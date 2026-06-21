@@ -241,7 +241,7 @@ function DeckColumn({
       </div>
 
       <Turntable
-        size={220} color={color}
+        size={typeof window !== "undefined" && window.innerWidth < 480 ? 160 : 220} color={color}
         artwork={t?.artwork ?? undefined}
         label={t?.title}
         spinning={deck.isPlaying}
