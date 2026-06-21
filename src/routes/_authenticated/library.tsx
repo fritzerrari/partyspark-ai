@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Upload, Music2, Heart, Play, Loader2, Search } from "lucide-react";
+import { Upload, Music2, Heart, Play, Loader2, Search, Wand2 } from "lucide-react";
 import { tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +10,7 @@ import { useEngine } from "@/lib/audio/engine";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { analyzeAudio, decodeToBuffer } from "@/lib/audio/analyze";
 
 export const Route = createFileRoute("/_authenticated/library")({
   head: () => ({ meta: [{ title: "Music Library — PartyPilot AI" }] }),
@@ -22,6 +23,7 @@ function Library() {
   const { data: tracks = [] } = useQuery(tracksListOptions());
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const engine = useEngine();
 
@@ -45,14 +47,32 @@ function Library() {
         });
 
         const title = file.name.replace(/\.[^.]+$/, "");
+        // Analyze on upload
+        let analysisFields: Record<string, unknown> = { energy: 60, mood: "Build" };
+        try {
+          const buf = await decodeToBuffer(file);
+          const a = await analyzeAudio(buf);
+          analysisFields = {
+            bpm: a.bpm,
+            music_key: a.musicalKey,
+            energy: 60,
+            mood: "Build",
+            beat_grid: a.beatGrid,
+            energy_curve: a.energyCurve,
+            cues: a.cues,
+            vocal_map: a.vocalMap,
+            analyzed_at: new Date().toISOString(),
+          };
+        } catch (e) {
+          console.warn("Analyse fehlgeschlagen, fahre ohne fort", e);
+        }
         await supabase.from("tracks").insert({
           owner_id: user!.id,
           title,
           artist: "You",
           storage_path: path,
           duration_sec: dur,
-          energy: 60,
-          mood: "Build",
+          ...analysisFields,
         });
       }
       toast.success(`Uploaded ${files.length} track${files.length > 1 ? "s" : ""}`);
@@ -81,8 +101,40 @@ function Library() {
         durationSec: t.duration_sec,
         artwork: t.artwork_url,
         energy: t.energy,
+        bpm: t.bpm,
+        musicalKey: (t as { music_key?: string | null }).music_key ?? null,
+        beatGrid: (t as { beat_grid?: number[] | null }).beat_grid ?? null,
+        cues: (t as { cues?: { introEnd: number; firstDrop: number; outroStart: number } | null }).cues ?? null,
+        vocalMap: (t as { vocal_map?: { t: number; voiced: number }[] | null }).vocal_map ?? null,
       },
     ]);
+  }
+
+  async function reanalyze(t: (typeof tracks)[number]) {
+    if (!t.storage_path) return;
+    setAnalyzingId(t.id);
+    try {
+      const { data } = await supabase.storage.from("tracks").createSignedUrl(t.storage_path, 60 * 60);
+      if (!data?.signedUrl) throw new Error("Track nicht ladbar");
+      const res = await fetch(data.signedUrl);
+      const buf = await decodeToBuffer(await res.arrayBuffer());
+      const a = await analyzeAudio(buf);
+      await supabase.from("tracks").update({
+        bpm: a.bpm,
+        music_key: a.musicalKey,
+        beat_grid: a.beatGrid,
+        energy_curve: a.energyCurve,
+        cues: a.cues,
+        vocal_map: a.vocalMap,
+        analyzed_at: new Date().toISOString(),
+      }).eq("id", t.id);
+      qc.invalidateQueries({ queryKey: ["tracks"] });
+      toast.success(`Analysiert: ${Math.round(a.bpm)} BPM · ${a.musicalKey}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Analyse fehlgeschlagen");
+    } finally {
+      setAnalyzingId(null);
+    }
   }
 
   async function favorite(t: (typeof tracks)[number]) {
