@@ -11,6 +11,8 @@ import { keyToCamelot } from "./keyToCamelot";
 import { shiftKey, semitoneShiftToKey } from "./keyDelta";
 import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
+import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
+import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -94,9 +96,10 @@ const deck: Record<DeckSide, {
   eqMid: BiquadFilterNode | null;
   eqHigh: BiquadFilterNode | null;
   analyser: AnalyserNode | null;
+  stems: StemSplit | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
@@ -179,11 +182,14 @@ function wireDeck(side: DeckSide) {
       d.analyser = ctx.createAnalyser();
       d.analyser.fftSize = 512;
       d.analyser.smoothingTimeConstant = 0.6;
+      // Insert pseudo-stem split between the filter chain and the final deck gain.
+      d.stems = createStemSplit(ctx);
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
-      d.filter.connect(d.gain);
+      d.filter.connect(d.stems.input);
+      d.stems.output.connect(d.gain);
       d.gain.connect(d.analyser);
       d.analyser.connect(masterGain);
     } catch {
