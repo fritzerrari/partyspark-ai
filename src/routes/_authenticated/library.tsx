@@ -57,6 +57,7 @@ function Library() {
         try {
           const buf = await decodeToBuffer(file);
           const a = await analyzeAudio(buf);
+          const tp = findTransitionPoints(a.beatGrid, a.vocalMap, a.energyCurve, a.cues, buf.duration);
           analysisFields = {
             bpm: a.bpm,
             music_key: a.musicalKey,
@@ -64,7 +65,7 @@ function Library() {
             mood: "Build",
             beat_grid: a.beatGrid,
             energy_curve: a.energyCurve,
-            cues: a.cues,
+            cues: { ...a.cues, ...tp },
             vocal_map: a.vocalMap,
             analyzed_at: new Date().toISOString(),
           };
@@ -118,18 +119,20 @@ function Library() {
   async function reanalyze(t: (typeof tracks)[number]) {
     if (!t.storage_path) return;
     setAnalyzingId(t.id);
+    setAnalyzingSet((s) => new Set(s).add(t.id));
     try {
       const { data } = await supabase.storage.from("tracks").createSignedUrl(t.storage_path, 60 * 60);
       if (!data?.signedUrl) throw new Error("Track nicht ladbar");
       const res = await fetch(data.signedUrl);
       const buf = await decodeToBuffer(await res.arrayBuffer());
       const a = await analyzeAudio(buf);
+      const tp = findTransitionPoints(a.beatGrid, a.vocalMap, a.energyCurve, a.cues, buf.duration);
       await supabase.from("tracks").update({
         bpm: a.bpm,
         music_key: a.musicalKey,
         beat_grid: a.beatGrid,
         energy_curve: a.energyCurve,
-        cues: a.cues,
+        cues: { ...a.cues, ...tp },
         vocal_map: a.vocalMap,
         analyzed_at: new Date().toISOString(),
       }).eq("id", t.id);
@@ -139,6 +142,7 @@ function Library() {
       toast.error(e instanceof Error ? e.message : "Analyse fehlgeschlagen");
     } finally {
       setAnalyzingId(null);
+      setAnalyzingSet((s) => { const n = new Set(s); n.delete(t.id); return n; });
     }
   }
 
@@ -150,6 +154,44 @@ function Library() {
   const filtered = tracks.filter((t) =>
     (t.title + " " + (t.artist ?? "")).toLowerCase().includes(search.toLowerCase()),
   );
+
+  function toggleSelect(id: string) {
+    setSelectedIds((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
+  }
+
+  async function analyzeMissing() {
+    const missing = selectedIds
+      .map((id) => tracks.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => !!t && !(t as { analyzed_at?: string | null }).analyzed_at);
+    for (const t of missing) {
+      await reanalyze(t);
+    }
+  }
+
+  async function loadOrderedToCockpit(orderedIds: string[]) {
+    const ordered = orderedIds
+      .map((id) => tracks.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => !!t);
+    const queueItems = await Promise.all(ordered.map(async (t) => {
+      const { data } = await supabase.storage.from("tracks").createSignedUrl(t.storage_path!, 60 * 60);
+      return {
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        url: data?.signedUrl ?? "",
+        durationSec: t.duration_sec,
+        artwork: t.artwork_url,
+        energy: t.energy,
+        bpm: t.bpm,
+        musicalKey: (t as { music_key?: string | null }).music_key ?? null,
+        beatGrid: (t as { beat_grid?: number[] | null }).beat_grid ?? null,
+        cues: (t as { cues?: { introEnd: number; firstDrop: number; outroStart: number } | null }).cues ?? null,
+        vocalMap: (t as { vocal_map?: { t: number; voiced: number }[] | null }).vocal_map ?? null,
+      };
+    }));
+    engine.loadQueue(queueItems);
+    toast.success(`Queue an Cockpit gesendet (${queueItems.length} Tracks)`);
+  }
 
   return (
     <div className="space-y-6 animate-fade-up">
@@ -184,6 +226,15 @@ function Library() {
           className="h-11 rounded-full pl-9"
         />
       </div>
+
+      <SmartOrderPanel
+        tracks={tracks as unknown as Parameters<typeof SmartOrderPanel>[0]["tracks"]}
+        selectedIds={selectedIds}
+        analyzingIds={analyzingSet}
+        onToggle={toggleSelect}
+        onAnalyzeMissing={analyzeMissing}
+        onLoadToCockpit={loadOrderedToCockpit}
+      />
 
       {filtered.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-border bg-card/40 p-10 text-center">
