@@ -32,7 +32,10 @@ export type TransitionMode =
   | "doubleDrop"
   | "bassSwap"
   | "reverbWash"
-  | "genreBridge";
+  | "genreBridge"
+  | "meetMiddle"
+  | "pitchLock"
+  | "pedalDrone";
 
 /** Mode hint accepted by the UI selector — "auto" lets planMix decide,
  *  "random" picks a virtuoso transition each time. */
@@ -52,6 +55,9 @@ export const TRANSITION_LABELS: Record<TransitionModeHint, string> = {
   bassSwap:    "Bass-Swap",
   reverbWash:  "Reverb-Wash",
   genreBridge: "Genre-Bridge (cross-genre)",
+  meetMiddle:  "Meet-in-the-Middle (Tempo-Bend)",
+  pitchLock:   "Pitch-Lock Pre-Shift",
+  pedalDrone:  "Tonal Pedal-Drone",
 };
 
 type State = {
