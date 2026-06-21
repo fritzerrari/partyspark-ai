@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import type { EngineTrack } from "@/lib/audio/engine";
 import { TwinDeck } from "@/components/cockpit/TwinDeck";
 import { MicRecorder } from "@/components/recording/MicRecorder";
+import { StemMixer } from "@/components/cockpit/StemMixer";
 import { StepSequencer } from "@/components/cockpit/StepSequencer";
 import { CoachHud } from "@/components/cockpit/CoachHud";
 import { SingAlongPanel } from "@/components/cockpit/SingAlongPanel";
@@ -156,6 +157,8 @@ function Cockpit() {
       </div>
 
       <TwinDeck tracks={tracks} />
+
+      <StemMixer />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
         <SingAlongPanel />
