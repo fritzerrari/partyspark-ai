@@ -77,6 +77,8 @@ type Actions = {
   stopAutoDj: () => void;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<Blob | null>;
+  /** Pre-render a bridge snippet for `side` locked to the OTHER deck's key+BPM. */
+  buildBridgeFor: (side: DeckSide) => Promise<void>;
   dispose: () => void;
 };
 
