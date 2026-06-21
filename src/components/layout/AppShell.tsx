@@ -38,6 +38,7 @@ const SECONDARY = [
   { to: "/karaoke", label: "Karaoke", icon: Mic },
   { to: "/party-host", label: "Party Host", icon: Bot },
   { to: "/moments", label: "Moments", icon: CalendarHeart },
+  { to: "/autotune", label: "Autotune", icon: Mic },
   { to: "/ai-lab", label: "AI Lab", icon: Sparkles },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;

@@ -20,11 +20,11 @@ export const Route = createFileRoute("/_authenticated/ai-lab")({
   component: AILab,
 });
 
-type Feature = { icon: typeof Mic; title: string; body: string; to?: "/party-host" | "/moments" };
+type Feature = { icon: typeof Mic; title: string; body: string; to?: "/party-host" | "/moments" | "/autotune" };
 const FEATURES: Feature[] = [
   { icon: Bot, title: "AI Party Host", body: "Gemini schreibt die Ansage, eine KI-Stimme spricht sie zwischen deinen Tracks.", to: "/party-host" },
   { icon: CalendarHeart, title: "AI Party Moments", body: "Findet automatisch die besten Momente aus deinen Aufnahmen.", to: "/moments" },
-  { icon: Mic, title: "AI Autotune", body: "Vocal-Korrektur in Echtzeit. Braucht spezialisierte Audio-AI." },
+  { icon: Mic, title: "Autotune", body: "Live-Tuner zum Einsingen + Tonart-Korrektur für deine Aufnahmen.", to: "/autotune" },
   { icon: Wand2, title: "AI Remix", body: "Songs in 90-Sekunden-Dance-Edits stretchen. Audio-Modell pending." },
   { icon: Combine, title: "AI Mashups", body: "Zwei Tracks blenden, die nicht zusammenpassen — aber funktionieren." },
   { icon: Music4, title: "AI Choir", body: "Aus einer Stimme einen 50-köpfigen Chor machen." },
