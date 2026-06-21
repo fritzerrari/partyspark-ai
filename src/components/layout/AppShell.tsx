@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   Bot,
   CalendarHeart,
+  Trophy,
+  PenLine,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
@@ -37,6 +39,8 @@ const SECONDARY = [
   { to: "/loops", label: "Loop Creator", icon: Repeat },
   { to: "/karaoke", label: "Karaoke", icon: Mic },
   { to: "/studio", label: "Studio", icon: Layers },
+  { to: "/battle", label: "Battle", icon: Trophy },
+  { to: "/lyric-writer", label: "Lyric-Writer", icon: PenLine },
   { to: "/party-host", label: "Party Host", icon: Bot },
   { to: "/moments", label: "Moments", icon: CalendarHeart },
   { to: "/autotune", label: "Autotune", icon: Mic },

@@ -25,6 +25,7 @@ import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedBattleRouteImport } from './routes/_authenticated/battle'
 import { Route as AuthenticatedAutotuneRouteImport } from './routes/_authenticated/autotune'
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
@@ -118,6 +119,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBattleRoute = AuthenticatedBattleRouteImport.update({
+  id: '/battle',
+  path: '/battle',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAutotuneRoute = AuthenticatedAutotuneRouteImport.update({
   id: '/autotune',
   path: '/autotune',
@@ -190,6 +196,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/autotune': typeof AuthenticatedAutotuneRoute
+  '/battle': typeof AuthenticatedBattleRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -219,6 +226,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/autotune': typeof AuthenticatedAutotuneRoute
+  '/battle': typeof AuthenticatedBattleRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -250,6 +258,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
   '/_authenticated/autotune': typeof AuthenticatedAutotuneRoute
+  '/_authenticated/battle': typeof AuthenticatedBattleRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
@@ -281,6 +290,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/ai-lab'
     | '/autotune'
+    | '/battle'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -310,6 +320,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/ai-lab'
     | '/autotune'
+    | '/battle'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_authenticated/ai-lab'
     | '/_authenticated/autotune'
+    | '/_authenticated/battle'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
@@ -489,6 +501,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/battle': {
+      id: '/_authenticated/battle'
+      path: '/battle'
+      fullPath: '/battle'
+      preLoaderRoute: typeof AuthenticatedBattleRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/autotune': {
       id: '/_authenticated/autotune'
       path: '/autotune'
@@ -579,6 +598,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAiLabRoute: typeof AuthenticatedAiLabRoute
   AuthenticatedAutotuneRoute: typeof AuthenticatedAutotuneRoute
+  AuthenticatedBattleRoute: typeof AuthenticatedBattleRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
@@ -601,6 +621,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAiLabRoute: AuthenticatedAiLabRoute,
   AuthenticatedAutotuneRoute: AuthenticatedAutotuneRoute,
+  AuthenticatedBattleRoute: AuthenticatedBattleRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
