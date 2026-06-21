@@ -6,6 +6,9 @@ import type { EngineTrack } from "@/lib/audio/engine";
 import { TwinDeck } from "@/components/cockpit/TwinDeck";
 import { StepSequencer } from "@/components/cockpit/StepSequencer";
 import { CoachHud } from "@/components/cockpit/CoachHud";
+import { SingAlongPanel } from "@/components/cockpit/SingAlongPanel";
+import { FxPadGrid } from "@/components/cockpit/FxPadGrid";
+import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 
 export const Route = createFileRoute("/_authenticated/cockpit")({
   head: () => ({ meta: [{ title: "DJ Cockpit — PartyPilot AI" }] }),
@@ -32,6 +35,7 @@ function Cockpit() {
           const { data: signed } = await supabase.storage.from("tracks").createSignedUrl(path, 60 * 60);
           url = signed?.signedUrl ?? "";
         }
+        const musicalKey = (t.music_key as string | null) ?? null;
         return {
           id: String(t.id),
           title: (t.title as string) ?? "Untitled",
@@ -39,8 +43,8 @@ function Cockpit() {
           url,
           artwork: (t.artwork_url as string | null) ?? null,
           bpm: (t.bpm as number | null) ?? null,
-          musicalKey: (t.musical_key as string | null) ?? null,
-          camelot: (t.camelot as string | null) ?? null,
+          musicalKey,
+          camelot: keyToCamelot(musicalKey),
           beatGrid: (t.beat_grid as number[] | null) ?? null,
           cues: (t.cues as { introEnd: number; firstDrop: number; outroStart: number } | null) ?? null,
           vocalMap: (t.vocal_map as { t: number; voiced: number }[] | null) ?? null,
@@ -69,6 +73,11 @@ function Cockpit() {
       </div>
 
       <TwinDeck tracks={tracks} />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+        <SingAlongPanel />
+        <FxPadGrid />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <StepSequencer />
