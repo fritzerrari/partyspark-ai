@@ -613,5 +613,3 @@ export function compatHint(a: EngineTrack | null, b: EngineTrack | null): {
 
 /** Suppress unused warning: re-export for convenience. */
 export type { TransitionModeHint };
-/** keep nextAutoFromSide referenced */
-export const __autoCursor = () => nextAutoFromSide;
