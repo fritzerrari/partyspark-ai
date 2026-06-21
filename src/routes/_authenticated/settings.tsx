@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { settingsOptions } from "@/lib/db/queries";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Switch } from "@/components/ui/switch";
@@ -19,14 +20,7 @@ function Settings() {
   const qc = useQueryClient();
   const { data: s } = useQuery(settingsOptions(user!.id));
 
-  async function update(patch: Partial<{
-    autodj_enabled: boolean;
-    beat_match: boolean;
-    harmonic_mix: boolean;
-    energy_management: boolean;
-    crossfade_sec: number;
-    notifications: Record<string, unknown>;
-  }>) {
+  async function update(patch: TablesUpdate<"settings">) {
     const { error } = await supabase.from("settings").update(patch).eq("user_id", user!.id);
     if (error) toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["settings", user!.id] });

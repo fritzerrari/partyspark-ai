@@ -20,6 +20,7 @@ import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
+import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
 
@@ -77,6 +78,11 @@ const AuthenticatedAiLabRoute = AuthenticatedAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const PPartyIdGuestRoute = PPartyIdGuestRouteImport.update({
+  id: '/p/$partyId/guest',
+  path: '/p/$partyId/guest',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedPartiesNewRoute = AuthenticatedPartiesNewRouteImport.update({
   id: '/parties/new',
   path: '/parties/new',
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/p/$partyId/guest': typeof PPartyIdGuestRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/p/$partyId/guest': typeof PPartyIdGuestRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/p/$partyId/guest': typeof PPartyIdGuestRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/soundpool'
     | '/parties/$partyId'
     | '/parties/new'
+    | '/p/$partyId/guest'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -162,6 +172,7 @@ export interface FileRouteTypes {
     | '/soundpool'
     | '/parties/$partyId'
     | '/parties/new'
+    | '/p/$partyId/guest'
   id:
     | '__root__'
     | '/'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/_authenticated/soundpool'
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
+    | '/p/$partyId/guest'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,6 +196,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
+  PPartyIdGuestRoute: typeof PPartyIdGuestRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAiLabRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/p/$partyId/guest': {
+      id: '/p/$partyId/guest'
+      path: '/p/$partyId/guest'
+      fullPath: '/p/$partyId/guest'
+      preLoaderRoute: typeof PPartyIdGuestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/parties/new': {
       id: '/_authenticated/parties/new'
       path: '/parties/new'
@@ -314,6 +334,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
+  PPartyIdGuestRoute: PPartyIdGuestRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
