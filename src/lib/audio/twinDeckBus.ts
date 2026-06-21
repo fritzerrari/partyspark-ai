@@ -96,6 +96,11 @@ const deck: Record<DeckSide, {
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
+// Bridge playback graph: a one-shot BufferSource → filter → gain → master.
+let bridgeGain: GainNode | null = null;
+let bridgeFilter: BiquadFilterNode | null = null;
+let bridgeSource: AudioBufferSourceNode | null = null;
+const bridgeBuffers: Record<DeckSide, BridgePlan | null> = { A: null, B: null };
 
 function emptyDeck(): DeckState {
   return {
