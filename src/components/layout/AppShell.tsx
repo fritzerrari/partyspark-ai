@@ -16,6 +16,10 @@ import {
   CalendarHeart,
   Trophy,
   PenLine,
+  Music4,
+  AudioWaveform,
+  Users,
+  Wand2,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
@@ -41,6 +45,10 @@ const SECONDARY = [
   { to: "/studio", label: "Studio", icon: Layers },
   { to: "/battle", label: "Battle", icon: Trophy },
   { to: "/lyric-writer", label: "Lyric-Writer", icon: PenLine },
+  { to: "/choir", label: "Choir", icon: Music4 },
+  { to: "/sound-designer", label: "Sound FX", icon: AudioWaveform },
+  { to: "/crowd", label: "Crowd", icon: Users },
+  { to: "/remix", label: "Remix", icon: Wand2 },
   { to: "/party-host", label: "Party Host", icon: Bot },
   { to: "/moments", label: "Moments", icon: CalendarHeart },
   { to: "/autotune", label: "Autotune", icon: Mic },

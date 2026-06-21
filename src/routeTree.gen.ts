@@ -17,7 +17,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
+import { Route as AuthenticatedSoundDesignerRouteImport } from './routes/_authenticated/sound-designer'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedRemixRouteImport } from './routes/_authenticated/remix'
 import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
 import { Route as AuthenticatedMomentsRouteImport } from './routes/_authenticated/moments'
 import { Route as AuthenticatedLyricWriterRouteImport } from './routes/_authenticated/lyric-writer'
@@ -25,6 +27,8 @@ import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCrowdRouteImport } from './routes/_authenticated/crowd'
+import { Route as AuthenticatedChoirRouteImport } from './routes/_authenticated/choir'
 import { Route as AuthenticatedBattleRouteImport } from './routes/_authenticated/battle'
 import { Route as AuthenticatedAutotuneRouteImport } from './routes/_authenticated/autotune'
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
@@ -78,9 +82,20 @@ const AuthenticatedSoundpoolRoute = AuthenticatedSoundpoolRouteImport.update({
   path: '/soundpool',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSoundDesignerRoute =
+  AuthenticatedSoundDesignerRouteImport.update({
+    id: '/sound-designer',
+    path: '/sound-designer',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedRemixRoute = AuthenticatedRemixRouteImport.update({
+  id: '/remix',
+  path: '/remix',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedPartyHostRoute = AuthenticatedPartyHostRouteImport.update({
@@ -117,6 +132,16 @@ const AuthenticatedKaraokeRoute = AuthenticatedKaraokeRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedCrowdRoute = AuthenticatedCrowdRouteImport.update({
+  id: '/crowd',
+  path: '/crowd',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedChoirRoute = AuthenticatedChoirRouteImport.update({
+  id: '/choir',
+  path: '/choir',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedBattleRoute = AuthenticatedBattleRouteImport.update({
@@ -197,6 +222,8 @@ export interface FileRoutesByFullPath {
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/autotune': typeof AuthenticatedAutotuneRoute
   '/battle': typeof AuthenticatedBattleRoute
+  '/choir': typeof AuthenticatedChoirRoute
+  '/crowd': typeof AuthenticatedCrowdRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -204,7 +231,9 @@ export interface FileRoutesByFullPath {
   '/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
+  '/remix': typeof AuthenticatedRemixRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -227,6 +256,8 @@ export interface FileRoutesByTo {
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/autotune': typeof AuthenticatedAutotuneRoute
   '/battle': typeof AuthenticatedBattleRoute
+  '/choir': typeof AuthenticatedChoirRoute
+  '/crowd': typeof AuthenticatedCrowdRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -234,7 +265,9 @@ export interface FileRoutesByTo {
   '/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
+  '/remix': typeof AuthenticatedRemixRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -259,6 +292,8 @@ export interface FileRoutesById {
   '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
   '/_authenticated/autotune': typeof AuthenticatedAutotuneRoute
   '/_authenticated/battle': typeof AuthenticatedBattleRoute
+  '/_authenticated/choir': typeof AuthenticatedChoirRoute
+  '/_authenticated/crowd': typeof AuthenticatedCrowdRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
@@ -266,7 +301,9 @@ export interface FileRoutesById {
   '/_authenticated/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/_authenticated/moments': typeof AuthenticatedMomentsRoute
   '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
+  '/_authenticated/remix': typeof AuthenticatedRemixRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -291,6 +328,8 @@ export interface FileRouteTypes {
     | '/ai-lab'
     | '/autotune'
     | '/battle'
+    | '/choir'
+    | '/crowd'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -298,7 +337,9 @@ export interface FileRouteTypes {
     | '/lyric-writer'
     | '/moments'
     | '/party-host'
+    | '/remix'
     | '/settings'
+    | '/sound-designer'
     | '/soundpool'
     | '/studio'
     | '/api/transcribe'
@@ -321,6 +362,8 @@ export interface FileRouteTypes {
     | '/ai-lab'
     | '/autotune'
     | '/battle'
+    | '/choir'
+    | '/crowd'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -328,7 +371,9 @@ export interface FileRouteTypes {
     | '/lyric-writer'
     | '/moments'
     | '/party-host'
+    | '/remix'
     | '/settings'
+    | '/sound-designer'
     | '/soundpool'
     | '/studio'
     | '/api/transcribe'
@@ -352,6 +397,8 @@ export interface FileRouteTypes {
     | '/_authenticated/ai-lab'
     | '/_authenticated/autotune'
     | '/_authenticated/battle'
+    | '/_authenticated/choir'
+    | '/_authenticated/crowd'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
@@ -359,7 +406,9 @@ export interface FileRouteTypes {
     | '/_authenticated/lyric-writer'
     | '/_authenticated/moments'
     | '/_authenticated/party-host'
+    | '/_authenticated/remix'
     | '/_authenticated/settings'
+    | '/_authenticated/sound-designer'
     | '/_authenticated/soundpool'
     | '/_authenticated/studio'
     | '/api/transcribe'
@@ -445,11 +494,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSoundpoolRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/sound-designer': {
+      id: '/_authenticated/sound-designer'
+      path: '/sound-designer'
+      fullPath: '/sound-designer'
+      preLoaderRoute: typeof AuthenticatedSoundDesignerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/remix': {
+      id: '/_authenticated/remix'
+      path: '/remix'
+      fullPath: '/remix'
+      preLoaderRoute: typeof AuthenticatedRemixRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/party-host': {
@@ -499,6 +562,20 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/crowd': {
+      id: '/_authenticated/crowd'
+      path: '/crowd'
+      fullPath: '/crowd'
+      preLoaderRoute: typeof AuthenticatedCrowdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/choir': {
+      id: '/_authenticated/choir'
+      path: '/choir'
+      fullPath: '/choir'
+      preLoaderRoute: typeof AuthenticatedChoirRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/battle': {
@@ -599,6 +676,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAiLabRoute: typeof AuthenticatedAiLabRoute
   AuthenticatedAutotuneRoute: typeof AuthenticatedAutotuneRoute
   AuthenticatedBattleRoute: typeof AuthenticatedBattleRoute
+  AuthenticatedChoirRoute: typeof AuthenticatedChoirRoute
+  AuthenticatedCrowdRoute: typeof AuthenticatedCrowdRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
@@ -606,7 +685,9 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLyricWriterRoute: typeof AuthenticatedLyricWriterRoute
   AuthenticatedMomentsRoute: typeof AuthenticatedMomentsRoute
   AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
+  AuthenticatedRemixRoute: typeof AuthenticatedRemixRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSoundDesignerRoute: typeof AuthenticatedSoundDesignerRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
@@ -622,6 +703,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAiLabRoute: AuthenticatedAiLabRoute,
   AuthenticatedAutotuneRoute: AuthenticatedAutotuneRoute,
   AuthenticatedBattleRoute: AuthenticatedBattleRoute,
+  AuthenticatedChoirRoute: AuthenticatedChoirRoute,
+  AuthenticatedCrowdRoute: AuthenticatedCrowdRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
@@ -629,7 +712,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLyricWriterRoute: AuthenticatedLyricWriterRoute,
   AuthenticatedMomentsRoute: AuthenticatedMomentsRoute,
   AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
+  AuthenticatedRemixRoute: AuthenticatedRemixRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSoundDesignerRoute: AuthenticatedSoundDesignerRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
