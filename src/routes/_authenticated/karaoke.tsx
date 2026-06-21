@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Mic, Square, Play, Trash2, Wand2 } from "lucide-react";
+import { Mic, Square, Play, Trash2, Wand2, Layers, Sparkles } from "lucide-react";
+import { scoreLabel } from "@/lib/audio/scoring";
 import { recordingsOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -116,6 +117,18 @@ function Karaoke() {
         subtitle="Hand the phone around. Capture the moment."
       />
 
+      <Link
+        to="/studio"
+        className="group flex items-center justify-between rounded-3xl border border-accent/40 bg-gradient-to-r from-accent/20 via-primary/15 to-accent/20 p-5 transition hover:border-accent"
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-accent">Neu · Multitrack</p>
+          <h2 className="font-display text-xl font-bold">Karaoke Studio öffnen</h2>
+          <p className="text-sm text-muted-foreground">Mehrere Tonspuren, Layering, Live-Pitch-Coach, KI-Score & Cover-Art.</p>
+        </div>
+        <Layers className="h-10 w-10 text-accent transition group-hover:scale-110" />
+      </Link>
+
       <section className="relative overflow-hidden rounded-3xl stage-gradient p-10 text-stage-foreground shadow-stage">
         <div className="flex flex-col items-center text-center">
           {introCountdown && (
@@ -158,27 +171,60 @@ function Karaoke() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {recs.map((r) => (
-              <div key={r.id} className="rounded-2xl border border-border bg-card p-4">
-                <p className="truncate font-display text-base font-semibold">{r.title ?? r.kind}</p>
-                <p className="mt-0.5 text-xs uppercase tracking-widest text-muted-foreground">{r.kind}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => play(r.storage_path)} className="rounded-full bg-primary text-primary-foreground">
-                    <Play className="mr-2 h-4 w-4" /> Play
-                  </Button>
-                  <Button size="sm" variant="secondary" onClick={() => setSelectedRec(r)} className="rounded-full">
-                    <Wand2 className="mr-2 h-4 w-4" /> FX
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => remove(r.id)} className="text-muted-foreground">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+              <RecordingCard
+                key={r.id}
+                rec={r}
+                onPlay={() => play(r.storage_path)}
+                onFx={() => setSelectedRec(r)}
+                onRemove={() => remove(r.id)}
+              />
             ))}
           </div>
         )}
       </section>
 
       <PostProcessSheet recording={selectedRec} onClose={() => setSelectedRec(null)} />
+    </div>
+  );
+}
+
+function RecordingCard({
+  rec, onPlay, onFx, onRemove,
+}: {
+  rec: { id: string; title: string | null; kind: string; storage_path: string; cover_url?: string | null; score?: number | null };
+  onPlay: () => void; onFx: () => void; onRemove: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="relative aspect-square bg-gradient-to-br from-primary/30 via-accent/20 to-stage">
+        {rec.cover_url ? (
+          <img src={rec.cover_url} alt={rec.title ?? "Cover"} className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <Sparkles className="h-10 w-10 text-stage-foreground/40" />
+          </div>
+        )}
+        {typeof rec.score === "number" && (
+          <div className="absolute right-2 top-2 rounded-full bg-stage/80 px-3 py-1 text-xs font-semibold text-stage-foreground backdrop-blur">
+            {rec.score} · {scoreLabel(rec.score)}
+          </div>
+        )}
+      </div>
+      <div className="p-4">
+        <p className="truncate font-display text-base font-semibold">{rec.title ?? rec.kind}</p>
+        <p className="mt-0.5 text-xs uppercase tracking-widest text-muted-foreground">{rec.kind}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" onClick={onPlay} className="rounded-full bg-primary text-primary-foreground">
+            <Play className="mr-2 h-4 w-4" /> Play
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onFx} className="rounded-full">
+            <Wand2 className="mr-2 h-4 w-4" /> FX
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onRemove} className="text-muted-foreground">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
