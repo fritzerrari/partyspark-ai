@@ -883,13 +883,14 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
 
 /** Compatibility helper: highlight whether decks are key/BPM compatible. */
 export function compatHint(a: EngineTrack | null, b: EngineTrack | null): {
-  keyOk: boolean; bpmOk: boolean; bpmDelta: number | null;
+  keyOk: boolean; bpmOk: boolean; bpmDelta: number | null; semitones: number;
 } {
-  if (!a || !b) return { keyOk: false, bpmOk: false, bpmDelta: null };
+  if (!a || !b) return { keyOk: false, bpmOk: false, bpmDelta: null, semitones: 0 };
   const keyOk = camelotCompatible(a.camelot ?? "", b.camelot ?? "");
   const delta = (a.bpm && b.bpm) ? +(Math.abs(a.bpm - b.bpm)).toFixed(1) : null;
   const bpmOk = delta != null ? (a.bpm! > 0 && delta / a.bpm! <= 0.08) : false;
-  return { keyOk, bpmOk, bpmDelta: delta };
+  const semitones = semitoneShiftToKey(a.musicalKey ?? null, b.musicalKey ?? null);
+  return { keyOk, bpmOk, bpmDelta: delta, semitones };
 }
 
 /** Suppress unused warning: re-export for convenience. */
