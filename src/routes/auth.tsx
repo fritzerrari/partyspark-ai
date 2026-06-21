@@ -20,7 +20,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -28,16 +28,19 @@ function AuthPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Redirect when a session is detected (covers both manual sign-in
+  // and async restore from storage).
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/dashboard", replace: true });
-  }, [user, loading, navigate]);
+    if (user) navigate({ to: "/dashboard", replace: true });
+  }, [user, navigate]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setBusy(true);
     try {
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -47,11 +50,15 @@ function AuthPage() {
         });
         if (error) throw error;
         toast.success("Welcome to PartyPilot! 🎉");
+        if (data.session) navigate({ to: "/dashboard", replace: true });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw error;
+        if (data.session) navigate({ to: "/dashboard", replace: true });
       }
-      navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -60,10 +67,10 @@ function AuthPage() {
   }
 
   return (
-    <div className="grid min-h-screen brand-gradient">
-      <div className="mx-auto flex w-full max-w-md flex-col justify-center px-5 py-10">
+    <div className="grid min-h-[100dvh] brand-gradient">
+      <div className="mx-auto flex w-full max-w-md flex-col justify-center px-5 py-8 sm:py-10">
         <Logo className="mx-auto" />
-        <div className="mt-8 rounded-3xl border border-border bg-card p-7 shadow-stage">
+        <div className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-stage sm:mt-8 sm:p-7">
           <h1 className="font-display text-2xl font-bold">
             {mode === "signup" ? "Start your first party" : "Welcome back"}
           </h1>
