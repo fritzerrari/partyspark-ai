@@ -20,10 +20,12 @@ import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
 import { Route as AuthenticatedMomentsRouteImport } from './routes/_authenticated/moments'
+import { Route as AuthenticatedLyricWriterRouteImport } from './routes/_authenticated/lyric-writer'
 import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/loops'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedBattleRouteImport } from './routes/_authenticated/battle'
 import { Route as AuthenticatedAutotuneRouteImport } from './routes/_authenticated/autotune'
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
@@ -91,6 +93,12 @@ const AuthenticatedMomentsRoute = AuthenticatedMomentsRouteImport.update({
   path: '/moments',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLyricWriterRoute =
+  AuthenticatedLyricWriterRouteImport.update({
+    id: '/lyric-writer',
+    path: '/lyric-writer',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedLoopsRoute = AuthenticatedLoopsRouteImport.update({
   id: '/loops',
   path: '/loops',
@@ -109,6 +117,11 @@ const AuthenticatedKaraokeRoute = AuthenticatedKaraokeRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedBattleRoute = AuthenticatedBattleRouteImport.update({
+  id: '/battle',
+  path: '/battle',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedAutotuneRoute = AuthenticatedAutotuneRouteImport.update({
@@ -183,10 +196,12 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/autotune': typeof AuthenticatedAutotuneRoute
+  '/battle': typeof AuthenticatedBattleRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
+  '/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -211,10 +226,12 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/autotune': typeof AuthenticatedAutotuneRoute
+  '/battle': typeof AuthenticatedBattleRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
+  '/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -241,10 +258,12 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
   '/_authenticated/autotune': typeof AuthenticatedAutotuneRoute
+  '/_authenticated/battle': typeof AuthenticatedBattleRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/loops': typeof AuthenticatedLoopsRoute
+  '/_authenticated/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/_authenticated/moments': typeof AuthenticatedMomentsRoute
   '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -271,10 +290,12 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/ai-lab'
     | '/autotune'
+    | '/battle'
     | '/dashboard'
     | '/karaoke'
     | '/library'
     | '/loops'
+    | '/lyric-writer'
     | '/moments'
     | '/party-host'
     | '/settings'
@@ -299,10 +320,12 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/ai-lab'
     | '/autotune'
+    | '/battle'
     | '/dashboard'
     | '/karaoke'
     | '/library'
     | '/loops'
+    | '/lyric-writer'
     | '/moments'
     | '/party-host'
     | '/settings'
@@ -328,10 +351,12 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_authenticated/ai-lab'
     | '/_authenticated/autotune'
+    | '/_authenticated/battle'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
     | '/_authenticated/loops'
+    | '/_authenticated/lyric-writer'
     | '/_authenticated/moments'
     | '/_authenticated/party-host'
     | '/_authenticated/settings'
@@ -441,6 +466,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMomentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/lyric-writer': {
+      id: '/_authenticated/lyric-writer'
+      path: '/lyric-writer'
+      fullPath: '/lyric-writer'
+      preLoaderRoute: typeof AuthenticatedLyricWriterRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/loops': {
       id: '/_authenticated/loops'
       path: '/loops'
@@ -467,6 +499,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/battle': {
+      id: '/_authenticated/battle'
+      path: '/battle'
+      fullPath: '/battle'
+      preLoaderRoute: typeof AuthenticatedBattleRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/autotune': {
@@ -559,10 +598,12 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAiLabRoute: typeof AuthenticatedAiLabRoute
   AuthenticatedAutotuneRoute: typeof AuthenticatedAutotuneRoute
+  AuthenticatedBattleRoute: typeof AuthenticatedBattleRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedLoopsRoute: typeof AuthenticatedLoopsRoute
+  AuthenticatedLyricWriterRoute: typeof AuthenticatedLyricWriterRoute
   AuthenticatedMomentsRoute: typeof AuthenticatedMomentsRoute
   AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -580,10 +621,12 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAiLabRoute: AuthenticatedAiLabRoute,
   AuthenticatedAutotuneRoute: AuthenticatedAutotuneRoute,
+  AuthenticatedBattleRoute: AuthenticatedBattleRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedLoopsRoute: AuthenticatedLoopsRoute,
+  AuthenticatedLyricWriterRoute: AuthenticatedLyricWriterRoute,
   AuthenticatedMomentsRoute: AuthenticatedMomentsRoute,
   AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
