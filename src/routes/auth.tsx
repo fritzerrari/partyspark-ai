@@ -20,7 +20,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -28,11 +28,12 @@ function AuthPage() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Redirect when a session is detected (covers both manual sign-in
-  // and async restore from storage).
+  // Only redirect AFTER the initial session restore has completed — otherwise
+  // a transient `user=null` during loading can race with `_authenticated`'s
+  // redirect-to-/auth and cause the auth screen to flash and disappear.
   useEffect(() => {
-    if (user) navigate({ to: "/dashboard", replace: true });
-  }, [user, navigate]);
+    if (!loading && user) navigate({ to: "/dashboard", replace: true });
+  }, [loading, user, navigate]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
