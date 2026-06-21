@@ -452,8 +452,14 @@ export type Database = {
           autodj_enabled: boolean
           beat_match: boolean
           crossfade_sec: number
+          cue_output_id: string | null
           energy_management: boolean
           harmonic_mix: boolean
+          master_output_id: string | null
+          mic_device_id: string | null
+          mic_ducking: boolean
+          mic_enabled: boolean
+          mic_gain: number
           notifications: Json
           updated_at: string
           user_id: string
@@ -462,8 +468,14 @@ export type Database = {
           autodj_enabled?: boolean
           beat_match?: boolean
           crossfade_sec?: number
+          cue_output_id?: string | null
           energy_management?: boolean
           harmonic_mix?: boolean
+          master_output_id?: string | null
+          mic_device_id?: string | null
+          mic_ducking?: boolean
+          mic_enabled?: boolean
+          mic_gain?: number
           notifications?: Json
           updated_at?: string
           user_id: string
@@ -472,8 +484,14 @@ export type Database = {
           autodj_enabled?: boolean
           beat_match?: boolean
           crossfade_sec?: number
+          cue_output_id?: string | null
           energy_management?: boolean
           harmonic_mix?: boolean
+          master_output_id?: string | null
+          mic_device_id?: string | null
+          mic_ducking?: boolean
+          mic_enabled?: boolean
+          mic_gain?: number
           notifications?: Json
           updated_at?: string
           user_id?: string
