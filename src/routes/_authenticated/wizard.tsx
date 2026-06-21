@@ -153,7 +153,7 @@ function WizardRoute() {
       <PageHeader
         title="Studio-Wizard"
         subtitle="Der komplette PartyPilot-Flow in 8 Schritten — du entscheidest, was optional bleibt."
-        actions={
+        action={
           done.length > 0 ? (
             <Button variant="ghost" onClick={reset} size="sm">
               Fortschritt zurücksetzen
