@@ -255,7 +255,19 @@ function Library() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => (
-            <div key={t.id} className="group rounded-2xl border border-border bg-card p-4">
+            <div key={t.id} className={cn(
+              "group relative rounded-2xl border bg-card p-4 transition",
+              selectedIds.includes(t.id) ? "border-accent shadow-glow" : "border-border",
+            )}>
+              <button
+                onClick={() => toggleSelect(t.id)}
+                className="absolute right-2 top-2 z-10 rounded-full bg-background/80 p-1.5 text-muted-foreground backdrop-blur hover:text-accent"
+                aria-label="Auswählen"
+              >
+                {selectedIds.includes(t.id)
+                  ? <CheckSquare className="h-4 w-4 text-accent" />
+                  : <SquareIcon className="h-4 w-4" />}
+              </button>
               <div className="aspect-square overflow-hidden rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-accent/40">
                 <div className="h-full w-full animate-float" />
               </div>
