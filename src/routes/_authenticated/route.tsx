@@ -17,7 +17,6 @@ function PendingScreen() {
 }
 
 export const Route = createFileRoute("/_authenticated")({
-  ssr: false,
   pendingComponent: PendingScreen,
   component: AuthedLayout,
 });
