@@ -8,7 +8,7 @@ function snapHzToScale(hz: number, mode: "major" | "minor"): number | null {
   if (!hz || !isFinite(hz)) return null;
   const midi = freqToMidi(hz);
   // Scale rooted at C — good enough for monophonic vocal snap.
-  const snapped = snapToScale(midi, mode === "minor" ? "Am" : "C");
+  const snapped = snapToScale(midi, mode === "minor" ? "a-minor" : "c-major");
   return midiToFreq(snapped);
 }
 
