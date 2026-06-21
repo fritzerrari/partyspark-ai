@@ -23,7 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { useDevices } from "@/lib/audio/devices";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 
-export const Route = createFileRoute("/_authenticated/settings/audio")({
+export const Route = createFileRoute("/_authenticated/settings_/audio")({
   head: () => ({ meta: [{ title: "Audio Setup — PartyPilot AI" }] }),
   component: AudioSetup,
 });
