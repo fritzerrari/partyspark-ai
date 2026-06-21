@@ -14,6 +14,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -58,6 +59,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
+  id: '/api/transcribe',
+  path: '/api/transcribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/fx/upload': typeof AuthenticatedFxUploadRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/fx/upload': typeof AuthenticatedFxUploadRoute
@@ -242,6 +250,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/_authenticated/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/_authenticated/fx/upload': typeof AuthenticatedFxUploadRoute
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/soundpool'
     | '/studio'
+    | '/api/transcribe'
     | '/admin/fx-review'
     | '/fx/$fxId'
     | '/fx/upload'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/soundpool'
     | '/studio'
+    | '/api/transcribe'
     | '/admin/fx-review'
     | '/fx/$fxId'
     | '/fx/upload'
@@ -326,6 +337,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/soundpool'
     | '/_authenticated/studio'
+    | '/api/transcribe'
     | '/_authenticated/admin/fx-review'
     | '/_authenticated/fx/$fxId'
     | '/_authenticated/fx/upload'
@@ -344,6 +356,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiTranscribeRoute: typeof ApiTranscribeRoute
   ApiAiPartyHostSpeakRoute: typeof ApiAiPartyHostSpeakRoute
   PPartyIdGuestRoute: typeof PPartyIdGuestRoute
   ApiPublicHooksStorageCleanupRoute: typeof ApiPublicHooksStorageCleanupRoute
@@ -384,6 +397,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/transcribe': {
+      id: '/api/transcribe'
+      path: '/api/transcribe'
+      fullPath: '/api/transcribe'
+      preLoaderRoute: typeof ApiTranscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/studio': {
@@ -587,6 +607,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiTranscribeRoute: ApiTranscribeRoute,
   ApiAiPartyHostSpeakRoute: ApiAiPartyHostSpeakRoute,
   PPartyIdGuestRoute: PPartyIdGuestRoute,
   ApiPublicHooksStorageCleanupRoute: ApiPublicHooksStorageCleanupRoute,
