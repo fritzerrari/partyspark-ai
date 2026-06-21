@@ -699,6 +699,7 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
 
     // Clean up: stop the now-silent from-deck, reset filter.
     try { fromDeck.el?.pause(); } catch { /* noop */ }
+    try { activeDroneStop?.(); activeDroneStop = null; } catch { /* noop */ }
     resetFilter(from);
     resetEq(from);
     resetEq(to);
