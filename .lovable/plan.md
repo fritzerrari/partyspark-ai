@@ -1,80 +1,63 @@
+## Problem-Analyse
 
-# DJ-Studio Ausbau: Turntables, Modul-Dashboard & Power-Design
+**1. Pads lassen sich nicht ausblenden / Fenster überlagert alles**
+`LoopPadOverlay` und `VocalOverlay` werden **doppelt** gerendert: einmal in `TransportBar.tsx` (eigener State `padsOpen`/`vocalOpen`) und einmal in `ModuleDock.tsx` (State `open: Set<ModuleId>`). Wer das Pad über den Dock öffnet, kann es mit dem X im Pad-Header nicht schließen — denn der X-Button steuert nur den lokalen State der jeweiligen Instanz. Beide Overlays liegen außerdem als `fixed` mit eigenem z-index über dem Inhalt und können nicht verschoben oder minimiert werden.
 
-## Ziel
-Der Auto-Mix wird zu einem vollwertigen Live-Cockpit mit zwei interaktiven Plattentellern, freier Modul-Anordnung in jedem Screen und einem konsistenten "Virtuoso DJ"-Design mit reaktiven Controls, Status-LEDs und Hilfs-/Empfehlungs-Layer.
+**2. Auto-DJ macht keine echten Übergänge**
+- Im `engine.ts` läuft die Auto-DJ-Logik **nur** im manuellen `skip()`-Pfad. Endet ein Track normal (`ended`-Event), wird zwar `skip()` aufgerufen, aber es gibt nur **eine** `<audio>`-Instanz → die Songs überlappen **nicht** wirklich; "Crossfade" verblendet ins Nichts und startet danach den nächsten Track.
+- `planMix()` liefert `startAtSecOfNext`, `triggerAtSecOfCurrent` und `bpmRatio` — alle drei Werte werden vom Engine **ignoriert**.
+- Transitions-Auswahl ist deterministisch und arm: nur 3 Pfade (crossfade / filterSweep / echoTail). Keine "random"-Option, kein Loop-Roll, kein Double-Drop, kein Stinger-Mix.
+- Songs müssen analysiert sein (BPM, Camelot, Cues) — das ist im Upload-Pfad bereits vorhanden, aber Tracks ohne Analyse fallen lautlos auf langweiligen Linear-Fade zurück, ohne Hinweis.
 
-## 1) Twin-Turntable Deck (neu)
-Zwei realistische, drag-bare Plattenteller — sowohl im Auto-Mix als auch als einblendbares Modul überall verfügbar.
+---
 
-- `src/components/player/Turntable.tsx`
-  - SVG/Canvas-Plattenteller mit Label-Print (Cover), Tonarm, Slipmat-Grafik
-  - Pointer/Touch-Drag → scrub (vor/zurück) inkl. Pitch-Bend, Trägheit beim Loslassen
-  - Modi: **Free Scratch** (volle Kontrolle, Auto-Mix pausiert kurz), **Nudge** (±2 % Pitch), **Hold** (Stop & Cue), **Reverse**
-  - Zustand spiegelt `engine.currentTime` + lokales `scratchOffset`
-- `src/components/player/TwinDeck.tsx`
-  - Deck A / Deck B nebeneinander, mittig Crossfader + EQ-3-Band + Filter-Knob + Cue/Play
-  - Sync-Button (BPM/Phase), Loop-In/Out, Hot-Cue-Pads (1–4)
-  - VU-Meter pro Deck (animiert), Beat-Phase-Ring um Plattenteller
-- Engine-Erweiterung (`src/lib/audio/engine.ts`)
-  - Zweiter `GainNode`-Pfad (`deckB`) + Crossfader-Gain
-  - `scrub(deck, deltaSec)`, `setPitch(deck, semitones, tempoLink)`, `setEQ`, `setFilter`
-  - Zusatzspuren (Sequencer-Layer) hängen am Master nach Crossfader
+## Plan
 
-## 2) Auto-Mix Sequencer & Layer
-Im laufenden Auto-Mix Tonspuren überlagern & Sequenzen einspielen.
+### Teil A · Modul-Overlays entdoppeln & dockbar machen
 
-- `src/components/player/SequencerLane.tsx` — 16-Step Grid pro Sample (Kick/Snare/Perc/Bass/Lead/FX/Vocal-Chop/User-Upload), pro Step Velocity, Swing-Slider, Tempo folgt Master-BPM
-- `src/components/player/LayerMixer.tsx` — Liste aktiver Layer (Sequencer, Loop-Pads, Vocals, externer Track auf Deck B), pro Layer: Mute (blinkt rot), Solo, Volume, Send-FX, Side-Chain-Toggle
-- Erweiterung `mixPlanner.ts`: Vorschläge welche Layer im aktuellen Energy-Segment passen (z. B. "Add Perc Layer @ Drop")
+1. **`TransportBar.tsx`**: Lokalen `padsOpen`/`vocalOpen` State entfernen. Buttons "Vocal" und "Pads" rufen stattdessen einen neuen globalen Zustand `useDock` (siehe 3) auf — `toggle("loop-pads")` / `toggle("vocal")`. JSX-Render der beiden Overlays am Ende der Datei entfernen.
+2. **`ModuleDock.tsx`**: Bleibt einzige Render-Quelle. `LoopPadOverlay` und `VocalOverlay` werden ebenfalls in einen `FloatingPanel` gewrappt (statt eigener fixed-Position), damit sie verschoben, minimiert **und** verlässlich geschlossen werden können. `LoopPadOverlay` / `VocalOverlay` bekommen dazu eine schlanke "headless"-Variante (innerer Inhalt ohne eigenen Card-Rahmen / X-Button).
+3. **Neuer Mini-Store `src/lib/dock.ts`** (zustand): `open: Set<ModuleId>`, `toggle(id)`, `close(id)`, `openIds()`. `ModuleDock` und `TransportBar` greifen beide darauf zu → eine einzige Quelle der Wahrheit, kein Doppel-Render mehr.
+4. **z-index-Ordnung sauber**: FloatingPanel z-40, TransportBar z-20, FAB z-50. Damit liegt der Pad-Header garantiert über der TransportBar und der X-Button funktioniert immer.
 
-## 3) Dashboard-Modus mit floatenden Modulen
-Aus jedem Screen heraus weitere Module einblenden & frei anordnen.
+### Teil B · Echtes virtuoses Auto-DJ mit Dual-Deck-Engine
 
-- `src/components/dashboard/ModuleDock.tsx` (FAB unten rechts, immer sichtbar)
-  - Liste aller verfügbaren Module mit Kompatibilitäts-Badge: TwinDeck, Sequencer, LoopPads, VocalLayer, FX-Rack, Waveform-Zoom, Lyrics, Coach-Tipps, Crowd-Mood, Energy-Curve, Key/BPM-Wheel, Hot-Cue-Bank, Recorder
-- `src/components/dashboard/FloatingPanel.tsx`
-  - Drag/Resize/Minimize/Pin, Snap-to-Grid (4er), pro User-Layout in `settings.dashboard_layout` (JSONB) gespeichert
-- Neue Route `src/routes/_authenticated/studio.tsx` — Default-Dashboard mit Twin-Deck + Sequencer + LoopPads + Waveform + Vocal
-- DB-Migration: `settings.dashboard_layout JSONB`, `settings.theme_preset TEXT`
+5. **`engine.ts`** um zweites Deck erweitern:
+   - `audioElB`, `sourceB`, `gainA`, `gainB`, `filterB`, `delayB` — gespiegelte Graph-Kette.
+   - Neuer interner Scheduler: läuft per `requestAnimationFrame`, prüft `positionSec` gegen `plan.triggerAtSecOfCurrent`. Wenn `autoDj === true` und `queue[0]` vorhanden → startet die geplante Transition vorzeitig **vor** Songende, sodass beide Decks gleichzeitig laufen.
+   - Plan wird beim Laden des nächsten Tracks vorab gebaut (nicht erst im `skip`) → wird in State als `pendingPlan` gehalten und in der Coach-HUD angezeigt.
+   - Nach dem Übergang: Decks tauschen Rollen (Deck B wird zum neuen Deck A), Plan für den dann nächsten Track wird gebaut.
 
-## 4) Power-Design "Virtuoso"
-Kohärentes futuristisches DJ-Design über alle Module.
+6. **`mixPlanner.ts`** um virtuose Modi erweitern:
+   - Neue Modi (zusätzlich zu den bestehenden): `loopRoll` (letzten 4 Beats des Outros loopen, dabei Filter-High-Pass + neuer Track startet auf Drop), `doubleDrop` (Outro-Drop ↔ Intro-Drop frame-genau übereinanderlegen), `bassSwap` (Lo-Cut auf A, Lo-Boost auf B, dann wechseln), `reverbWash` (langer Reverb-Tail + Filter), bestehende `echoTail`, `filterSweep`, `crossfade`, `stinger`.
+   - Auswahl-Strategie:
+     - **BPM nahe (≤3 %) + Key kompatibel + beide Cues bekannt → `doubleDrop` oder `bassSwap` (random gewichtet)**
+     - **BPM nahe + Key inkompatibel → `loopRoll` oder `echoTail`**
+     - **BPM-Sprung >12 % → `filterSweep` oder `reverbWash`**
+     - **Energie-Sprung >30 → `loopRoll` mit Build-up**
+     - **Modus `"random"`** schaltbar: planMix mischt aus den passenden Kandidaten zufällig → "Profi-DJ-Feeling".
+   - `planMix` gibt zusätzlich `startAtSecOfNext`, `triggerAtSecOfCurrent`, `bpmRatio` zurück (bereits da) — Engine **nutzt sie jetzt**: `audioElB.currentTime = startAtSecOfNext` und `audioElB.playbackRate = bpmRatio` (clamped 0.92–1.08, damit es musikalisch bleibt).
 
-- `src/styles.css`: neue Tokens — `--neon-cyan`, `--neon-magenta`, `--neon-amber`, `--deck-graphite`, `--glass-surface`, Glow-Shadows, Gradient-Mesh-Backgrounds, Scanline-Overlay
-- Globale Komponenten:
-  - `NeonButton` (Variants: idle/active/armed/danger – Farbwechsel + Glow)
-  - `LedIndicator` (pulsiert grün/orange/rot je nach Status, blinkt bei Mute/Clip)
-  - `MeterBar`, `RotaryKnob` (drag-rotate, Wertanzeige), `MotorSlider` (Color-Track ändert mit Wert)
-  - Module-Header mit dünner Animated-Beam-Linie (MagicUI), Background „Flickering Grid" dezent
-- Typo: Display-Font für Werte (z. B. JetBrains Mono / Orbitron-ähnlich via Google Fonts `<link>` im `__root.tsx`), Body bleibt clean
+7. **Transition-Mode-Wahl im UI**:
+   - `TransitionMode` Typ um die neuen Modi erweitern. `TRANSITION_LABELS` Mapping anpassen.
+   - `setTransitionMode("auto" | "random" | <fest>)` — `auto` (default) lässt planMix entscheiden, `random` würfelt aus allen passenden, alle anderen Werte erzwingen den jeweiligen Modus.
+   - TransportBar: kleines Dropdown neben dem Auto-DJ-Switch („Auto · Random · Crossfade · Double-Drop · Loop-Roll · …").
 
-## 5) Hilfe / Empfehlungen / Optimierung
-- `src/components/dashboard/CoachHud.tsx` — kleines Overlay mit Live-Tipps von `coach.functions.ts` (BPM-Drift, Key-Clash, leiser Vocal, Loudness > -6 dB)
-- Tooltip-Layer auf allen neuen Controls (kurzer Tipp + „Mehr"-Link)
-- Onboarding-Tour (1× pro User, in `settings.onboarded_studio`) führt durch Decks, Sequencer, Module-Dock
-- „Optimize Mix"-Button: ruft `planMix` + `coach` und passt EQ/Volume automatisch an, mit „Undo"
+8. **Analyse-Hinweis**: Wenn ein Track in der Queue keine BPM/Cues hat, läuft Auto-DJ auf "safe crossfade" zurück und der `CoachHud` zeigt einen gelben Hinweis „Track ‚X' nicht analysiert — Übergang reduziert. Jetzt analysieren?" mit Button → triggert die bestehende Re-Analyse aus `library.tsx`.
 
-## 6) Konsolidierung & Konsistenz
-- Bestehende Routen (`/loops`, `/karaoke`, `/remix`, `/sound-designer`, `/wizard`) bekommen Deep-Link-Buttons „In Studio öffnen" → öffnen jeweiliges Modul als FloatingPanel
-- `TransportBar` zeigt zusätzlich Deck-A/B-Indikatoren, Crossfader-Position, aktive Layer-Anzahl
+### Teil C · Verifikation
+- Mit zwei kurzen Test-Uploads (z. B. 30 s) Auto-DJ einschalten → echte Überlappung im Waveform sichtbar, beide Tracks gleichzeitig hörbar.
+- Pad-Button in TransportBar öffnen, X im Pad-Header schließen → wirklich geschlossen, kein Geist-Overlay mehr.
 
-## Technische Notizen
-- Scratch/Scrub via `AudioBufferSourceNode.playbackRate` + Re-Schedule bei Richtungswechsel; Touch-Events mit `pointercancel`-Cleanup
-- Sequencer-Clock: `AudioContext.currentTime` + Lookahead-Scheduler (25 ms Tick, 100 ms Ahead)
-- Floating Panels: einfache eigene Implementierung (pointer-events, `position: fixed`, transform), kein extra Lib
-- Alle neuen AI-Calls über vorhandenes Gateway, Modell `gemini-3-flash-preview`
-- DB: 1 Migration für `dashboard_layout`, `theme_preset`, `onboarded_studio`
+## Technische Details
 
-## Lieferung
-Ein Rutsch (~20–25 neue/geänderte Dateien). Reihenfolge intern:
-1. Design-Tokens + Basis-UI-Primitives (NeonButton, Led, Knob, Slider)
-2. Engine-Erweiterung (Deck B, Crossfader, Scratch)
-3. Twin-Deck + Turntable
-4. Sequencer + LayerMixer
-5. ModuleDock + FloatingPanel + `/studio`-Route
-6. CoachHud + Onboarding + Optimize-Button
-7. Migration + Settings-Persistenz
+Geänderte / neue Dateien:
+- `src/lib/dock.ts` (neu) — globaler Modul-Open-State.
+- `src/lib/audio/engine.ts` — zweites Deck, Auto-DJ-Scheduler, `pendingPlan`, neue Transition-Modi-Execution.
+- `src/lib/audio/mixPlanner.ts` — neue Modi (`loopRoll`, `doubleDrop`, `bassSwap`, `reverbWash`), Random-Selektor.
+- `src/components/player/TransportBar.tsx` — entkoppelt, Transition-Dropdown.
+- `src/components/player/LoopPadOverlay.tsx` / `VocalOverlay.tsx` — Inhalt vom Card-Rahmen trennen, von `FloatingPanel` wrappen lassen.
+- `src/components/dashboard/ModuleDock.tsx` — alle Module via `useDock`, alle in `FloatingPanel`.
+- `src/components/cockpit/CoachHud.tsx` — zeigt `pendingPlan.notes` und Analyse-Warnungen.
 
-## Offen vor dem Bauen
-- Soll der `/studio`-Screen die neue **Standard-Startseite nach Login** werden, oder bleibt `/library` Default und Studio ist via Nav/FAB erreichbar?
+Risiken: zweite `MediaElementAudioSourceNode` für `audioElB` muss separat verbunden werden (eine Source pro Element); Playback-Rate-Drift bei langen Songs minimieren wir durch das Clamping 0.92–1.08.
