@@ -1,123 +1,65 @@
+## Status der 6 „Coming Soon"-Karten
 
-# Karaoke Studio — Gamechanger-Upgrade
+| Karte | Status | Was wir kostenlos liefern können |
+|---|---|---|
+| **AI Mashups** | ✅ bereits live (`/battle`) | Karte auf "Open" umstellen, auf `/battle` linken |
+| **AI Vocal Producer** | ✅ bereits live (`PostProcessSheet` in `/karaoke`) | Karte auf "Open" umstellen, FX-Sheet öffnen |
+| **AI Choir** | ✅ Engine vorhanden (`vocalPost.ts`) | Eigene Route `/choir` mit Preset-Auswahl (3/5/8/16/50 Stimmen), Detune-Spread, Reverb-Halle |
+| **AI Sound Designer** | 🆕 neu, machbar | Gemini gibt JSON-FX-Parameter zurück (Oscillator-Typ, Hüllkurve, Filter, FM-Mod) → Web Audio synthetisiert in Echtzeit + Download als WAV |
+| **AI Crowd Reactions** | 🆕 neu, machbar | Procedurale Crowd-Engine (Noise + viele Stimmen-TTS gemischt) + Preset-Buttons "Jubel/Lacher/Applaus/Pfiffe/Buh"; Gemini wählt passendes Preset zur Szene |
+| **AI Remix** | 🆕 neu, machbar | 90-Sek Dance-Edit: BPM-Detect (vorhanden) → Time-Stretch auf Ziel-BPM → Intro/Drop/Outro-Struktur via Filter-Sweeps & Loop-Wiederholungen aus bestehendem `engine.ts` |
 
-Aktuell ist Karaoke ein **Single-Take Recorder**. Damit es einen Level höher kommt, mache ich daraus ein **Multitrack-Loop-Studio mit KI-Coach** — wie eine Ed-Sheeran-Loop-Station kombiniert mit einem Vocal-Trainer.
+Alles funktioniert kostenlos: Lovable AI Gateway (Gemini Text + TTS, schon im Projekt) + Web Audio API. Keine zusätzlichen API-Keys nötig.
 
-Alles, was hier steht, ist mit **Lovable AI (kostenlos in deinem Plan)** + Web Audio API umsetzbar. Keine externen Bezahl-APIs.
+## Umsetzung
 
----
+### 1. AI Lab Karten aktualisieren (`ai-lab.tsx`)
+- "Mashups", "Vocal Producer", "Choir" → grüner "Open" Badge + Link
+- Neue Karten "Sound Designer", "Crowd Reactions", "Remix" → eigene Routen
 
-## TEIL A — Das Multitrack-Studio (die Hauptsache)
+### 2. AI Choir — `/choir`
+- Auswahl Recording aus `recordings`
+- Slider: Stimmenzahl (1–50), Detune-Spread (Cents), Stereo-Spread, Hall-Größe
+- Nutzt `pitchShiftBuffer` × N mit zufälligem Detune/Timing-Offset → Offline-Mixdown → Upload als neue Aufnahme
 
-### A1. DAW-Style Multitrack-Recorder
-- **Mehrere Tonspuren parallel** auf einem Timeline-Grid
-- Jede Spur: eigene Wellenform, Mute/Solo/Volume/Pan, eigene FX-Bypass
-- **Overdub**: während die alten Spuren laufen, neue Spur dazu aufnehmen (Beatbox-Layer, Harmonies, Ad-libs)
-- **Loop-Station Mode**: Loop-Länge in Takten setzen (z. B. 4 Bars @ 100 BPM), jeder Durchgang fügt eine neue Layer hinzu — perfekt für spontane Songs auf der Party
-- **Punch-In / Punch-Out**: nur ein Abschnitt einer Spur neu aufnehmen
-- **Mixdown**: alle Spuren als eine WAV exportieren
-- **Sessions speichern**: Projekt mit allen Spuren in DB + Storage, später weiterbearbeiten
+### 3. AI Sound Designer — `/sound-designer`
+- Textprompt: "Laser-Schuss", "UFO-Landung", "Tropfen im Eimer", "Cyber-Drone 4s"
+- Server-Function: Gemini → strikt JSON `{ oscType, freqStart, freqEnd, duration, attack, decay, sustain, release, filterType, filterFreq, filterQ, lfoRate, lfoDepth, distortion, reverb }`
+- Client synthetisiert via `OfflineAudioContext` → WAV-Download + Speichern als Recording
 
-### A2. Visueller Mixer
-- Channel-Strips wie bei einem echten Mischpult
-- Live-Pegel-Meter pro Spur
-- Stereo-Master-Output mit Limiter
+### 4. AI Crowd Reactions — `/crowd`
+- 5 Presets: Jubel, Lacher, Applaus, Buhrufe, "Ohhhh"
+- Procedural Engine: 6–40 TTS-Clips ("Yeaaah", "Bravo", "Hahaha"…) mit unterschiedlichen Voices + leichtem Pitch-Offset + Stereo-Spread + Crowd-Noise-Layer (gefiltertes Pink Noise)
+- "AI Pick": Gemini bekommt Szenenbeschreibung → wählt Preset + Intensität
+- Direkt abspielen oder in FX-Library speichern
 
-### A3. Sync-Click + Tempo-Map
-- Globaler Tempo + Taktart fürs Projekt
-- Optional metronom-synchrones Recording (jede Spur startet automatisch auf dem 1er)
+### 5. AI Remix — `/remix`
+- Wähle ein Recording (oder Track aus `tracks`)
+- Slider: Ziel-BPM (default 128), Länge (60/90/120s), Style (House/Techno/Disco)
+- Pipeline: `estimateBPM` → time-stretch → Aufbau: Intro (8 bars, Lowpass-Sweep) → Body (16 bars, full) → Break (4 bars, Highpass + Echo-Tail) → Drop (16 bars) → Outro (8 bars, Fade)
+- Nutzt vorhandene `mashup.ts`-Bausteine + `engine.ts` Filter-Logik
+- Mixdown als WAV + Save
 
----
+### 6. Neue Server-Funktionen
+- `src/lib/ai/soundDesigner.functions.ts` — Gemini JSON → FX-Parameter
+- `src/lib/ai/crowdPick.functions.ts` — Szene → Preset-Empfehlung
+- Wiederverwendung: `duet.functions.ts` (TTS für Crowd), bestehende `lyrics`/`coach`
 
-## TEIL B — KI-Features (alle kostenlos via Lovable AI)
+### 7. Audio-Module
+- `src/lib/audio/synth.ts` — Parameter → AudioBuffer (Oscillator + ADSR + Filter + LFO + Distortion + Reverb)
+- `src/lib/audio/choir.ts` — N-stimmiger Chor via Pitch-Shift + Detune
+- `src/lib/audio/crowd.ts` — TTS-Layering + Noise-Bett
+- `src/lib/audio/remix.ts` — BPM-sync Dance-Edit-Builder
 
-### B1. Live Vocal Coach (Pitch + Score) ⭐ Gamechanger
-- Während des Singens: **scrollende Pitch-Linie** + Ziel-Tonleiter overlay
-- Sofort sichtbar wo du daneben singst
-- Nach dem Take: **Score 0–100** (Pitch-Accuracy, Timing-Konsistenz, Energie)
-- Funktioniert per Web Audio (kein KI-Call nötig), zusätzlich Gemini-Feedback ("Refrain war 🔥, Strophe 2 leicht flach")
+### 8. Nav (`AppShell.tsx`)
+- `/choir`, `/sound-designer`, `/crowd`, `/remix` in SECONDARY-Nav aufnehmen (oder als Untergruppe „AI Lab")
 
-### B2. Live KI-Untertitel (Speech-to-Text)
-- Nimmt während des Singens mit, **transkribiert live** via `openai/gpt-4o-mini-transcribe`
-- Zeigt Lyrics karaoke-mäßig auf dem Bildschirm — auch ohne offizielle Lyric-Datei
-- Speichert Transkript zur Aufnahme
+## Reihenfolge
 
-### B3. KI-Lyric-Writer (Text Generation)
-- "Schreibe einen Song über [Thema] im Stil von [Künstler]" → Gemini liefert komplette Lyrics
-- Auto-Scrolling Teleprompter-View für die Performance
-- Optional: Reim-Schema, Strophenzahl, Sprache wählen
+1. AI Lab Karten umstellen + 3 ✅-Karten verlinken (5 min)
+2. AI Choir Route (existing engine, schnellster Win)
+3. AI Crowd Reactions (TTS-Layering)
+4. AI Sound Designer (synth engine)
+5. AI Remix (komplexester Build)
 
-### B4. KI-Song-Identifier (Multimodal Audio→Text) ⭐
-- Sing oder summe 5–10 s — **Gemini 3 Flash kann Audio direkt verarbeiten** und rät den Song
-- "Klingt nach 'Bohemian Rhapsody' von Queen" — perfekt fürs Party-Quiz
-
-### B5. KI-Cover-Art für jede Aufnahme
-- Jede gespeicherte Aufnahme bekommt automatisch ein generiertes **Cover-Bild** (Gemini Flash Image)
-- Basiert auf Song-Titel + Vibe — die "Tonight's moments"-Gallery wird zum Vinyl-Cover-Wand
-
-### B6. KI-Roast & Toast Generator (TTS)
-- Nach jedem Take: Gemini schreibt einen 2-Sätze-Roast oder Toast über den Sänger
-- TTS spricht ihn mit gewählter Stimme — instant Party-Moment
-
-### B7. KI-Duett-Partner
-- Du singst Strophe 1, KI-Stimme (TTS) singt Strophe 2 → Duett-Aufnahme
-- Lyrics liefert B3, Gesang B6-Voice
-- Begrenzung: TTS spricht, "singt" aber nicht melodisch — gut für Rap/Spoken-Word-Sektionen
-
-### B8. Karaoke-Battle-Modus + Leaderboard
-- Mehrere Sänger nacheinander, gleicher Song, B1-Scores zählen
-- Live-Leaderboard pro Party
-- Sieger-Stinger nach jeder Runde
-
-### B9. Auto-Mashup
-- Wähle 2 Tracks → BPM/Key-Detection → automatisches Time-Stretch + Crossfade → ein Mashup
-- Nutzt vorhandenes `soundtouchjs` + neue Beat-Erkennung
-
----
-
-## Prioritäten / Reihenfolge
-
-1. **A1 + A2 Multitrack-Studio** — die zentrale Vision deiner Anfrage
-2. **B1 Live Vocal Coach** — visuelles Wow für jeden Sänger
-3. **B5 KI-Cover-Art** — sofortiger Hingucker in der Gallery
-4. **B2 Live-Untertitel** — gameplay-relevant
-5. **B6 Roast/Toast** — schnell gebaut, hohe Party-Wirkung
-6. **B4 Song-Identifier** — Quiz-Feature
-7. **B3 Lyric-Writer** + **B7 Duett**
-8. **B8 Battle-Modus** + **B9 Mashup**
-
----
-
-## Technik (kurz)
-
-### Neue Dateien
-- `src/lib/audio/multitrack.ts` — Track-Klassen, Mixer, OfflineAudioContext-Bouncer
-- `src/lib/audio/loopStation.ts` — Loop-Sync-Engine
-- `src/lib/audio/beatDetect.ts` — BPM + Key Detection (autocorrelation + chromagram)
-- `src/lib/audio/scoring.ts` — Pitch-Accuracy + Timing-Score
-- `src/lib/ai/coach.functions.ts` — Score → Feedback via Gemini
-- `src/lib/ai/lyrics.functions.ts` — Lyric Generator
-- `src/lib/ai/songId.functions.ts` — Multimodal Audio → Song-Guess (Gemini 3 Flash)
-- `src/lib/ai/cover.functions.ts` — Cover-Art via Gemini Flash Image
-- `src/lib/ai/roast.functions.ts` — Roast/Toast generator
-- `src/routes/api/ai/transcribe-stream.ts` — Live STT-Stream-Endpoint
-- `src/routes/_authenticated/studio.tsx` — neuer Multitrack-Studio Screen
-- `src/components/studio/Timeline.tsx`, `TrackLane.tsx`, `Mixer.tsx`, `PitchCoach.tsx`, `Teleprompter.tsx`, `LoopPad.tsx`
-- Neue DB-Tabelle `karaoke_sessions` (Projekt mit JSON für Tracks-Metadata) + `karaoke_session_tracks`
-
-### Geänderte Dateien
-- `src/routes/_authenticated/karaoke.tsx` — Link zum neuen Studio, Cover-Bilder in Gallery, Score-Badges
-- `src/components/layout/AppShell.tsx` — Studio-Navigation
-- `src/integrations/supabase/types.ts` — neue Tabellen
-
----
-
-## Zeitlicher Aufwand
-
-Das ist **viel** — realistisch in Etappen liefern. Mein Vorschlag:
-
-**Etappe 1 (jetzt):** A1, A2, B1, B5 — Multitrack-Studio + Live-Coach + Cover-Art
-**Etappe 2:** B2, B6, B4 — Untertitel, Roast, Song-Identifier
-**Etappe 3:** B3, B7, B8, B9 — Lyric-Writer, Duett, Battle, Mashup
-
-**Soll ich mit Etappe 1 starten, oder willst du eine andere Auswahl?**
+Soll ich alle 4 neuen Routen + Card-Updates in einem Rutsch bauen, oder Schritt für Schritt mit Zwischenfreigabe?
