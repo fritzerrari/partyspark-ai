@@ -147,13 +147,21 @@ export class VocalChain {
     this.eqLow.gain.setTargetAtTime(s.eqLow, t, 0.05);
     this.eqMid.gain.setTargetAtTime(s.eqMid, t, 0.05);
     this.eqHigh.gain.setTargetAtTime(s.eqHigh, t, 0.05);
-    this.reverbSend.gain.setTargetAtTime(s.reverb ? s.reverbMix : 0, t, 0.05);
-    this.reverbReturn.gain.value = 1.0;
-    this.delaySend.gain.setTargetAtTime(s.delay ? s.delayMix : 0, t, 0.05);
+    // Gain-stage so dry + reverb + delay + doubler can never overshoot 0 dBFS.
+    // Each FX return is capped, and dry is trimmed when many parallel paths are hot.
+    const reverb  = s.reverb  ? s.reverbMix       : 0;
+    const delay   = s.delay   ? s.delayMix        : 0;
+    const doubler = s.doubler ? s.doublerAmount   : 0;
+    const hot = 1 + reverb * 0.7 + delay * 0.6 + doubler * 0.6;
+    const dryTrim = 1 / hot;
+    this.dry.gain.setTargetAtTime(dryTrim, t, 0.05);
+    this.reverbSend.gain.setTargetAtTime(reverb, t, 0.05);
+    this.reverbReturn.gain.setTargetAtTime(0.85 * dryTrim, t, 0.05);
+    this.delaySend.gain.setTargetAtTime(delay, t, 0.05);
     this.delayNode.delayTime.setTargetAtTime(s.delayTime, t, 0.05);
-    this.delayFeedback.gain.setTargetAtTime(s.delayFeedback, t, 0.05);
-    this.delayReturn.gain.value = 1.0;
-    this.doublerGain.gain.setTargetAtTime(s.doubler ? s.doublerAmount : 0, t, 0.05);
+    this.delayFeedback.gain.setTargetAtTime(Math.min(0.75, s.delayFeedback), t, 0.05);
+    this.delayReturn.gain.setTargetAtTime(0.85 * dryTrim, t, 0.05);
+    this.doublerGain.gain.setTargetAtTime(doubler * dryTrim, t, 0.05);
   }
 
   setReverbPreset(preset: ReverbPreset) {

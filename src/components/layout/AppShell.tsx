@@ -44,6 +44,7 @@ const NAV = [
 // Secondary nav (More menu on mobile, sidebar on desktop).
 const SECONDARY = [
   { to: "/cockpit", label: "DJ Cockpit", icon: Disc3 },
+  { to: "/studio-bench", label: "Studio Bench", icon: Sparkles },
   { to: "/wizard", label: "Studio-Wizard", icon: Compass },
   { to: "/soundpool", label: "Soundpool", icon: Layers },
   { to: "/loops", label: "Loop Creator", icon: Repeat },

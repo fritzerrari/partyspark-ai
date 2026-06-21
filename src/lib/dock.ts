@@ -8,7 +8,11 @@ export type ModuleId =
   | "sequencer"
   | "loop-pads"
   | "vocal"
-  | "coach";
+  | "coach"
+  | "remix"
+  | "autotune"
+  | "mashup"
+  | "project-tray";
 
 type DockState = {
   open: Record<ModuleId, boolean>;
@@ -24,6 +28,10 @@ const EMPTY: Record<ModuleId, boolean> = {
   "loop-pads": false,
   vocal: false,
   coach: false,
+  remix: false,
+  autotune: false,
+  mashup: false,
+  "project-tray": false,
 };
 
 export const useDock = create<DockState>((set, get) => ({

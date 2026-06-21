@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { buildRemix } from "@/lib/audio/remix";
 import { bufferToWav } from "@/lib/audio/mashup";
+import { useProject } from "@/lib/project/store";
 
 export const Route = createFileRoute("/_authenticated/remix")({
   head: () => ({ meta: [{ title: "AI Remix — PartyPilot" }] }),
@@ -20,6 +21,7 @@ export const Route = createFileRoute("/_authenticated/remix")({
 function RemixRoute() {
   const { user } = useAuth();
   const qc = useQueryClient();
+  const addArtifact = useProject((s) => s.addArtifact);
   const { data: recs = [] } = useQuery(recordingsOptions());
   const { data: tracks = [] } = useQuery(tracksListOptions());
   const [sel, setSel] = useState<string>("");
@@ -51,6 +53,11 @@ function RemixRoute() {
       const wav = bufferToWav(buffer);
       setBlob(wav); setUrl(URL.createObjectURL(wav)); setBpms({ src: sourceBpm, tgt: targetBpm });
       liveCtx.close();
+      // Push into Project Bus so other modules (Cockpit, Mashup, Choir) see it instantly.
+      addArtifact({
+        kind: "remix", title: `${item.label} — Remix ${targetBpm} BPM`,
+        buffer, meta: { sourceBpm, targetBpm },
+      });
       toast.success(`Remix fertig — ${sourceBpm} → ${targetBpm} BPM, ${length}s`);
     } catch (e) { toast.error((e as Error).message); }
     finally { setBusy(false); }
