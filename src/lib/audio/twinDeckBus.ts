@@ -379,6 +379,8 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   autoShuffle: true,
   pool: [],
   needsUserGesture: false,
+  recording: false,
+  lastRecordingUrl: null,
 
   init() {
     ensureCtx(); wireDeck("A"); wireDeck("B");
@@ -466,6 +468,98 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   setAutoTimerOn(on) {
     set({ autoTimerOn: on, autoTimerCountdown: get().autoTimerSec });
     if (on) startAutoTimer(); else stopAutoTimer();
+  },
+
+  async startAutoDj() {
+    ensureCtx(); wireDeck("A"); wireDeck("B");
+    if (ctx?.state === "suspended") { try { await ctx.resume(); } catch { /* noop */ } }
+    const st = get();
+    const pool = st.pool;
+    if (pool.length < 2) {
+      set({ needsUserGesture: false });
+      return;
+    }
+    // Pick deck to start
+    const aHas = !!st.A.track;
+    const bHas = !!st.B.track;
+    let firstSide: DeckSide = "A";
+    if (!aHas && !bHas) {
+      const t0 = pool[0];
+      await get().loadDeck("A", t0);
+      recentlyPlayedIds.push(t0.id);
+      firstSide = "A";
+    } else if (aHas) {
+      firstSide = "A";
+    } else {
+      firstSide = "B";
+    }
+    // Pre-load B (or A) with next candidate
+    const otherSide: DeckSide = firstSide === "A" ? "B" : "A";
+    if (!get()[otherSide].track) {
+      const next = pickNextTrack(get());
+      if (next) {
+        await get().loadDeck(otherSide, next);
+        recentlyPlayedIds.push(next.id);
+      }
+    }
+    // Snap crossfader to firstSide and play it
+    set({ crossfader: firstSide === "A" ? 0 : 1 });
+    applyCrossfader(get());
+    if (!get()[firstSide].isPlaying) {
+      try { await get().toggle(firstSide); } catch { /* noop */ }
+    }
+    // Kick off analysis in background for both
+    void get().ensureAnalysis("A");
+    void get().ensureAnalysis("B");
+    // Arm the auto-timer
+    set({ autoTimerOn: true, autoTimerCountdown: get().autoTimerSec });
+    startAutoTimer();
+  },
+
+  stopAutoDj() {
+    set({ autoTimerOn: false });
+    stopAutoTimer();
+  },
+
+  async startRecording() {
+    ensureCtx();
+    if (!ctx || !masterGain) return;
+    if (mediaRecorder) return;
+    try {
+      recorderStream = ctx.createMediaStreamDestination();
+      masterGain.connect(recorderStream);
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "audio/webm";
+      mediaRecorder = new MediaRecorder(recorderStream.stream, { mimeType: mime });
+      recordedChunks = [];
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.start(1000);
+      set({ recording: true });
+    } catch (e) {
+      console.warn("recorder start failed", e);
+    }
+  },
+
+  async stopRecording() {
+    if (!mediaRecorder) return null;
+    return new Promise<Blob | null>((resolve) => {
+      mediaRecorder!.onstop = () => {
+        try {
+          const blob = new Blob(recordedChunks, { type: "audio/webm" });
+          const url = URL.createObjectURL(blob);
+          set({ recording: false, lastRecordingUrl: url });
+          if (recorderStream && masterGain) {
+            try { masterGain.disconnect(recorderStream); } catch { /* noop */ }
+          }
+          recorderStream = null;
+          mediaRecorder = null;
+          recordedChunks = [];
+          resolve(blob);
+        } catch {
+          resolve(null);
+        }
+      };
+      mediaRecorder!.stop();
+    });
   },
 
   async ensureAnalysis(side, opts) {
