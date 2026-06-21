@@ -8,6 +8,8 @@ import type { EngineTrack, TransitionMode, TransitionModeHint } from "./engine";
 import { planMix } from "./mixPlanner";
 import { analyzeAudio, decodeToBuffer, camelotCompatible } from "./analyze";
 import { keyToCamelot } from "./keyToCamelot";
+import { shiftKey, semitoneShiftToKey } from "./keyDelta";
+import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -21,6 +23,16 @@ export type DeckState = {
   volume: number;    // user vol 0..1
   analyzing: boolean;
   analyzeProgress: number; // 0..100
+  /** Perceived BPM accounting for the current playback rate (pitch). */
+  effectiveBpm: number | null;
+  /** Effective musical key after pitch-shift (semitones rounded). */
+  effectiveKey: string | null;
+  /** Semitones of effective key shift vs native (0 = unchanged). */
+  keyShiftSemis: number;
+  /** Bridge snippet readiness for transitioning INTO this deck. */
+  bridgeReady: boolean;
+  bridgeBuilding: boolean;
+  bridgeNotes: string | null;
 };
 
 type BusState = {
@@ -86,7 +98,12 @@ let masterGain: GainNode | null = null;
 let rafId: number | null = null;
 
 function emptyDeck(): DeckState {
-  return { track: null, isPlaying: false, position: 0, duration: 0, pitch: 1, volume: 0.9, analyzing: false, analyzeProgress: 0 };
+  return {
+    track: null, isPlaying: false, position: 0, duration: 0, pitch: 1, volume: 0.9,
+    analyzing: false, analyzeProgress: 0,
+    effectiveBpm: null, effectiveKey: null, keyShiftSemis: 0,
+    bridgeReady: false, bridgeBuilding: false, bridgeNotes: null,
+  };
 }
 
 function ensureCtx() {
