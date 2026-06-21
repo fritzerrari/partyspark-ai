@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { partyOptions, queueOptions, tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
-import { useEngine, TRANSITION_LABELS, type EngineTrack, type TransitionMode } from "@/lib/audio/engine";
+import { useEngine, TRANSITION_LABELS, type EngineTrack, type TransitionModeHint } from "@/lib/audio/engine";
 import { Button } from "@/components/ui/button";
 import { EnergyMeter } from "@/components/party/EnergyMeter";
 import { MoodPill, type Mood } from "@/components/party/MoodPill";
@@ -299,7 +299,7 @@ function ControlCenter() {
         ))}
         <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Transition</p>
-          <Select value={engine.transitionMode} onValueChange={(v) => engine.setTransitionMode(v as TransitionMode)}>
+          <Select value={engine.transitionMode} onValueChange={(v) => engine.setTransitionMode(v as TransitionModeHint)}>
             <SelectTrigger className="rounded-full"><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(TRANSITION_LABELS).map(([id, label]) => (

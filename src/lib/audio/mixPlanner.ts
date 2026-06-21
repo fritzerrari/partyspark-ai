@@ -24,7 +24,52 @@ export type MixPlan = {
 
 const DEFAULT_BARS = 16; // 16 beats ≈ 4 bars
 
-export function planMix(current: TrackMeta, next: TrackMeta, positionSec: number): MixPlan {
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Random-virtuoso selector — used when transitionMode === "random". */
+function pickRandomMode(
+  current: TrackMeta,
+  next: TrackMeta,
+): { mode: TransitionMode; bars: number; notes: string } {
+  const curBpm = current.bpm ?? 120;
+  const nxtBpm = next.bpm ?? curBpm;
+  const bpmDiff = Math.abs(curBpm - nxtBpm) / curBpm;
+  const keyCompat = camelotCompatible(current.camelot ?? "", next.camelot ?? "");
+  const haveCues = !!(current.cues && next.cues);
+  const candidates: { mode: TransitionMode; bars: number; weight: number; notes: string }[] = [];
+  if (bpmDiff <= 0.03 && keyCompat && haveCues) {
+    candidates.push({ mode: "doubleDrop", bars: 8, weight: 3, notes: "Double-Drop auf Cue" });
+    candidates.push({ mode: "bassSwap",   bars: 16, weight: 3, notes: "Bass-Swap (Lo-Cut → Lo-Boost)" });
+    candidates.push({ mode: "loopRoll",   bars: 4, weight: 2, notes: "Loop-Roll → Drop" });
+    candidates.push({ mode: "crossfade",  bars: 16, weight: 1, notes: "Sauberer harmonischer Crossfade" });
+  } else if (bpmDiff <= 0.06 && keyCompat) {
+    candidates.push({ mode: "crossfade",  bars: 16, weight: 3, notes: "Harmonischer Crossfade" });
+    candidates.push({ mode: "loopRoll",   bars: 4, weight: 2, notes: "Loop-Roll Transition" });
+    candidates.push({ mode: "echoTail",   bars: 8, weight: 1, notes: "Echo-Tail Übergang" });
+  } else if (bpmDiff > 0.12) {
+    candidates.push({ mode: "filterSweep", bars: 8, weight: 3, notes: "BPM-Sprung: Filter-Sweep" });
+    candidates.push({ mode: "reverbWash",  bars: 8, weight: 2, notes: "BPM-Sprung: Reverb-Wash" });
+    candidates.push({ mode: "echoTail",    bars: 6, weight: 1, notes: "BPM-Sprung: Echo-Tail" });
+  } else {
+    candidates.push({ mode: "echoTail",   bars: 8, weight: 2, notes: "Echo-Tail (Key-Wechsel)" });
+    candidates.push({ mode: "loopRoll",   bars: 4, weight: 2, notes: "Loop-Roll" });
+    candidates.push({ mode: "filterSweep", bars: 8, weight: 1, notes: "Filter-Sweep" });
+  }
+  // weighted pick
+  const total = candidates.reduce((s, c) => s + c.weight, 0);
+  let r = Math.random() * total;
+  for (const c of candidates) { r -= c.weight; if (r <= 0) return c; }
+  return pick(candidates);
+}
+
+export function planMix(
+  current: TrackMeta,
+  next: TrackMeta,
+  positionSec: number,
+  opts?: { forceMode?: TransitionMode | "auto" | "random" },
+): MixPlan {
   const curBpm = current.bpm ?? 120;
   const nxtBpm = next.bpm ?? curBpm;
   const bpmDiff = Math.abs(curBpm - nxtBpm) / curBpm; // 0..
@@ -39,34 +84,53 @@ export function planMix(current: TrackMeta, next: TrackMeta, positionSec: number
 
   // Choose mode + length
   let mode: TransitionMode = "crossfade";
-  let crossfadeSec = DEFAULT_BARS * beatSec;
+  let bars = DEFAULT_BARS;
   let notes = `Harmonischer Crossfade (${DEFAULT_BARS} Beats)`;
+  const force = opts?.forceMode ?? "auto";
 
-  if (bpmDiff > 0.12) {
-    mode = "filterSweep";
-    crossfadeSec = 8 * beatSec;
-    notes = `BPM-Sprung ${curBpm.toFixed(0)} → ${nxtBpm.toFixed(0)}: Filter Sweep`;
+  if (force === "random") {
+    const r = pickRandomMode(current, next);
+    mode = r.mode; bars = r.bars; notes = `🎲 ${r.notes}`;
+  } else if (force !== "auto") {
+    mode = force as TransitionMode;
+    bars = mode === "doubleDrop" ? 8 : mode === "loopRoll" ? 4 : mode === "bassSwap" ? 16 : 8;
+    notes = `Manuell: ${mode}`;
+  } else if (bpmDiff <= 0.03 && keyCompat && current.cues && next.cues) {
+    // Profi-Move: perfekt kompatibel → doubleDrop oder bassSwap
+    const r = Math.random();
+    if (r < 0.45)      { mode = "doubleDrop"; bars = 8;  notes = `Double-Drop: Outro+Drop sync (${curBpm.toFixed(0)} BPM)`; }
+    else if (r < 0.8)  { mode = "bassSwap";   bars = 16; notes = `Bass-Swap, Tonart ${current.camelot}→${next.camelot}`; }
+    else               { mode = "loopRoll";   bars = 4;  notes = `Loop-Roll in den Drop`; }
+  } else if (bpmDiff > 0.12) {
+    const r = Math.random();
+    if (r < 0.55) { mode = "filterSweep"; bars = 8; notes = `BPM-Sprung ${curBpm.toFixed(0)}→${nxtBpm.toFixed(0)}: Filter Sweep`; }
+    else          { mode = "reverbWash";  bars = 8; notes = `BPM-Sprung: Reverb-Wash + Filter`; }
   } else if (!keyCompat) {
-    mode = "echoTail";
-    crossfadeSec = 6 * beatSec;
-    notes = `Tonart ${current.camelot} → ${next.camelot} nicht kompatibel: Echo Tail`;
+    mode = Math.random() < 0.5 ? "echoTail" : "loopRoll";
+    bars = mode === "loopRoll" ? 4 : 6;
+    notes = `Tonart ${current.camelot}→${next.camelot} inkompatibel: ${mode}`;
   } else if (Math.abs((current.energy ?? 50) - (next.energy ?? 50)) > 30) {
-    mode = "filterSweep";
-    crossfadeSec = 12 * beatSec;
-    notes = `Energie-Sprung: Filter Sweep mit Drop-Sync`;
+    mode = "loopRoll"; bars = 4;
+    notes = `Energie-Sprung: Loop-Roll Build-up`;
   }
+
+  const crossfadeSec = bars * beatSec;
 
   // Snap trigger to next beat for tightness
   const triggerSnapped = current.beatGrid?.length
     ? nextBeatAfter(current.beatGrid, triggerAtSecOfCurrent)
     : triggerAtSecOfCurrent;
 
+  // Clamp playback-rate ratio so musical pitch doesn't get destroyed
+  const rawRatio = nxtBpm / curBpm;
+  const bpmRatio = Math.max(0.92, Math.min(1.08, rawRatio));
+
   return {
     mode,
     crossfadeSec: +crossfadeSec.toFixed(2),
     startAtSecOfNext,
     triggerAtSecOfCurrent: triggerSnapped,
-    bpmRatio: nxtBpm / curBpm,
+    bpmRatio,
     notes,
   };
 }

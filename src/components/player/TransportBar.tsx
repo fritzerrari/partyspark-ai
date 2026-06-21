@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { Play, Pause, SkipForward, Mic, Grid3x3, Wand2, Volume2 } from "lucide-react";
 import { useRouterState } from "@tanstack/react-router";
-import { useEngine } from "@/lib/audio/engine";
+import { useEngine, TRANSITION_LABELS, type TransitionModeHint } from "@/lib/audio/engine";
 import { buildPeaks } from "@/lib/audio/multitrack";
 import { decodeToBuffer } from "@/lib/audio/analyze";
 import { WaveformBar } from "./WaveformBar";
-import { VocalOverlay } from "./VocalOverlay";
-import { LoopPadOverlay } from "./LoopPadOverlay";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDock } from "@/lib/dock";
 import { cn } from "@/lib/utils";
 
 function fmt(sec: number) {
@@ -27,14 +27,18 @@ export function TransportBar() {
   const duration = useEngine((s) => s.durationSec);
   const volume = useEngine((s) => s.volume);
   const autoDj = useEngine((s) => s.autoDj);
+  const transitionMode = useEngine((s) => s.transitionMode);
+  const pendingPlan = useEngine((s) => s.pendingPlan);
   const toggle = useEngine((s) => s.toggle);
   const skip = useEngine((s) => s.skip);
   const setVolume = useEngine((s) => s.setVolume);
   const setAutoDj = useEngine((s) => s.setAutoDj);
+  const setTransitionMode = useEngine((s) => s.setTransitionMode);
+  const dockToggle = useDock((s) => s.toggle);
+  const padsOpen = useDock((s) => s.open["loop-pads"]);
+  const vocalOpen = useDock((s) => s.open.vocal);
 
   const [peaks, setPeaks] = useState<Float32Array | null>(null);
-  const [vocalOpen, setVocalOpen] = useState(false);
-  const [padsOpen, setPadsOpen] = useState(false);
 
   // Build waveform peaks when current track URL changes
   useEffect(() => {
@@ -58,7 +62,6 @@ export function TransportBar() {
   if (!current) return null;
 
   return (
-    <>
       <div className="fixed inset-x-0 bottom-[68px] z-20 mx-auto max-w-[1400px] px-2 lg:bottom-3 lg:px-6">
         <div className="rounded-2xl border border-border bg-card/95 p-3 shadow-stage backdrop-blur">
           <div className="flex items-center gap-3">
@@ -71,12 +74,13 @@ export function TransportBar() {
                     {current.artist ?? "—"}
                     {current.bpm ? ` · ${Math.round(current.bpm)} BPM` : ""}
                     {current.musicalKey ? ` · ${current.musicalKey}` : ""}
+                    {autoDj && pendingPlan ? ` · 🎚 ${pendingPlan.notes}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm" variant={vocalOpen ? "default" : "ghost"}
-                    onClick={() => setVocalOpen((v) => !v)}
+                    onClick={() => dockToggle("vocal")}
                     className="h-9 rounded-full"
                     title="Über Song singen"
                   >
@@ -84,7 +88,7 @@ export function TransportBar() {
                   </Button>
                   <Button
                     size="sm" variant={padsOpen ? "default" : "ghost"}
-                    onClick={() => setPadsOpen((v) => !v)}
+                    onClick={() => dockToggle("loop-pads")}
                     className="h-9 rounded-full"
                     title="Loop-Pads"
                   >
@@ -94,6 +98,16 @@ export function TransportBar() {
                     <Wand2 className="h-3.5 w-3.5 text-primary" />
                     <span className="text-xs font-medium">Auto-DJ</span>
                     <Switch checked={autoDj} onCheckedChange={setAutoDj} />
+                    <Select value={transitionMode} onValueChange={(v) => setTransitionMode(v as TransitionModeHint)}>
+                      <SelectTrigger className="h-7 w-[150px] border-none bg-transparent px-2 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(TRANSITION_LABELS) as [TransitionModeHint, string][]).map(([id, label]) => (
+                          <SelectItem key={id} value={id} className="text-xs">{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
@@ -119,10 +133,6 @@ export function TransportBar() {
           </div>
         </div>
       </div>
-
-      <VocalOverlay open={vocalOpen} onClose={() => setVocalOpen(false)} />
-      <LoopPadOverlay open={padsOpen} onClose={() => setPadsOpen(false)} />
-    </>
   );
 }
 

@@ -19,7 +19,7 @@ function keyRootMidi(key: string): number {
   return m[root] ?? 0;
 }
 
-export function VocalOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function VocalOverlay({ open, onClose, embedded }: { open: boolean; onClose: () => void; embedded?: boolean }) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const current = useEngine((s) => s.current);
@@ -198,18 +198,19 @@ export function VocalOverlay({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   if (!open) return null;
-  return (
-    <div className="fixed inset-x-0 bottom-[180px] z-30 mx-auto max-w-[1400px] px-2 lg:bottom-[112px] lg:px-6">
-      <div className="rounded-2xl border border-border bg-card/95 p-4 shadow-stage backdrop-blur">
-        <div className="mb-3 flex items-center justify-between">
+  const body = (
+    <>
+      <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="font-display text-lg font-semibold">Vocal Live-Layer</p>
             <p className="text-xs text-muted-foreground">
               Singe während der Song läuft. „Drop" platziert die Phrase beat-genau in der nächsten Pause.
             </p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
-        </div>
+          {!embedded && (
+            <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+          )}
+      </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-xl border border-border bg-card p-3">
@@ -275,7 +276,12 @@ export function VocalOverlay({ open, onClose }: { open: boolean; onClose: () => 
             </Button>
           </div>
         </div>
-      </div>
+    </>
+  );
+  if (embedded) return body;
+  return (
+    <div className="fixed inset-x-0 bottom-[180px] z-30 mx-auto max-w-[1400px] px-2 lg:bottom-[112px] lg:px-6">
+      <div className="rounded-2xl border border-border bg-card/95 p-4 shadow-stage backdrop-blur">{body}</div>
     </div>
   );
 }

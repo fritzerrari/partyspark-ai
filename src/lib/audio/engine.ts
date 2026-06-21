@@ -3,6 +3,7 @@
 // Phase 1: linear-volume crossfade, queue, progress.
 // Phase 2 hooks: bpm/key, beatmatch, mood routing, harmonics.
 import { create } from "zustand";
+import type { MixPlan } from "./mixPlanner";
 
 export type EngineTrack = {
   id: string;
@@ -20,15 +21,35 @@ export type EngineTrack = {
   vocalMap?: { t: number; voiced: number }[] | null;
 };
 
-export type TransitionMode = "crossfade" | "cut" | "fadeGap" | "filterSweep" | "echoTail" | "stinger";
+export type TransitionMode =
+  | "crossfade"
+  | "cut"
+  | "fadeGap"
+  | "filterSweep"
+  | "echoTail"
+  | "stinger"
+  | "loopRoll"
+  | "doubleDrop"
+  | "bassSwap"
+  | "reverbWash";
 
-export const TRANSITION_LABELS: Record<TransitionMode, string> = {
+/** Mode hint accepted by the UI selector — "auto" lets planMix decide,
+ *  "random" picks a virtuoso transition each time. */
+export type TransitionModeHint = TransitionMode | "auto" | "random";
+
+export const TRANSITION_LABELS: Record<TransitionModeHint, string> = {
+  auto:        "Auto (Profi-DJ)",
+  random:      "🎲 Random Virtuoso",
   crossfade:   "Crossfade",
   cut:         "Cut (hart)",
   fadeGap:     "Fade + Gap",
   filterSweep: "Filter Sweep",
   echoTail:    "Echo Tail",
   stinger:     "Stinger",
+  loopRoll:    "Loop-Roll → Drop",
+  doubleDrop:  "Double-Drop",
+  bassSwap:    "Bass-Swap",
+  reverbWash:  "Reverb-Wash",
 };
 
 type State = {
@@ -41,9 +62,11 @@ type State = {
   crossfadeSec: number;
   energy: number;
   mood: string;
-  transitionMode: TransitionMode;
+  transitionMode: TransitionModeHint;
   stingerUrl: string | null;
   autoDj: boolean;
+  pendingPlan: MixPlan | null;
+  lastPlanNotes: string | null;
 };
 
 type Actions = {
@@ -60,13 +83,15 @@ type Actions = {
   bumpEnergy: (delta: number) => void;
   setMood: (m: string) => void;
   getAnalyser: () => AnalyserNode | null;
-  setTransitionMode: (m: TransitionMode) => void;
+  setTransitionMode: (m: TransitionModeHint) => void;
   setStingerUrl: (url: string | null) => void;
   setAutoDj: (on: boolean) => void;
   getAudioElement: () => HTMLAudioElement | null;
   getAudioContext: () => AudioContext | null;
   getMasterNode: () => AudioNode | null;
   nextBeatTime: (fromSec?: number) => number;
+  /** Force-rebuild the upcoming Auto-DJ plan (e.g. after queue or track change). */
+  rebuildPlan: () => void;
 };
 
 let audioEl: HTMLAudioElement | null = null;
@@ -79,6 +104,14 @@ let delayFb: GainNode | null = null;
 let delayReturn: GainNode | null = null;
 let postGain: GainNode | null = null;
 let rafId: number | null = null;
+// --- Deck B (used during Auto-DJ transitions) ---
+let audioElB: HTMLAudioElement | null = null;
+let sourceNodeB: MediaElementAudioSourceNode | null = null;
+let filterNodeB: BiquadFilterNode | null = null;
+let gainA: GainNode | null = null;
+let gainB: GainNode | null = null;
+let autoSchedTimer: number | null = null;
+let transitionInFlight = false;
 
 function ensureAudio() {
   if (typeof window === "undefined") return;
@@ -127,9 +160,12 @@ function ensureGraph() {
       delayReturn = audioCtx.createGain();
       delayReturn.gain.value = 0;
       postGain = audioCtx.createGain();
-      // source → filter → analyser → postGain → destination
+      gainA = audioCtx.createGain();
+      gainA.gain.value = 1;
+      // source → filter → gainA → analyser → postGain → destination
       sourceNode.connect(filterNode);
-      filterNode.connect(analyser);
+      filterNode.connect(gainA);
+      gainA.connect(analyser);
       analyser.connect(postGain);
       postGain.connect(audioCtx.destination);
       // delay tap (feedback loop), normally muted via delayReturn
@@ -141,6 +177,192 @@ function ensureGraph() {
     } catch {
       /* may throw on second source — ignore */
     }
+  }
+}
+
+/** Lazily build the Deck-B graph (separate <audio> + nodes) for true overlap. */
+function ensureDeckB() {
+  if (typeof window === "undefined") return;
+  if (!audioElB) {
+    audioElB = new Audio();
+    audioElB.crossOrigin = "anonymous";
+    audioElB.preload = "auto";
+  }
+  if (!audioCtx) return;
+  if (sourceNodeB || !postGain) return;
+  try {
+    sourceNodeB = audioCtx.createMediaElementSource(audioElB);
+    filterNodeB = audioCtx.createBiquadFilter();
+    filterNodeB.type = "lowpass";
+    filterNodeB.frequency.value = 22000;
+    gainB = audioCtx.createGain();
+    gainB.gain.value = 0;
+    sourceNodeB.connect(filterNodeB);
+    filterNodeB.connect(gainB);
+    gainB.connect(postGain);
+  } catch {
+    /* second source may throw — ignore */
+  }
+}
+
+function rampGain(g: GainNode | null, target: number, sec: number) {
+  if (!g || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(g.gain.value, now);
+  g.gain.linearRampToValueAtTime(target, now + Math.max(0.05, sec));
+}
+
+function rampFilterOn(f: BiquadFilterNode | null, hz: number, sec: number) {
+  if (!f || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  f.frequency.cancelScheduledValues(now);
+  f.frequency.setValueAtTime(f.frequency.value, now);
+  f.frequency.exponentialRampToValueAtTime(Math.max(40, hz), now + Math.max(0.05, sec));
+}
+
+async function executeAutoTransition(plan: MixPlan, nextTrack: EngineTrack) {
+  if (!audioEl || !audioCtx || !gainA) return;
+  ensureDeckB();
+  if (!audioElB || !gainB) return;
+  transitionInFlight = true;
+  const targetVol = useEngine.getState().volume;
+  audioElB.src = nextTrack.url;
+  try { audioElB.currentTime = Math.max(0, plan.startAtSecOfNext); } catch { /* noop */ }
+  audioElB.playbackRate = plan.bpmRatio;
+  audioElB.volume = 1;
+  gainB.gain.value = 0;
+  await audioElB.play().catch(() => {});
+  const xf = Math.max(0.6, plan.crossfadeSec);
+
+  // Mode-specific effect choreography
+  switch (plan.mode) {
+    case "filterSweep":
+      rampFilterOn(filterNode, 180, xf);
+      rampGain(gainA, 0, xf);
+      rampGain(gainB, targetVol, xf);
+      break;
+    case "reverbWash":
+      await setFeedback(0.6);
+      rampFilterOn(filterNode, 250, xf);
+      rampGain(gainA, 0, xf);
+      rampGain(gainB, targetVol, xf);
+      break;
+    case "echoTail":
+      await setFeedback(0.55);
+      rampGain(gainA, 0, xf * 0.8);
+      rampGain(gainB, targetVol, xf);
+      break;
+    case "loopRoll": {
+      // emulate a beat-loop tail: HPF rise on A while B fades in fast
+      if (filterNode) filterNode.type = "highpass";
+      rampFilterOn(filterNode, 1200, xf);
+      rampGain(gainA, 0, xf);
+      rampGain(gainB, targetVol, Math.min(2, xf * 0.5));
+      break;
+    }
+    case "doubleDrop":
+      // hard sync: keep both at full level briefly, then drop A
+      rampGain(gainB, targetVol, 0.2);
+      await new Promise((r) => setTimeout(r, Math.max(800, xf * 500)));
+      rampGain(gainA, 0, xf * 0.5);
+      break;
+    case "bassSwap":
+      // A: low-cut (HPF), B: full → after xf, swap
+      if (filterNode) filterNode.type = "highpass";
+      rampFilterOn(filterNode, 220, xf * 0.5);
+      rampGain(gainB, targetVol, xf * 0.5);
+      await new Promise((r) => setTimeout(r, xf * 500));
+      rampGain(gainA, 0, xf * 0.5);
+      break;
+    case "cut":
+      rampGain(gainA, 0, 0.05);
+      rampGain(gainB, targetVol, 0.05);
+      break;
+    case "fadeGap":
+      rampGain(gainA, 0, xf * 0.5);
+      await new Promise((r) => setTimeout(r, xf * 500 + 400));
+      rampGain(gainB, targetVol, xf * 0.5);
+      break;
+    case "stinger": {
+      rampGain(gainA, 0, 0.3);
+      const url = useEngine.getState().stingerUrl;
+      if (url) await playStinger(url);
+      rampGain(gainB, targetVol, 0.3);
+      break;
+    }
+    case "crossfade":
+    default:
+      rampGain(gainA, 0, xf);
+      rampGain(gainB, targetVol, xf);
+      break;
+  }
+
+  await new Promise((r) => setTimeout(r, Math.max(800, xf * 1000) + 100));
+
+  // Cleanup A side
+  try { audioEl.pause(); } catch { /* noop */ }
+  if (filterNode) {
+    filterNode.type = "lowpass";
+    if (audioCtx) {
+      filterNode.frequency.cancelScheduledValues(audioCtx.currentTime);
+      filterNode.frequency.setValueAtTime(22000, audioCtx.currentTime);
+    }
+  }
+  await setFeedback(0);
+
+  // Swap: move B's source URL into A, snap A to B's playhead, hand audio back to deck A
+  const handoffTime = audioElB.currentTime;
+  const wasPlaying = !audioElB.paused;
+  try { audioElB.pause(); } catch { /* noop */ }
+  audioEl.src = nextTrack.url;
+  try { audioEl.currentTime = handoffTime; } catch { /* noop */ }
+  audioEl.volume = targetVol;
+  if (gainA) gainA.gain.value = 1;
+  if (gainB) gainB.gain.value = 0;
+  if (wasPlaying) await audioEl.play().catch(() => {});
+
+  // Pop queue, update state, build next plan
+  const st = useEngine.getState();
+  const [, ...rest] = st.queue;
+  useEngine.setState({
+    current: nextTrack,
+    queue: rest,
+    isPlaying: true,
+    positionSec: handoffTime,
+    lastPlanNotes: plan.notes,
+    pendingPlan: null,
+  });
+  transitionInFlight = false;
+  // Build the plan for the *next* transition
+  setTimeout(() => useEngine.getState().rebuildPlan(), 250);
+}
+
+function startAutoScheduler() {
+  if (autoSchedTimer != null) return;
+  autoSchedTimer = window.setInterval(() => {
+    const st = useEngine.getState();
+    if (!st.autoDj || transitionInFlight) return;
+    if (!st.current || st.queue.length === 0) return;
+    if (!st.pendingPlan) {
+      // build a plan if none exists
+      st.rebuildPlan();
+      return;
+    }
+    const plan = st.pendingPlan;
+    const dur = st.durationSec || (st.current.durationSec ?? 0);
+    const safeTrigger = Math.min(plan.triggerAtSecOfCurrent, Math.max(0, dur - plan.crossfadeSec - 0.5));
+    if (st.positionSec >= safeTrigger && st.positionSec > 1) {
+      const next = st.queue[0];
+      if (next) void executeAutoTransition(plan, next);
+    }
+  }, 250);
+}
+
+function stopAutoScheduler() {
+  if (autoSchedTimer != null) {
+    clearInterval(autoSchedTimer);
+    autoSchedTimer = null;
   }
 }
 
@@ -191,7 +413,13 @@ async function playTrack(track: EngineTrack, crossfade: boolean) {
   const state = useEngine.getState();
   const targetVol = state.volume;
   const fadeMs = state.crossfadeSec * 1000;
-  const mode: TransitionMode = crossfade ? state.transitionMode : "cut";
+  const hint = state.transitionMode;
+  const mode: TransitionMode =
+    !crossfade
+      ? "cut"
+      : hint === "auto" || hint === "random"
+        ? "crossfade"
+        : (hint as TransitionMode);
   const wasPlaying = crossfade && !audioEl.paused;
 
   if (wasPlaying) {
@@ -233,11 +461,14 @@ async function playTrack(track: EngineTrack, crossfade: boolean) {
   audioEl.volume = startSilent ? 0 : targetVol;
   await audioEl.play().catch(() => {});
   ensureGraph();
+  if (gainA) gainA.gain.value = 1;
   if (audioCtx?.state === "suspended") void audioCtx.resume();
   if (startSilent) {
     tickFade(targetVol, Math.max(400, fadeMs));
   }
   useEngine.setState({ current: track, isPlaying: true, positionSec: 0 });
+  // Rebuild plan whenever a new track starts
+  setTimeout(() => useEngine.getState().rebuildPlan(), 200);
 }
 
 export const useEngine = create<State & Actions>((set, get) => ({
@@ -253,6 +484,8 @@ export const useEngine = create<State & Actions>((set, get) => ({
   transitionMode: "crossfade",
   stingerUrl: null,
   autoDj: false,
+  pendingPlan: null,
+  lastPlanNotes: null,
 
   loadQueue: (tracks, opts) => {
     if (!tracks.length) return;
@@ -260,8 +493,12 @@ export const useEngine = create<State & Actions>((set, get) => ({
     set({ queue: rest });
     if (opts?.autoplay !== false) void playTrack(first, false);
     else set({ current: first });
+    setTimeout(() => useEngine.getState().rebuildPlan(), 250);
   },
-  appendQueue: (tracks) => set({ queue: [...get().queue, ...tracks] }),
+  appendQueue: (tracks) => {
+    set({ queue: [...get().queue, ...tracks] });
+    setTimeout(() => useEngine.getState().rebuildPlan(), 100);
+  },
   play: async () => {
     ensureAudio();
     if (!audioEl) return;
@@ -299,8 +536,9 @@ export const useEngine = create<State & Actions>((set, get) => ({
           { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy },
           { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
           state.positionSec,
+          { forceMode: state.transitionMode },
         );
-        set({ transitionMode: plan.mode, crossfadeSec: plan.crossfadeSec });
+        set({ crossfadeSec: plan.crossfadeSec, lastPlanNotes: plan.notes });
       } catch { /* fall back to current mode */ }
     }
     await playTrack(next, true);
@@ -318,9 +556,16 @@ export const useEngine = create<State & Actions>((set, get) => ({
   bumpEnergy: (delta) => set({ energy: Math.max(0, Math.min(100, get().energy + delta)) }),
   setMood: (m) => set({ mood: m }),
   getAnalyser: () => analyser,
-  setTransitionMode: (m) => set({ transitionMode: m }),
+  setTransitionMode: (m) => {
+    set({ transitionMode: m });
+    setTimeout(() => useEngine.getState().rebuildPlan(), 50);
+  },
   setStingerUrl: (url) => set({ stingerUrl: url }),
-  setAutoDj: (on) => set({ autoDj: on }),
+  setAutoDj: (on) => {
+    set({ autoDj: on });
+    if (on) { startAutoScheduler(); setTimeout(() => useEngine.getState().rebuildPlan(), 100); }
+    else    { stopAutoScheduler(); set({ pendingPlan: null }); }
+  },
   getAudioElement: () => audioEl,
   getAudioContext: () => audioCtx,
   getMasterNode: () => postGain,
@@ -331,5 +576,22 @@ export const useEngine = create<State & Actions>((set, get) => ({
     if (!grid?.length) return pos;
     for (const b of grid) if (b > pos + 0.02) return b;
     return grid[grid.length - 1];
+  },
+  rebuildPlan: () => {
+    const st = get();
+    const next = st.queue[0];
+    if (!st.current || !next) { set({ pendingPlan: null }); return; }
+    void (async () => {
+      try {
+        const { planMix } = await import("./mixPlanner");
+        const plan = planMix(
+          { bpm: st.current!.bpm, camelot: st.current!.camelot, beatGrid: st.current!.beatGrid, cues: st.current!.cues, durationSec: st.durationSec, energy: st.current!.energy },
+          { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
+          st.positionSec,
+          { forceMode: st.transitionMode },
+        );
+        set({ pendingPlan: plan });
+      } catch { /* noop */ }
+    })();
   },
 }));
