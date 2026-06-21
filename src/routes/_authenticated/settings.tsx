@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { bytesToHuman } from "@/lib/fx/utils";
+import { Button } from "@/components/ui/button";
+import { Headphones } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — PartyPilot AI" }] }),
@@ -33,6 +35,18 @@ function Settings() {
   return (
     <div className="space-y-6 animate-fade-up">
       <PageHeader title="Settings" subtitle="Tune your engine and your account." />
+
+      <Card title="Hardware" subtitle="Externes Mikrofon, Lautsprecher & Vorhör-Kopfhörer.">
+        <Row>
+          <div>
+            <Label>Audio-Geräte einrichten</Label>
+            <p className="text-xs text-muted-foreground">Master, Cue-Kopfhörer und Mikrofon zuweisen + Pegel testen.</p>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/settings/audio"><Headphones className="mr-2 h-4 w-4" /> Öffnen</Link>
+          </Button>
+        </Row>
+      </Card>
 
       <Card title="Speicher" subtitle="Wie viel Cloud-Speicher du verbrauchst.">
         {quota ? (

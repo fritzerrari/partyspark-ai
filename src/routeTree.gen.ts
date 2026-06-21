@@ -22,6 +22,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
 import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
+import { Route as AuthenticatedSettingsAudioRouteImport } from './routes/_authenticated/settings_.audio'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
 import { Route as AuthenticatedFxUploadRouteImport } from './routes/_authenticated/fx/upload'
@@ -93,6 +94,12 @@ const PPartyIdGuestRoute = PPartyIdGuestRouteImport.update({
   path: '/p/$partyId/guest',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSettingsAudioRoute =
+  AuthenticatedSettingsAudioRouteImport.update({
+    id: '/settings_/audio',
+    path: '/settings/audio',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPartiesNewRoute = AuthenticatedPartiesNewRouteImport.update({
   id: '/parties/new',
   path: '/parties/new',
@@ -143,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/fx/upload': typeof AuthenticatedFxUploadRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/settings/audio': typeof AuthenticatedSettingsAudioRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -163,6 +171,7 @@ export interface FileRoutesByTo {
   '/fx/upload': typeof AuthenticatedFxUploadRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/settings/audio': typeof AuthenticatedSettingsAudioRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -185,6 +194,7 @@ export interface FileRoutesById {
   '/_authenticated/fx/upload': typeof AuthenticatedFxUploadRoute
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/_authenticated/settings_/audio': typeof AuthenticatedSettingsAudioRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/_authenticated/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/fx/upload'
     | '/parties/$partyId'
     | '/parties/new'
+    | '/settings/audio'
     | '/p/$partyId/guest'
     | '/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/fx/upload'
     | '/parties/$partyId'
     | '/parties/new'
+    | '/settings/audio'
     | '/p/$partyId/guest'
     | '/fx'
     | '/api/public/hooks/storage-cleanup'
@@ -248,6 +260,7 @@ export interface FileRouteTypes {
     | '/_authenticated/fx/upload'
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
+    | '/_authenticated/settings_/audio'
     | '/p/$partyId/guest'
     | '/_authenticated/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -355,6 +368,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PPartyIdGuestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/settings_/audio': {
+      id: '/_authenticated/settings_/audio'
+      path: '/settings/audio'
+      fullPath: '/settings/audio'
+      preLoaderRoute: typeof AuthenticatedSettingsAudioRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/parties/new': {
       id: '/_authenticated/parties/new'
       path: '/parties/new'
@@ -413,6 +433,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFxUploadRoute: typeof AuthenticatedFxUploadRoute
   AuthenticatedPartiesPartyIdRoute: typeof AuthenticatedPartiesPartyIdRoute
   AuthenticatedPartiesNewRoute: typeof AuthenticatedPartiesNewRoute
+  AuthenticatedSettingsAudioRoute: typeof AuthenticatedSettingsAudioRoute
   AuthenticatedFxIndexRoute: typeof AuthenticatedFxIndexRoute
 }
 
@@ -429,6 +450,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFxUploadRoute: AuthenticatedFxUploadRoute,
   AuthenticatedPartiesPartyIdRoute: AuthenticatedPartiesPartyIdRoute,
   AuthenticatedPartiesNewRoute: AuthenticatedPartiesNewRoute,
+  AuthenticatedSettingsAudioRoute: AuthenticatedSettingsAudioRoute,
   AuthenticatedFxIndexRoute: AuthenticatedFxIndexRoute,
 }
 
