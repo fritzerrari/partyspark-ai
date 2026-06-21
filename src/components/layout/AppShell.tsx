@@ -12,6 +12,8 @@ import {
   MoreHorizontal,
   Volume2,
   ShieldCheck,
+  Bot,
+  CalendarHeart,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
@@ -34,6 +36,8 @@ const SECONDARY = [
   { to: "/soundpool", label: "Soundpool", icon: Layers },
   { to: "/loops", label: "Loop Creator", icon: Repeat },
   { to: "/karaoke", label: "Karaoke", icon: Mic },
+  { to: "/party-host", label: "Party Host", icon: Bot },
+  { to: "/moments", label: "Moments", icon: CalendarHeart },
   { to: "/ai-lab", label: "AI Lab", icon: Sparkles },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
