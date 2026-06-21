@@ -63,7 +63,8 @@ export class LivePitchTracker {
   }
   read(): { hz: number; clarity: number } {
     this.analyser.getFloatTimeDomainData(this.buf);
-    const [hz, clarity] = this.detector.findPitch(this.buf, this.analyser.context.sampleRate);
+    const view = new Float32Array(this.buf.buffer as ArrayBuffer, this.buf.byteOffset, this.buf.length);
+    const [hz, clarity] = this.detector.findPitch(view, this.analyser.context.sampleRate);
     return { hz, clarity };
   }
 }
