@@ -221,7 +221,7 @@ function DeckColumn({
 }: {
   side: DeckSide;
   color: "cyan" | "magenta";
-  deck: { track: EngineTrack | null; isPlaying: boolean; position: number; duration: number; analyzing: boolean; analyzeProgress: number };
+  deck: ReturnType<typeof useTwinDeck.getState>["A"];
   onToggle: () => void;
   onScrub: (dSec: number) => void;
   onVolume: (v: number) => void;
