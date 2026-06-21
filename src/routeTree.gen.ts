@@ -22,6 +22,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
 import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
+import { Route as ApiAiPartyHostSpeakRouteImport } from './routes/api/ai/party-host-speak'
 import { Route as AuthenticatedSettingsAudioRouteImport } from './routes/_authenticated/settings_.audio'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
@@ -94,6 +95,11 @@ const PPartyIdGuestRoute = PPartyIdGuestRouteImport.update({
   path: '/p/$partyId/guest',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAiPartyHostSpeakRoute = ApiAiPartyHostSpeakRouteImport.update({
+  id: '/api/ai/party-host-speak',
+  path: '/api/ai/party-host-speak',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSettingsAudioRoute =
   AuthenticatedSettingsAudioRouteImport.update({
     id: '/settings_/audio',
@@ -151,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/settings/audio': typeof AuthenticatedSettingsAudioRoute
+  '/api/ai/party-host-speak': typeof ApiAiPartyHostSpeakRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -172,6 +179,7 @@ export interface FileRoutesByTo {
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/settings/audio': typeof AuthenticatedSettingsAudioRoute
+  '/api/ai/party-host-speak': typeof ApiAiPartyHostSpeakRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
   '/_authenticated/settings_/audio': typeof AuthenticatedSettingsAudioRoute
+  '/api/ai/party-host-speak': typeof ApiAiPartyHostSpeakRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/_authenticated/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/parties/$partyId'
     | '/parties/new'
     | '/settings/audio'
+    | '/api/ai/party-host-speak'
     | '/p/$partyId/guest'
     | '/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/parties/$partyId'
     | '/parties/new'
     | '/settings/audio'
+    | '/api/ai/party-host-speak'
     | '/p/$partyId/guest'
     | '/fx'
     | '/api/public/hooks/storage-cleanup'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
     | '/_authenticated/settings_/audio'
+    | '/api/ai/party-host-speak'
     | '/p/$partyId/guest'
     | '/_authenticated/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -271,6 +283,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
+  ApiAiPartyHostSpeakRoute: typeof ApiAiPartyHostSpeakRoute
   PPartyIdGuestRoute: typeof PPartyIdGuestRoute
   ApiPublicHooksStorageCleanupRoute: typeof ApiPublicHooksStorageCleanupRoute
 }
@@ -368,6 +381,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PPartyIdGuestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ai/party-host-speak': {
+      id: '/api/ai/party-host-speak'
+      path: '/api/ai/party-host-speak'
+      fullPath: '/api/ai/party-host-speak'
+      preLoaderRoute: typeof ApiAiPartyHostSpeakRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/settings_/audio': {
       id: '/_authenticated/settings_/audio'
       path: '/settings/audio'
@@ -462,6 +482,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
+  ApiAiPartyHostSpeakRoute: ApiAiPartyHostSpeakRoute,
   PPartyIdGuestRoute: PPartyIdGuestRoute,
   ApiPublicHooksStorageCleanupRoute: ApiPublicHooksStorageCleanupRoute,
 }
