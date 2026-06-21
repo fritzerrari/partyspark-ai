@@ -55,16 +55,15 @@ export function snapToScale(midi: number, scaleId: ScaleId): number {
 /** Live pitch detection helper bound to an AnalyserNode. */
 export class LivePitchTracker {
   private detector: PitchDetector<Float32Array>;
-  private buf: Float32Array;
+  private buf: Float32Array<ArrayBuffer>;
   constructor(private analyser: AnalyserNode) {
     const size = analyser.fftSize;
     this.detector = PitchDetector.forFloat32Array(size);
-    this.buf = new Float32Array(size);
+    this.buf = new Float32Array(new ArrayBuffer(size * 4));
   }
   read(): { hz: number; clarity: number } {
     this.analyser.getFloatTimeDomainData(this.buf);
-    const view = new Float32Array(this.buf.buffer as ArrayBuffer, this.buf.byteOffset, this.buf.length);
-    const [hz, clarity] = this.detector.findPitch(view, this.analyser.context.sampleRate);
+    const [hz, clarity] = this.detector.findPitch(this.buf, this.analyser.context.sampleRate);
     return { hz, clarity };
   }
 }
