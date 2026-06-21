@@ -251,6 +251,8 @@ function DeckColumn({
         onScrub={onScrub}
       />
 
+      <DeckLiveHud side={side} />
+
       <div className="line-clamp-1 text-sm font-semibold text-stage-foreground">{t?.title ?? "— kein Track —"}</div>
       <div className="flex items-center gap-1 text-[10px] text-stage-foreground/60">
         <span className="line-clamp-1">
