@@ -22,6 +22,7 @@ import {
   Wand2,
   Compass,
 } from "lucide-react";
+import { Disc3 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
@@ -235,6 +236,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </>
       )}
       <TransportBar />
+      <ModuleDock />
     </div>
   );
 }
