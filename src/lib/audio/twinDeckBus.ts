@@ -8,6 +8,8 @@ import type { EngineTrack, TransitionMode, TransitionModeHint } from "./engine";
 import { planMix } from "./mixPlanner";
 import { analyzeAudio, decodeToBuffer, camelotCompatible } from "./analyze";
 import { keyToCamelot } from "./keyToCamelot";
+import { shiftKey, semitoneShiftToKey } from "./keyDelta";
+import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -21,6 +23,16 @@ export type DeckState = {
   volume: number;    // user vol 0..1
   analyzing: boolean;
   analyzeProgress: number; // 0..100
+  /** Perceived BPM accounting for the current playback rate (pitch). */
+  effectiveBpm: number | null;
+  /** Effective musical key after pitch-shift (semitones rounded). */
+  effectiveKey: string | null;
+  /** Semitones of effective key shift vs native (0 = unchanged). */
+  keyShiftSemis: number;
+  /** Bridge snippet readiness for transitioning INTO this deck. */
+  bridgeReady: boolean;
+  bridgeBuilding: boolean;
+  bridgeNotes: string | null;
 };
 
 type BusState = {
@@ -65,6 +77,8 @@ type Actions = {
   stopAutoDj: () => void;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<Blob | null>;
+  /** Pre-render a bridge snippet for `side` locked to the OTHER deck's key+BPM. */
+  buildBridgeFor: (side: DeckSide) => Promise<void>;
   dispose: () => void;
 };
 
@@ -84,9 +98,19 @@ const deck: Record<DeckSide, {
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
+// Bridge playback graph: a one-shot BufferSource → filter → gain → master.
+let bridgeGain: GainNode | null = null;
+let bridgeFilter: BiquadFilterNode | null = null;
+let bridgeSource: AudioBufferSourceNode | null = null;
+const bridgeBuffers: Record<DeckSide, BridgePlan | null> = { A: null, B: null };
 
 function emptyDeck(): DeckState {
-  return { track: null, isPlaying: false, position: 0, duration: 0, pitch: 1, volume: 0.9, analyzing: false, analyzeProgress: 0 };
+  return {
+    track: null, isPlaying: false, position: 0, duration: 0, pitch: 1, volume: 0.9,
+    analyzing: false, analyzeProgress: 0,
+    effectiveBpm: null, effectiveKey: null, keyShiftSemis: 0,
+    bridgeReady: false, bridgeBuilding: false, bridgeNotes: null,
+  };
 }
 
 function ensureCtx() {
@@ -99,6 +123,15 @@ function ensureCtx() {
     masterGain = ctx.createGain();
     masterGain.gain.value = 1;
     masterGain.connect(ctx.destination);
+    // Bridge bus
+    bridgeGain = ctx.createGain();
+    bridgeGain.gain.value = 0;
+    bridgeFilter = ctx.createBiquadFilter();
+    bridgeFilter.type = "highpass";
+    bridgeFilter.frequency.value = 220;
+    bridgeFilter.Q.value = 0.7;
+    bridgeFilter.connect(bridgeGain);
+    bridgeGain.connect(masterGain);
   }
 }
 
@@ -214,6 +247,7 @@ function syncTempo(from: DeckSide, to: DeckSide): number {
   const clamped = Math.max(0.88, Math.min(1.12, ratio));
   if (deck[to].el) deck[to].el.playbackRate = clamped;
   useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: clamped } } as Partial<BusState>));
+  recomputeEffective(to);
   return clamped;
 }
 
@@ -254,6 +288,25 @@ async function waitForNextBeat(side: DeckSide, maxMs = 2000): Promise<void> {
   if (!next) return;
   const waitMs = Math.min(maxMs, Math.max(0, (next - now) * 1000 / (el.playbackRate || 1)));
   await new Promise((r) => setTimeout(r, waitMs));
+}
+
+/** Recompute perceived BPM + key based on current playbackRate / pitch. */
+function recomputeEffective(side: DeckSide) {
+  const st = useTwinDeck.getState();
+  const t = st[side].track;
+  const rate = deck[side].el?.playbackRate ?? st[side].pitch ?? 1;
+  const bpm = t?.bpm ? +(t.bpm * rate).toFixed(1) : null;
+  // Pitch is multiplicative on playbackRate; convert to semitones for key shift.
+  const semis = Math.round(12 * Math.log2(rate));
+  const newKey = t?.musicalKey ? shiftKey(t.musicalKey, semis) : null;
+  useTwinDeck.setState((s) => ({
+    [side]: {
+      ...s[side],
+      effectiveBpm: bpm,
+      effectiveKey: newKey,
+      keyShiftSemis: semis,
+    },
+  } as Partial<BusState>));
 }
 
 function applyCrossfader(state: BusState) {
@@ -402,6 +455,63 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
 
     // Effect choreography per mode — uses 3-band EQ + filter + gain.
     const mode = plan.mode;
+
+    // -------- GENRE-BRIDGE: a separate flow (uses pre-rendered snippet) --------
+    if (mode === "genreBridge" && bridgeBuffers[to] && bridgeFilter && bridgeGain) {
+      const bridge = bridgeBuffers[to]!;
+      // Reset the standard pre-prime EQ — bridge handles its own taper.
+      rampEqGain(toDeck.eqLow, -24, 0.05);
+      // The bridge plays IN TEMPO + KEY of outgoing → listener stays in groove.
+      const src = ctx.createBufferSource();
+      src.buffer = bridge.buffer;
+      src.connect(bridgeFilter);
+      bridgeSource = src;
+      // Start bridge highpassed (percussion only) and silent.
+      bridgeFilter.frequency.cancelScheduledValues(ctx.currentTime);
+      bridgeFilter.frequency.setValueAtTime(900, ctx.currentTime);
+      bridgeGain.gain.cancelScheduledValues(ctx.currentTime);
+      bridgeGain.gain.setValueAtTime(0, ctx.currentTime);
+      const bridgeLen = Math.max(8, bridge.durationSec);
+      const sneak = Math.min(bridgeLen * 0.45, 8);
+      const reveal = Math.min(bridgeLen - sneak - 2, 12);
+      src.start();
+      // Phase A — sneak the bridge percussion in over the outgoing groove.
+      bridgeGain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + sneak);
+      bridgeFilter.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + sneak + reveal);
+      rampEqGain(fromDeck.eqHigh, -4, sneak);
+      await new Promise((r) => setTimeout(r, sneak * 1000));
+      // Phase B — open the bridge fully (full-band snippet sitting in groove).
+      bridgeGain.gain.linearRampToValueAtTime(0.85, ctx.currentTime + reveal * 0.5);
+      rampEqGain(fromDeck.eqHigh, -8, reveal * 0.6);
+      rampEqGain(fromDeck.eqMid, -4, reveal * 0.6);
+      await new Promise((r) => setTimeout(r, reveal * 1000));
+      // Phase C — REVEAL: bridge fades, real incoming starts at its native tempo+key.
+      if (toDeck.el) {
+        toDeck.el.playbackRate = 1;
+        useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
+        try { if (plan.startAtSecOfNext > 0.5) toDeck.el.currentTime = plan.startAtSecOfNext; } catch { /* noop */ }
+        if (toDeck.el.paused) { try { await toDeck.el.play(); } catch { /* noop */ } }
+      }
+      if (toDeck.gain) toDeck.gain.gain.value = 0;
+      rampEqGain(toDeck.eqLow, 0, 0.6);
+      rampGain(toDeck.gain, toUserVol, 1.0);
+      rampGain(fromDeck.gain, 0, 1.2);
+      bridgeGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
+      animateCrossfader(to === "B" ? 1 : 0, 1000);
+      await new Promise((r) => setTimeout(r, 1400));
+      try { src.stop(); } catch { /* noop */ }
+      bridgeSource = null;
+      try { fromDeck.el?.pause(); } catch { /* noop */ }
+      resetFilter(from); resetEq(from); resetEq(to);
+      recomputeEffective(to);
+      useTwinDeck.setState({
+        lastTransitionNote: `${plan.note} · ${bridge.notes}`,
+        transitionInFlight: false,
+      });
+      return;
+    }
+    // ------------------------------------------------------------------
+
     // Pre-prime EQ for incoming (bass-cut to slide in cleanly).
     rampEqGain(toDeck.eqLow, -24, 0.05);
     switch (mode) {
@@ -529,8 +639,13 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     };
     d.el.src = enriched.url;
     d.el.playbackRate = get()[side].pitch;
-    set((s) => ({ [side]: { ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0, isPlaying: false } } as Partial<BusState>));
+    set((s) => ({ [side]: {
+      ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0,
+      isPlaying: false, bridgeReady: false, bridgeNotes: null,
+    } } as Partial<BusState>));
+    bridgeBuffers[side] = null;
     applyCrossfader(get());
+    recomputeEffective(side);
     // Lazy analysis if metadata missing
     if (!enriched.beatGrid || !enriched.bpm || !enriched.cues) {
       await get().ensureAnalysis(side).catch(() => {});
@@ -539,6 +654,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const other: DeckSide = side === "A" ? "B" : "A";
     if (get()[other].isPlaying && get()[other].track?.bpm && get()[side].track?.bpm) {
       syncTempo(other, side);
+    }
+    // Pre-build the bridge snippet so cross-genre transitions are ready instantly.
+    if (get()[other].track?.bpm) {
+      void get().buildBridgeFor(side).catch(() => {});
     }
   },
 
@@ -574,6 +693,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     set((s) => ({ [side]: { ...s[side], pitch: p } } as Partial<BusState>));
     const d = deck[side];
     if (d.el) d.el.playbackRate = p;
+    recomputeEffective(side);
   },
   setCrossfader(v) {
     set({ crossfader: v });
@@ -657,6 +777,25 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     stopAutoTimer();
   },
 
+  async buildBridgeFor(side) {
+    const other: DeckSide = side === "A" ? "B" : "A";
+    const st = get();
+    const t = st[side].track;
+    const o = st[other].track;
+    if (!ctx) { ensureCtx(); }
+    if (!ctx || !t || !o?.bpm) return;
+    if (st[side].bridgeBuilding) return;
+    set((s) => ({ [side]: { ...s[side], bridgeBuilding: true, bridgeReady: false } } as Partial<BusState>));
+    try {
+      const plan = await buildBridge(ctx, t, { bpm: o.bpm, musicalKey: o.musicalKey ?? null });
+      bridgeBuffers[side] = plan;
+      set((s) => ({ [side]: { ...s[side], bridgeBuilding: false, bridgeReady: !!plan, bridgeNotes: plan?.notes ?? null } } as Partial<BusState>));
+    } catch (e) {
+      console.warn("buildBridgeFor failed", e);
+      set((s) => ({ [side]: { ...s[side], bridgeBuilding: false, bridgeReady: false } } as Partial<BusState>));
+    }
+  },
+
   async startRecording() {
     ensureCtx();
     if (!ctx || !masterGain) return;
@@ -722,6 +861,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         vocalMap: a.vocalMap,
       };
       set((s) => ({ [side]: { ...s[side], track: enriched, analyzing: false, analyzeProgress: 100 } } as Partial<BusState>));
+      recomputeEffective(side);
+      // (Re)build bridge for this side now that analysis is fresh.
+      const other: DeckSide = side === "A" ? "B" : "A";
+      if (get()[other].track?.bpm) {
+        void get().buildBridgeFor(side).catch(() => {});
+      }
       // Persist to DB (best-effort)
       void persistAnalysis(t.id, a);
     } catch (e) {
@@ -738,13 +883,14 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
 
 /** Compatibility helper: highlight whether decks are key/BPM compatible. */
 export function compatHint(a: EngineTrack | null, b: EngineTrack | null): {
-  keyOk: boolean; bpmOk: boolean; bpmDelta: number | null;
+  keyOk: boolean; bpmOk: boolean; bpmDelta: number | null; semitones: number;
 } {
-  if (!a || !b) return { keyOk: false, bpmOk: false, bpmDelta: null };
+  if (!a || !b) return { keyOk: false, bpmOk: false, bpmDelta: null, semitones: 0 };
   const keyOk = camelotCompatible(a.camelot ?? "", b.camelot ?? "");
   const delta = (a.bpm && b.bpm) ? +(Math.abs(a.bpm - b.bpm)).toFixed(1) : null;
   const bpmOk = delta != null ? (a.bpm! > 0 && delta / a.bpm! <= 0.08) : false;
-  return { keyOk, bpmOk, bpmDelta: delta };
+  const semitones = semitoneShiftToKey(a.musicalKey ?? null, b.musicalKey ?? null);
+  return { keyOk, bpmOk, bpmDelta: delta, semitones };
 }
 
 /** Suppress unused warning: re-export for convenience. */
