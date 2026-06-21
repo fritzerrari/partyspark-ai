@@ -580,8 +580,13 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     };
     d.el.src = enriched.url;
     d.el.playbackRate = get()[side].pitch;
-    set((s) => ({ [side]: { ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0, isPlaying: false } } as Partial<BusState>));
+    set((s) => ({ [side]: {
+      ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0,
+      isPlaying: false, bridgeReady: false, bridgeNotes: null,
+    } } as Partial<BusState>));
+    bridgeBuffers[side] = null;
     applyCrossfader(get());
+    recomputeEffective(side);
     // Lazy analysis if metadata missing
     if (!enriched.beatGrid || !enriched.bpm || !enriched.cues) {
       await get().ensureAnalysis(side).catch(() => {});
@@ -590,6 +595,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const other: DeckSide = side === "A" ? "B" : "A";
     if (get()[other].isPlaying && get()[other].track?.bpm && get()[side].track?.bpm) {
       syncTempo(other, side);
+    }
+    // Pre-build the bridge snippet so cross-genre transitions are ready instantly.
+    if (get()[other].track?.bpm) {
+      void get().buildBridgeFor(side).catch(() => {});
     }
   },
 
@@ -625,6 +634,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     set((s) => ({ [side]: { ...s[side], pitch: p } } as Partial<BusState>));
     const d = deck[side];
     if (d.el) d.el.playbackRate = p;
+    recomputeEffective(side);
   },
   setCrossfader(v) {
     set({ crossfader: v });
