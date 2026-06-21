@@ -252,6 +252,7 @@ export const useEngine = create<State & Actions>((set, get) => ({
   mood: "Warm-up",
   transitionMode: "crossfade",
   stingerUrl: null,
+  autoDj: false,
 
   loadQueue: (tracks, opts) => {
     if (!tracks.length) return;
@@ -306,4 +307,16 @@ export const useEngine = create<State & Actions>((set, get) => ({
   getAnalyser: () => analyser,
   setTransitionMode: (m) => set({ transitionMode: m }),
   setStingerUrl: (url) => set({ stingerUrl: url }),
+  setAutoDj: (on) => set({ autoDj: on }),
+  getAudioElement: () => audioEl,
+  getAudioContext: () => audioCtx,
+  getMasterNode: () => postGain,
+  nextBeatTime: (fromSec) => {
+    const cur = get().current;
+    const pos = fromSec ?? get().positionSec;
+    const grid = cur?.beatGrid ?? null;
+    if (!grid?.length) return pos;
+    for (const b of grid) if (b > pos + 0.02) return b;
+    return grid[grid.length - 1];
+  },
 }));
