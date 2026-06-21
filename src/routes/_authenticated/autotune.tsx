@@ -137,7 +137,7 @@ function LiveTuner() {
               <b>{cents > 0 ? "+" : ""}{cents.toFixed(0)} cents</b>
             </>
           ) : (
-            active ? "Sing oder spiele einen Ton…" : "Drücke „Mikrofon starten"."
+            active ? "Sing oder spiele einen Ton…" : "Drücke „Mikrofon starten“."
           )}
         </div>
 
