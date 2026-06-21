@@ -29,6 +29,7 @@ import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCrowdRouteImport } from './routes/_authenticated/crowd'
+import { Route as AuthenticatedCockpitRouteImport } from './routes/_authenticated/cockpit'
 import { Route as AuthenticatedChoirRouteImport } from './routes/_authenticated/choir'
 import { Route as AuthenticatedBattleRouteImport } from './routes/_authenticated/battle'
 import { Route as AuthenticatedAutotuneRouteImport } from './routes/_authenticated/autotune'
@@ -145,6 +146,11 @@ const AuthenticatedCrowdRoute = AuthenticatedCrowdRouteImport.update({
   path: '/crowd',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCockpitRoute = AuthenticatedCockpitRouteImport.update({
+  id: '/cockpit',
+  path: '/cockpit',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedChoirRoute = AuthenticatedChoirRouteImport.update({
   id: '/choir',
   path: '/choir',
@@ -229,6 +235,7 @@ export interface FileRoutesByFullPath {
   '/autotune': typeof AuthenticatedAutotuneRoute
   '/battle': typeof AuthenticatedBattleRoute
   '/choir': typeof AuthenticatedChoirRoute
+  '/cockpit': typeof AuthenticatedCockpitRoute
   '/crowd': typeof AuthenticatedCrowdRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
@@ -264,6 +271,7 @@ export interface FileRoutesByTo {
   '/autotune': typeof AuthenticatedAutotuneRoute
   '/battle': typeof AuthenticatedBattleRoute
   '/choir': typeof AuthenticatedChoirRoute
+  '/cockpit': typeof AuthenticatedCockpitRoute
   '/crowd': typeof AuthenticatedCrowdRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/_authenticated/autotune': typeof AuthenticatedAutotuneRoute
   '/_authenticated/battle': typeof AuthenticatedBattleRoute
   '/_authenticated/choir': typeof AuthenticatedChoirRoute
+  '/_authenticated/cockpit': typeof AuthenticatedCockpitRoute
   '/_authenticated/crowd': typeof AuthenticatedCrowdRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
@@ -338,6 +347,7 @@ export interface FileRouteTypes {
     | '/autotune'
     | '/battle'
     | '/choir'
+    | '/cockpit'
     | '/crowd'
     | '/dashboard'
     | '/karaoke'
@@ -373,6 +383,7 @@ export interface FileRouteTypes {
     | '/autotune'
     | '/battle'
     | '/choir'
+    | '/cockpit'
     | '/crowd'
     | '/dashboard'
     | '/karaoke'
@@ -409,6 +420,7 @@ export interface FileRouteTypes {
     | '/_authenticated/autotune'
     | '/_authenticated/battle'
     | '/_authenticated/choir'
+    | '/_authenticated/cockpit'
     | '/_authenticated/crowd'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
@@ -590,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCrowdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/cockpit': {
+      id: '/_authenticated/cockpit'
+      path: '/cockpit'
+      fullPath: '/cockpit'
+      preLoaderRoute: typeof AuthenticatedCockpitRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/choir': {
       id: '/_authenticated/choir'
       path: '/choir'
@@ -696,6 +715,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAutotuneRoute: typeof AuthenticatedAutotuneRoute
   AuthenticatedBattleRoute: typeof AuthenticatedBattleRoute
   AuthenticatedChoirRoute: typeof AuthenticatedChoirRoute
+  AuthenticatedCockpitRoute: typeof AuthenticatedCockpitRoute
   AuthenticatedCrowdRoute: typeof AuthenticatedCrowdRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
@@ -724,6 +744,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAutotuneRoute: AuthenticatedAutotuneRoute,
   AuthenticatedBattleRoute: AuthenticatedBattleRoute,
   AuthenticatedChoirRoute: AuthenticatedChoirRoute,
+  AuthenticatedCockpitRoute: AuthenticatedCockpitRoute,
   AuthenticatedCrowdRoute: AuthenticatedCrowdRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
@@ -764,13 +785,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

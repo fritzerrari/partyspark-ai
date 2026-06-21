@@ -1,104 +1,80 @@
-# DJ-Cockpit + integriertes Live-Vocal-System
 
-Ziel: Aus den heute eigenständigen Modulen (Library, Loops, Karaoke, Remix, Autotune, Choir) wird **ein zusammenhängendes Live-Tool** mit einem zentralen Player, Zeitleiste, vorbereiteten Transitions und Vocal-Recording über laufende Songs.
+# DJ-Studio Ausbau: Turntables, Modul-Dashboard & Power-Design
 
-## 1) Zentraler Player mit Zeitleiste & Seek
+## Ziel
+Der Auto-Mix wird zu einem vollwertigen Live-Cockpit mit zwei interaktiven Plattentellern, freier Modul-Anordnung in jedem Screen und einem konsistenten "Virtuoso DJ"-Design mit reaktiven Controls, Status-LEDs und Hilfs-/Empfehlungs-Layer.
 
-Heute: `engine.ts` spielt Tracks ab, aber die UI hat keinen sichtbaren Zeitstrahl mit Vor-/Zurückspulen, und Karaoke/Loops/Remix nutzen ihre eigenen Mini-Player.
+## 1) Twin-Turntable Deck (neu)
+Zwei realistische, drag-bare Plattenteller — sowohl im Auto-Mix als auch als einblendbares Modul überall verfügbar.
 
-Neu: **Persistente Transport-Bar** unten in `AppShell` (analog Spotify), die `useEngine` nutzt:
-- Waveform-Zeitstrahl (gerendert via `buildPeaks` aus `multitrack.ts`) + Playhead
-- Klick/Drag zum Spulen → `engine.seek(sec)`
-- Play/Pause, Skip, Lautstärke, aktueller Track + Cover
-- Mini-Buttons: "Vocal aufnehmen", "Loop-Pads", "Auto-Mix" → öffnen Overlays statt zu navigieren
-- Sichtbar auf allen Routen außer `/auth`
+- `src/components/player/Turntable.tsx`
+  - SVG/Canvas-Plattenteller mit Label-Print (Cover), Tonarm, Slipmat-Grafik
+  - Pointer/Touch-Drag → scrub (vor/zurück) inkl. Pitch-Bend, Trägheit beim Loslassen
+  - Modi: **Free Scratch** (volle Kontrolle, Auto-Mix pausiert kurz), **Nudge** (±2 % Pitch), **Hold** (Stop & Cue), **Reverse**
+  - Zustand spiegelt `engine.currentTime` + lokales `scratchOffset`
+- `src/components/player/TwinDeck.tsx`
+  - Deck A / Deck B nebeneinander, mittig Crossfader + EQ-3-Band + Filter-Knob + Cue/Play
+  - Sync-Button (BPM/Phase), Loop-In/Out, Hot-Cue-Pads (1–4)
+  - VU-Meter pro Deck (animiert), Beat-Phase-Ring um Plattenteller
+- Engine-Erweiterung (`src/lib/audio/engine.ts`)
+  - Zweiter `GainNode`-Pfad (`deckB`) + Crossfader-Gain
+  - `scrub(deck, deltaSec)`, `setPitch(deck, semitones, tempoLink)`, `setEQ`, `setFilter`
+  - Zusatzspuren (Sequencer-Layer) hängen am Master nach Crossfader
 
-## 2) Upload-Analyse-Pipeline (BPM, Key, Energy, Beat-Grid, Hot-Cues)
+## 2) Auto-Mix Sequencer & Layer
+Im laufenden Auto-Mix Tonspuren überlagern & Sequenzen einspielen.
 
-Heute: Uploads in `library.tsx` speichern nur Dauer. Keine BPM/Key/Beat-Analyse → "perfekte virtuose Transitions" sind nicht möglich.
+- `src/components/player/SequencerLane.tsx` — 16-Step Grid pro Sample (Kick/Snare/Perc/Bass/Lead/FX/Vocal-Chop/User-Upload), pro Step Velocity, Swing-Slider, Tempo folgt Master-BPM
+- `src/components/player/LayerMixer.tsx` — Liste aktiver Layer (Sequencer, Loop-Pads, Vocals, externer Track auf Deck B), pro Layer: Mute (blinkt rot), Solo, Volume, Send-FX, Side-Chain-Toggle
+- Erweiterung `mixPlanner.ts`: Vorschläge welche Layer im aktuellen Energy-Segment passen (z. B. "Add Perc Layer @ Drop")
 
-Neu: Beim Upload (und nachträglich per Button "Analysieren") läuft eine **Web-Audio-Analyse im Browser**:
-- BPM via `estimateBPM` (existiert in `mashup.ts`) + verfeinert durch Onset-Detection
-- **Beat-Grid** (Array von Beat-Timestamps) → ermöglicht beat-synchrones Mixen
-- **Key/Tonart** via Chroma-Feature + Krumhansl-Profil (Pure-JS, neue `keyDetect.ts`)
-- **Energy-Kurve** (RMS pro 1s) → für Drop-Detection
-- **Hot-Cues**: Intro-Ende, erster Drop, Outro-Start (Heuristik aus Energy-Kurve)
-- **Vocal-Pausen-Map** (laute Sektionen vs. instrumentale Breaks via Spektral-Flatness) → für Vocal-Layering & Mix-In-Punkte
+## 3) Dashboard-Modus mit floatenden Modulen
+Aus jedem Screen heraus weitere Module einblenden & frei anordnen.
 
-Persistenz: Erweiterung Tabelle `tracks` um Spalten `bpm float`, `musical_key text`, `beat_grid jsonb`, `energy_curve jsonb`, `cues jsonb`, `vocal_map jsonb`, `analyzed_at timestamptz`. Analyse läuft als Web-Worker → blockiert UI nicht.
+- `src/components/dashboard/ModuleDock.tsx` (FAB unten rechts, immer sichtbar)
+  - Liste aller verfügbaren Module mit Kompatibilitäts-Badge: TwinDeck, Sequencer, LoopPads, VocalLayer, FX-Rack, Waveform-Zoom, Lyrics, Coach-Tipps, Crowd-Mood, Energy-Curve, Key/BPM-Wheel, Hot-Cue-Bank, Recorder
+- `src/components/dashboard/FloatingPanel.tsx`
+  - Drag/Resize/Minimize/Pin, Snap-to-Grid (4er), pro User-Layout in `settings.dashboard_layout` (JSONB) gespeichert
+- Neue Route `src/routes/_authenticated/studio.tsx` — Default-Dashboard mit Twin-Deck + Sequencer + LoopPads + Waveform + Vocal
+- DB-Migration: `settings.dashboard_layout JSONB`, `settings.theme_preset TEXT`
 
-## 3) Virtuoses Auto-DJ-System
+## 4) Power-Design "Virtuoso"
+Kohärentes futuristisches DJ-Design über alle Module.
 
-Heute: `engine.ts` hat Transition-Modi (crossfade, filterSweep, echoTail …), aber wählt nicht intelligent nach Tracks aus.
+- `src/styles.css`: neue Tokens — `--neon-cyan`, `--neon-magenta`, `--neon-amber`, `--deck-graphite`, `--glass-surface`, Glow-Shadows, Gradient-Mesh-Backgrounds, Scanline-Overlay
+- Globale Komponenten:
+  - `NeonButton` (Variants: idle/active/armed/danger – Farbwechsel + Glow)
+  - `LedIndicator` (pulsiert grün/orange/rot je nach Status, blinkt bei Mute/Clip)
+  - `MeterBar`, `RotaryKnob` (drag-rotate, Wertanzeige), `MotorSlider` (Color-Track ändert mit Wert)
+  - Module-Header mit dünner Animated-Beam-Linie (MagicUI), Background „Flickering Grid" dezent
+- Typo: Display-Font für Werte (z. B. JetBrains Mono / Orbitron-ähnlich via Google Fonts `<link>` im `__root.tsx`), Body bleibt clean
 
-Neu: **AI-Mix-Planner** (`mixPlanner.ts` + Gemini `planMix.functions.ts`):
-- Nimmt die nächsten 2–3 Tracks aus der Queue
-- Berechnet **Kompatibilität** (BPM-Differenz < 8%, harmonischer Key via Camelot-Wheel)
-- Wählt **Transition-Typ + Länge** abhängig vom Material:
-  - Ähnliche Energy/BPM → **langer harmonischer Crossfade** (16–32 Beats) am nächsten Phrasen-Ende von A + Intro von B
-  - Großer Energy-Sprung → **Filter Sweep + Drop-Sync** (B startet exakt auf Drop)
-  - Verschiedene Keys → **Echo-Tail + Cut** auf Beat
-  - Wenn A noch nicht zu Ende: **kurzes In-Mix** von B als "Loop-Snippet" (8 Beats vom Hook) während A's instrumentaler Sektion läuft, dann zurück zu A
-- Time-Stretch (existiert in `remix.ts`) angleicht BPM **ohne Tonhöhenverschiebung** (Pitch-Korrektur ist schon drin)
-- Phrase-aligned: Mix-Punkte snappen auf Beat-Grid + 8/16/32-Takt-Grenzen
+## 5) Hilfe / Empfehlungen / Optimierung
+- `src/components/dashboard/CoachHud.tsx` — kleines Overlay mit Live-Tipps von `coach.functions.ts` (BPM-Drift, Key-Clash, leiser Vocal, Loudness > -6 dB)
+- Tooltip-Layer auf allen neuen Controls (kurzer Tipp + „Mehr"-Link)
+- Onboarding-Tour (1× pro User, in `settings.onboarded_studio`) führt durch Decks, Sequencer, Module-Dock
+- „Optimize Mix"-Button: ruft `planMix` + `coach` und passt EQ/Volume automatisch an, mit „Undo"
 
-UI: Im Player-Bar Button "Auto-Mix an", optional Slider "Mix-Stil" (Smooth ↔ Creative).
+## 6) Konsolidierung & Konsistenz
+- Bestehende Routen (`/loops`, `/karaoke`, `/remix`, `/sound-designer`, `/wizard`) bekommen Deep-Link-Buttons „In Studio öffnen" → öffnen jeweiliges Modul als FloatingPanel
+- `TransportBar` zeigt zusätzlich Deck-A/B-Indikatoren, Crossfader-Position, aktive Layer-Anzahl
 
-## 4) Loop-Pads über laufendem Song
+## Technische Notizen
+- Scratch/Scrub via `AudioBufferSourceNode.playbackRate` + Re-Schedule bei Richtungswechsel; Touch-Events mit `pointercancel`-Cleanup
+- Sequencer-Clock: `AudioContext.currentTime` + Lookahead-Scheduler (25 ms Tick, 100 ms Ahead)
+- Floating Panels: einfache eigene Implementierung (pointer-events, `position: fixed`, transform), kein extra Lib
+- Alle neuen AI-Calls über vorhandenes Gateway, Modell `gemini-3-flash-preview`
+- DB: 1 Migration für `dashboard_layout`, `theme_preset`, `onboarded_studio`
 
-Heute: `/loops` hat ein Pad-Grid, aber spielt unabhängig vom Library-Player und nicht beat-synchron.
+## Lieferung
+Ein Rutsch (~20–25 neue/geänderte Dateien). Reihenfolge intern:
+1. Design-Tokens + Basis-UI-Primitives (NeonButton, Led, Knob, Slider)
+2. Engine-Erweiterung (Deck B, Crossfader, Scratch)
+3. Twin-Deck + Turntable
+4. Sequencer + LayerMixer
+5. ModuleDock + FloatingPanel + `/studio`-Route
+6. CoachHud + Onboarding + Optimize-Button
+7. Migration + Settings-Persistenz
 
-Neu: **Loop-Pad-Overlay** (aufrufbar aus Player-Bar):
-- 4×4 Pad-Grid mit eigenen Loops + Preset-Packs (Drums, Vocal-Chops, FX, Bass)
-- Klick startet Loop **quantisiert auf nächsten Beat** des laufenden Songs (Beat-Grid kommt aus Schritt 2)
-- Loops werden auto-time-stretched auf Song-BPM
-- Per-Pad: Volume, Mute, Loop-Length (1/2/4/8 Takte), Pitch-Shift in Semitönen
-- "Record Performance" → mischt Song + alle gespielten Pads + Vocal in eine neue Aufnahme (`recordings`)
-- Loops können auch aus jedem `recordings`-Eintrag gemacht werden ("Slice & Pad")
-
-## 5) Live-Vocal-Layer auf Song mit Smart-Autotune
-
-Das Kernstück. Heute: Karaoke nimmt Vocals auf, aber ohne laufenden Song als Background, und Autotune ist ein separater Schritt.
-
-Neu: **Vocal-Live-Layer** (Sheet/Overlay über Player):
-- Großer **"Mic"-Button** → startet Aufnahme während Song läuft
-- Song läuft weiter, Mikrofon-Input geht durch **Live-VocalChain** (`vocalChain.ts` existiert): EQ, Kompressor, optional Live-Autotune zur Song-Tonart (aus Schritt 2), Reverb, Echo
-- **Monitoring**: User hört eigene Stimme mit Effekten (Kopfhörer-Modus, mit Latenz-Hinweis)
-- **DJ-Button "Drop Vocal"**: Bei Klick markiert das Tool den Zeitpunkt; Tool platziert die Vocal-Phrase **automatisch an der musikalisch passenden Stelle**:
-  - Snap auf nächsten Downbeat
-  - Wenn die laufende Song-Sektion gerade Vocals hat → schiebt es in nächste instrumentale Lücke (aus `vocal_map`)
-  - Tonart-Korrektur via existierendem `pitchShiftBuffer` an Song-Key
-  - Optionaler Echo-Tail auf Beat-Grid
-- **Auto-Modus**: AI entscheidet anhand `vocal_map` + Energy-Kurve selbst, wann die letzte aufgenommene Phrase eingespielt wird (z. B. nur in Breaks oder als Echo-Layer im Drop)
-- Export als neue `recordings` (Song-Mix + Vocal-Layer) per Offline-Render
-
-## 6) Modul-Konsolidierung (alles arbeitet zusammen)
-
-Statt 12 unabhängiger Routen → **eine zentrale `/studio`-Surface** mit Tabs:
-- **Decks** (Library + Queue + Player)
-- **Pads** (Loops, beat-sync)
-- **Mic** (Vocal-Layer + Autotune)
-- **FX** (existierende FX-Bibliothek)
-- **Mixdown** (Multitrack-Editor — `multitrack.ts` existiert bereits)
-
-Bestehende Routen (`/loops`, `/karaoke`, `/autotune`, `/choir`, `/remix`, `/lyric-writer`) bleiben als Deep-Links bestehen, aber teilen sich denselben globalen Engine-State (`engine.ts`), dieselbe `recordings`-Tabelle, denselben Vocal-Chain. Der Studio-Wizard wird auf diese Tabs umgestellt.
-
-## Umfang (in dieser Etappe)
-
-Vorschlag: in **3 Sub-Etappen** liefern, jede testbar:
-
-- **3a — Player & Analyse-Fundament**: Persistente Transport-Bar mit Waveform & Seek + Upload-Analyse (BPM/Key/Beat-Grid/Energy/Vocal-Map) + DB-Migration + Re-Analyse-Button in Library.
-- **3b — Auto-DJ + Loop-Pads über Song**: Mix-Planner + intelligente Transitions + beat-quantisierte Loop-Pads als Overlay.
-- **3c — Live-Vocal-Layer + Studio-Konsolidierung**: Vocal-Live-Recording über Song mit Smart-Drop, Live-Autotune zur Song-Key, `/studio` als zentrale Tab-Surface.
-
-## Technische Hinweise
-
-- Alle Audio-Analyse läuft client-seitig im Web-Worker (keine Kosten, kein Upload-Roundtrip).
-- AI-Aufrufe nur für: Mix-Plan-Vorschläge, Vocal-Auto-Drop-Entscheidungen, Lyric-Vorschläge — alles über Lovable AI (`gemini-3-flash-preview`).
-- Migration für `tracks`-Spalten + GRANTs.
-- Web-Worker via `?worker`-Import in Vite; Worker-Code in `src/lib/audio/workers/`.
-- Beat-Grid + Vocal-Map in `jsonb` reicht (≤ 50 KB pro Track typisch).
-
-## Frage vor Start
-
-Soll ich **alle 3 Sub-Etappen in einem Rutsch** bauen (umfangreich, ~15–20 Dateien neu/geändert), oder mit **3a starten und nach jedem Schritt Zwischenfreigabe** holen?
+## Offen vor dem Bauen
+- Soll der `/studio`-Screen die neue **Standard-Startseite nach Login** werden, oder bleibt `/library` Default und Studio ist via Nav/FAB erreichbar?

@@ -22,6 +22,7 @@ import {
   Wand2,
   Compass,
 } from "lucide-react";
+import { Disc3 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
@@ -30,6 +31,7 @@ import { isAdminOptions } from "@/lib/db/queries";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { TransportBar } from "@/components/player/TransportBar";
+import { ModuleDock } from "@/components/dashboard/ModuleDock";
 
 // Primary nav for desktop sidebar (and mostly mobile bottom bar).
 const NAV = [
@@ -41,6 +43,7 @@ const NAV = [
 
 // Secondary nav (More menu on mobile, sidebar on desktop).
 const SECONDARY = [
+  { to: "/cockpit", label: "DJ Cockpit", icon: Disc3 },
   { to: "/wizard", label: "Studio-Wizard", icon: Compass },
   { to: "/soundpool", label: "Soundpool", icon: Layers },
   { to: "/loops", label: "Loop Creator", icon: Repeat },
@@ -233,6 +236,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </>
       )}
       <TransportBar />
+      <ModuleDock />
     </div>
   );
 }
