@@ -533,7 +533,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     applyCrossfader(get());
     // Lazy analysis if metadata missing
     if (!enriched.beatGrid || !enriched.bpm || !enriched.cues) {
-      void get().ensureAnalysis(side);
+      await get().ensureAnalysis(side).catch(() => {});
+    }
+    // If the other deck is playing, pre-sync this deck's tempo so it's already beat-matched.
+    const other: DeckSide = side === "A" ? "B" : "A";
+    if (get()[other].isPlaying && get()[other].track?.bpm && get()[side].track?.bpm) {
+      syncTempo(other, side);
     }
   },
 
