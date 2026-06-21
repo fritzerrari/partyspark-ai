@@ -3,6 +3,7 @@ import type { EngineTrack } from "@/lib/audio/engine";
 import { TRANSITION_LABELS } from "@/lib/audio/engine";
 import { useTwinDeck, compatHint, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { Turntable } from "./Turntable";
+import { DeckLiveHud } from "./DeckLiveHud";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { Led } from "@/components/ui/LedIndicator";
 import { RotaryKnob } from "@/components/ui/RotaryKnob";
@@ -139,7 +140,7 @@ export function TwinDeck({ tracks }: Props) {
 
         <div className="flex items-center justify-between text-[9px]">
           <span className={cn("rounded px-1.5 py-0.5", compat.keyOk ? "bg-emerald-500/30 text-emerald-200" : "bg-white/10 text-stage-foreground/60")}>
-            Key {compat.keyOk ? "✓" : "—"} {A.track?.camelot ?? "?"}↔{B.track?.camelot ?? "?"}
+            Key {compat.keyOk ? "✓" : `Δ${compat.semitones > 0 ? "+" : ""}${compat.semitones}st`} {A.track?.camelot ?? "?"}↔{B.track?.camelot ?? "?"}
           </span>
           <span className={cn("rounded px-1.5 py-0.5", compat.bpmOk ? "bg-emerald-500/30 text-emerald-200" : "bg-white/10 text-stage-foreground/60")}>
             BPM Δ {compat.bpmDelta ?? "?"}
