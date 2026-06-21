@@ -113,7 +113,7 @@ export function LoopPadOverlay({ open, onClose }: { open: boolean; onClose: () =
     const beatSec = 60 / bpm;
     const dropAt = current ? nextBeatTime(position) : position;
     const delay = Math.max(0, dropAt - position);
-    const buf = pad.build(ctx, beatSec);
+    const buf = pad.build(ctx, beatSec, bpm);
     const src = ctx.createBufferSource(); src.buffer = buf;
     const g = ctx.createGain(); g.gain.value = 0.7;
     src.connect(g); g.connect(ctx.destination);

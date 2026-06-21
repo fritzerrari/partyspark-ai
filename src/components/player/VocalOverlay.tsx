@@ -185,7 +185,7 @@ export function VocalOverlay({ open, onClose }: { open: boolean; onClose: () => 
         user_id: user!.id,
         title: `${current.title} (Vocal Mix)`,
         storage_path: path,
-        kind: "mix",
+        kind: "karaoke",
         duration_sec: Math.round(rendered.duration),
       });
       qc.invalidateQueries({ queryKey: ["recordings"] });
