@@ -1,0 +1,1 @@
+ALTER VIEW public.community_fx_rankings SET (security_invoker = true);
