@@ -245,6 +245,7 @@ function syncTempo(from: DeckSide, to: DeckSide): number {
   const clamped = Math.max(0.88, Math.min(1.12, ratio));
   if (deck[to].el) deck[to].el.playbackRate = clamped;
   useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: clamped } } as Partial<BusState>));
+  recomputeEffective(to);
   return clamped;
 }
 
