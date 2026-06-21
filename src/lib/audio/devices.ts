@@ -2,6 +2,7 @@
 // Handles enumeration, permission, mic capture and Web Audio routing
 // for master + cue (pre-listen) buses on separate output sinks.
 import { create } from "zustand";
+import { createMicAutotune, type MicAutotuneHandle, type ScaleMode, targetFromKey } from "@/lib/audio/micAutotune";
 
 export type DeviceInfo = { deviceId: string; label: string };
 
@@ -17,6 +18,14 @@ type DeviceState = {
   micDeviceId: string | null;
   micEnabled: boolean;
   micGain: number;
+  /** Autotune (sing-along) state */
+  autotuneOn: boolean;
+  autotuneLockToSong: boolean;
+  autotuneStrength: number;     // 0..1
+  autotuneMode: ScaleMode;      // used when not locked to song
+  autotuneRoot: number;         // 0..11
+  autotuneDetune: number;       // current applied cents (display only)
+  autotuneHz: number;           // last detected pitch in Hz
 };
 
 type DeviceActions = {
@@ -27,6 +36,9 @@ type DeviceActions = {
   setMicDevice: (id: string | null) => Promise<void>;
   setMicEnabled: (on: boolean) => Promise<void>;
   setMicGain: (g: number) => void;
+  setAutotune: (p: Partial<{ on: boolean; lockToSong: boolean; strength: number; mode: ScaleMode; root: number }>) => void;
+  /** Push current song key into the autotune chain. */
+  setAutotuneTargetFromKey: (musicalKey: string | null) => void;
   testCue: () => Promise<void>; // play short tone on cue sink
   testMaster: () => Promise<void>;
   dispose: () => void;
@@ -40,6 +52,8 @@ let micSource: MediaStreamAudioSourceNode | null = null;
 let micGainNode: GainNode | null = null;
 let micAnalyser: AnalyserNode | null = null;
 let micRaf: number | null = null;
+let micAutotune: MicAutotuneHandle | null = null;
+let autotuneMeterRaf: number | null = null;
 
 function ensureCtx() {
   if (typeof window === "undefined") return null;
@@ -78,6 +92,23 @@ function stopMicMeter() {
   useDevices.setState({ micLevel: 0 });
 }
 
+function startAutotuneMeter() {
+  const tick = () => {
+    if (!micAutotune) return;
+    useDevices.setState({
+      autotuneDetune: micAutotune.getCurrentDetune(),
+      autotuneHz: micAutotune.getDetectedHz(),
+    });
+    autotuneMeterRaf = requestAnimationFrame(tick);
+  };
+  autotuneMeterRaf = requestAnimationFrame(tick);
+}
+function stopAutotuneMeter() {
+  if (autotuneMeterRaf != null) cancelAnimationFrame(autotuneMeterRaf);
+  autotuneMeterRaf = null;
+  useDevices.setState({ autotuneDetune: 0, autotuneHz: 0 });
+}
+
 async function openMic(deviceId: string | null, gain: number) {
   await closeMic();
   const c = ensureCtx();
@@ -94,7 +125,19 @@ async function openMic(deviceId: string | null, gain: number) {
     micAnalyser = c.createAnalyser();
     micAnalyser.fftSize = 1024;
     micSource.connect(micAnalyser);
-    micSource.connect(micGainNode);
+    // Optional autotune: mic → autotune → gain
+    const s = useDevices.getState();
+    if (s.autotuneOn) {
+      micAutotune = createMicAutotune(c, micSource, {
+        enabled: true,
+        strength: s.autotuneStrength,
+        target: { root: s.autotuneRoot, mode: s.autotuneMode },
+      });
+      micAutotune.output.connect(micGainNode);
+      startAutotuneMeter();
+    } else {
+      micSource.connect(micGainNode);
+    }
     micGainNode.connect(c.destination);
     startMicMeter();
   } catch (e) {
@@ -105,6 +148,9 @@ async function openMic(deviceId: string | null, gain: number) {
 
 async function closeMic() {
   stopMicMeter();
+  stopAutotuneMeter();
+  try { micAutotune?.dispose(); } catch { /* noop */ }
+  micAutotune = null;
   try { micGainNode?.disconnect(); } catch {}
   try { micSource?.disconnect(); } catch {}
   try { micAnalyser?.disconnect(); } catch {}
@@ -171,6 +217,13 @@ export const useDevices = create<DeviceState & DeviceActions>((set, get) => ({
   micDeviceId: null,
   micEnabled: false,
   micGain: 0.8,
+  autotuneOn: false,
+  autotuneLockToSong: true,
+  autotuneStrength: 0.7,
+  autotuneMode: "chromatic",
+  autotuneRoot: 0,
+  autotuneDetune: 0,
+  autotuneHz: 0,
 
   async refresh() {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) return;
@@ -215,6 +268,38 @@ export const useDevices = create<DeviceState & DeviceActions>((set, get) => ({
   setMicGain(g) {
     set({ micGain: g });
     if (micGainNode) micGainNode.gain.value = g;
+  },
+  setAutotune(p) {
+    const prev = get();
+    const next = {
+      autotuneOn: p.on ?? prev.autotuneOn,
+      autotuneLockToSong: p.lockToSong ?? prev.autotuneLockToSong,
+      autotuneStrength: p.strength ?? prev.autotuneStrength,
+      autotuneMode: p.mode ?? prev.autotuneMode,
+      autotuneRoot: p.root ?? prev.autotuneRoot,
+    };
+    set(next);
+    // If we already have a chain, patch it in place; otherwise re-open when toggling on.
+    if (micAutotune) {
+      micAutotune.setConfig({
+        enabled: next.autotuneOn,
+        strength: next.autotuneStrength,
+        target: { root: next.autotuneRoot, mode: next.autotuneMode },
+      });
+      if (!next.autotuneOn) {
+        // Still leave the chain in place; it just becomes dry.
+      }
+    } else if (next.autotuneOn && prev.micEnabled) {
+      // Re-open mic to insert the autotune node into the graph.
+      void openMic(prev.micDeviceId, prev.micGain);
+    }
+  },
+  setAutotuneTargetFromKey(musicalKey) {
+    const t = targetFromKey(musicalKey, get().autotuneMode);
+    set({ autotuneRoot: t.root, autotuneMode: t.mode });
+    if (micAutotune && get().autotuneLockToSong) {
+      micAutotune.setConfig({ target: t });
+    }
   },
   async testCue() {
     ensureSinkElements();
