@@ -112,8 +112,8 @@ export function createMicAutotune(ctx: AudioContext, source: AudioNode, initial?
     speedMs: 80,
     target: { root: 0, mode: "chromatic" },
     ...initial,
-    target: { ...{ root: 0, mode: "chromatic" }, ...(initial?.target ?? {}) },
   };
+  cfg.target = { root: 0, mode: "chromatic", ...(initial?.target ?? {}) };
 
   // Bypass branch when disabled — keep both wires up so we can toggle silently.
   const inGain = ctx.createGain();
