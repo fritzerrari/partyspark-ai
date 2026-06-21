@@ -66,7 +66,7 @@ function ChoirRoute() {
     const { error } = await supabase.storage.from("recordings").upload(path, blob);
     if (error) { toast.error(error.message); return; }
     await supabase.from("recordings").insert({
-      owner_id: user.id, storage_path: path, kind: "choir",
+      owner_id: user.id, storage_path: path, kind: "karaoke",
       title: `Choir ×${voices}`,
     });
     qc.invalidateQueries({ queryKey: ["recordings"] });
