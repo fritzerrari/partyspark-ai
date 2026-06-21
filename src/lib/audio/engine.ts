@@ -31,7 +31,8 @@ export type TransitionMode =
   | "loopRoll"
   | "doubleDrop"
   | "bassSwap"
-  | "reverbWash";
+  | "reverbWash"
+  | "genreBridge";
 
 /** Mode hint accepted by the UI selector — "auto" lets planMix decide,
  *  "random" picks a virtuoso transition each time. */
@@ -50,6 +51,7 @@ export const TRANSITION_LABELS: Record<TransitionModeHint, string> = {
   doubleDrop:  "Double-Drop",
   bassSwap:    "Bass-Swap",
   reverbWash:  "Reverb-Wash",
+  genreBridge: "Genre-Bridge (cross-genre)",
 };
 
 type State = {
