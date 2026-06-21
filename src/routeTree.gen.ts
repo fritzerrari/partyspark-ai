@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
@@ -33,6 +34,11 @@ import { Route as AuthenticatedFxFxIdRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedAdminFxReviewRouteImport } from './routes/_authenticated/admin/fx-review'
 import { Route as ApiPublicHooksStorageCleanupRouteImport } from './routes/api/public/hooks/storage-cleanup'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
@@ -156,6 +162,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
@@ -180,6 +187,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
@@ -206,6 +214,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
@@ -232,6 +241,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pricing'
+    | '/reset-password'
     | '/ai-lab'
     | '/dashboard'
     | '/karaoke'
@@ -256,6 +266,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pricing'
+    | '/reset-password'
     | '/ai-lab'
     | '/dashboard'
     | '/karaoke'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/pricing'
+    | '/reset-password'
     | '/_authenticated/ai-lab'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
@@ -307,6 +319,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ApiAiPartyHostSpeakRoute: typeof ApiAiPartyHostSpeakRoute
   PPartyIdGuestRoute: typeof PPartyIdGuestRoute
   ApiPublicHooksStorageCleanupRoute: typeof ApiPublicHooksStorageCleanupRoute
@@ -314,6 +327,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing': {
       id: '/pricing'
       path: '/pricing'
@@ -524,6 +544,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ApiAiPartyHostSpeakRoute: ApiAiPartyHostSpeakRoute,
   PPartyIdGuestRoute: PPartyIdGuestRoute,
   ApiPublicHooksStorageCleanupRoute: ApiPublicHooksStorageCleanupRoute,
