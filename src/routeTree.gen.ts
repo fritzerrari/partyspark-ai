@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
+import { Route as AuthenticatedSoundDesignerRouteImport } from './routes/_authenticated/sound-designer'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
 import { Route as AuthenticatedMomentsRouteImport } from './routes/_authenticated/moments'
@@ -79,6 +80,12 @@ const AuthenticatedSoundpoolRoute = AuthenticatedSoundpoolRouteImport.update({
   path: '/soundpool',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSoundDesignerRoute =
+  AuthenticatedSoundDesignerRouteImport.update({
+    id: '/sound-designer',
+    path: '/sound-designer',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -212,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -243,6 +251,7 @@ export interface FileRoutesByTo {
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -276,6 +285,7 @@ export interface FileRoutesById {
   '/_authenticated/moments': typeof AuthenticatedMomentsRoute
   '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
   '/api/transcribe': typeof ApiTranscribeRoute
@@ -309,6 +319,7 @@ export interface FileRouteTypes {
     | '/moments'
     | '/party-host'
     | '/settings'
+    | '/sound-designer'
     | '/soundpool'
     | '/studio'
     | '/api/transcribe'
@@ -340,6 +351,7 @@ export interface FileRouteTypes {
     | '/moments'
     | '/party-host'
     | '/settings'
+    | '/sound-designer'
     | '/soundpool'
     | '/studio'
     | '/api/transcribe'
@@ -372,6 +384,7 @@ export interface FileRouteTypes {
     | '/_authenticated/moments'
     | '/_authenticated/party-host'
     | '/_authenticated/settings'
+    | '/_authenticated/sound-designer'
     | '/_authenticated/soundpool'
     | '/_authenticated/studio'
     | '/api/transcribe'
@@ -455,6 +468,13 @@ declare module '@tanstack/react-router' {
       path: '/soundpool'
       fullPath: '/soundpool'
       preLoaderRoute: typeof AuthenticatedSoundpoolRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/sound-designer': {
+      id: '/_authenticated/sound-designer'
+      path: '/sound-designer'
+      fullPath: '/sound-designer'
+      preLoaderRoute: typeof AuthenticatedSoundDesignerRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/settings': {
@@ -627,6 +647,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMomentsRoute: typeof AuthenticatedMomentsRoute
   AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSoundDesignerRoute: typeof AuthenticatedSoundDesignerRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
@@ -651,6 +672,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMomentsRoute: AuthenticatedMomentsRoute,
   AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSoundDesignerRoute: AuthenticatedSoundDesignerRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
