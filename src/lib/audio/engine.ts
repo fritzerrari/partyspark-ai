@@ -13,6 +13,11 @@ export type EngineTrack = {
   durationSec?: number | null;
   bpm?: number | null;
   energy?: number | null;
+  camelot?: string | null;
+  musicalKey?: string | null;
+  beatGrid?: number[] | null;
+  cues?: { introEnd: number; firstDrop: number; outroStart: number } | null;
+  vocalMap?: { t: number; voiced: number }[] | null;
 };
 
 export type TransitionMode = "crossfade" | "cut" | "fadeGap" | "filterSweep" | "echoTail" | "stinger";
@@ -38,6 +43,7 @@ type State = {
   mood: string;
   transitionMode: TransitionMode;
   stingerUrl: string | null;
+  autoDj: boolean;
 };
 
 type Actions = {
@@ -56,6 +62,11 @@ type Actions = {
   getAnalyser: () => AnalyserNode | null;
   setTransitionMode: (m: TransitionMode) => void;
   setStingerUrl: (url: string | null) => void;
+  setAutoDj: (on: boolean) => void;
+  getAudioElement: () => HTMLAudioElement | null;
+  getAudioContext: () => AudioContext | null;
+  getMasterNode: () => AudioNode | null;
+  nextBeatTime: (fromSec?: number) => number;
 };
 
 let audioEl: HTMLAudioElement | null = null;
@@ -241,6 +252,7 @@ export const useEngine = create<State & Actions>((set, get) => ({
   mood: "Warm-up",
   transitionMode: "crossfade",
   stingerUrl: null,
+  autoDj: false,
 
   loadQueue: (tracks, opts) => {
     if (!tracks.length) return;
@@ -278,6 +290,19 @@ export const useEngine = create<State & Actions>((set, get) => ({
     }
     const [next, ...rest] = q;
     set({ queue: rest });
+    // Auto-DJ: pick smarter transition based on track metadata
+    const state = get();
+    if (state.autoDj && state.current) {
+      try {
+        const { planMix } = await import("./mixPlanner");
+        const plan = planMix(
+          { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy },
+          { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
+          state.positionSec,
+        );
+        set({ transitionMode: plan.mode, crossfadeSec: plan.crossfadeSec });
+      } catch { /* fall back to current mode */ }
+    }
     await playTrack(next, true);
   },
   seek: (sec) => {
@@ -295,4 +320,16 @@ export const useEngine = create<State & Actions>((set, get) => ({
   getAnalyser: () => analyser,
   setTransitionMode: (m) => set({ transitionMode: m }),
   setStingerUrl: (url) => set({ stingerUrl: url }),
+  setAutoDj: (on) => set({ autoDj: on }),
+  getAudioElement: () => audioEl,
+  getAudioContext: () => audioCtx,
+  getMasterNode: () => postGain,
+  nextBeatTime: (fromSec) => {
+    const cur = get().current;
+    const pos = fromSec ?? get().positionSec;
+    const grid = cur?.beatGrid ?? null;
+    if (!grid?.length) return pos;
+    for (const b of grid) if (b > pos + 0.02) return b;
+    return grid[grid.length - 1];
+  },
 }));

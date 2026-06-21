@@ -697,13 +697,17 @@ export type Database = {
       }
       tracks: {
         Row: {
+          analyzed_at: string | null
           artist: string | null
           artwork_url: string | null
+          beat_grid: Json | null
           bpm: number | null
           cleanup_warned_at: string | null
           created_at: string
+          cues: Json | null
           duration_sec: number | null
           energy: number
+          energy_curve: Json | null
           id: string
           is_favorite: boolean
           last_played_at: string | null
@@ -712,15 +716,20 @@ export type Database = {
           owner_id: string
           storage_path: string | null
           title: string
+          vocal_map: Json | null
         }
         Insert: {
+          analyzed_at?: string | null
           artist?: string | null
           artwork_url?: string | null
+          beat_grid?: Json | null
           bpm?: number | null
           cleanup_warned_at?: string | null
           created_at?: string
+          cues?: Json | null
           duration_sec?: number | null
           energy?: number
+          energy_curve?: Json | null
           id?: string
           is_favorite?: boolean
           last_played_at?: string | null
@@ -729,15 +738,20 @@ export type Database = {
           owner_id: string
           storage_path?: string | null
           title: string
+          vocal_map?: Json | null
         }
         Update: {
+          analyzed_at?: string | null
           artist?: string | null
           artwork_url?: string | null
+          beat_grid?: Json | null
           bpm?: number | null
           cleanup_warned_at?: string | null
           created_at?: string
+          cues?: Json | null
           duration_sec?: number | null
           energy?: number
+          energy_curve?: Json | null
           id?: string
           is_favorite?: boolean
           last_played_at?: string | null
@@ -746,6 +760,7 @@ export type Database = {
           owner_id?: string
           storage_path?: string | null
           title?: string
+          vocal_map?: Json | null
         }
         Relationships: []
       }

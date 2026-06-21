@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Upload, Music2, Heart, Play, Loader2, Search } from "lucide-react";
+import { Upload, Music2, Heart, Play, Loader2, Search, Wand2 } from "lucide-react";
 import { tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -10,6 +10,7 @@ import { useEngine } from "@/lib/audio/engine";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { analyzeAudio, decodeToBuffer } from "@/lib/audio/analyze";
 
 export const Route = createFileRoute("/_authenticated/library")({
   head: () => ({ meta: [{ title: "Music Library — PartyPilot AI" }] }),
@@ -22,6 +23,7 @@ function Library() {
   const { data: tracks = [] } = useQuery(tracksListOptions());
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const engine = useEngine();
 
@@ -45,14 +47,32 @@ function Library() {
         });
 
         const title = file.name.replace(/\.[^.]+$/, "");
+        // Analyze on upload
+        let analysisFields: Record<string, unknown> = { energy: 60, mood: "Build" };
+        try {
+          const buf = await decodeToBuffer(file);
+          const a = await analyzeAudio(buf);
+          analysisFields = {
+            bpm: a.bpm,
+            music_key: a.musicalKey,
+            energy: 60,
+            mood: "Build",
+            beat_grid: a.beatGrid,
+            energy_curve: a.energyCurve,
+            cues: a.cues,
+            vocal_map: a.vocalMap,
+            analyzed_at: new Date().toISOString(),
+          };
+        } catch (e) {
+          console.warn("Analyse fehlgeschlagen, fahre ohne fort", e);
+        }
         await supabase.from("tracks").insert({
           owner_id: user!.id,
           title,
           artist: "You",
           storage_path: path,
           duration_sec: dur,
-          energy: 60,
-          mood: "Build",
+          ...analysisFields,
         });
       }
       toast.success(`Uploaded ${files.length} track${files.length > 1 ? "s" : ""}`);
@@ -81,8 +101,40 @@ function Library() {
         durationSec: t.duration_sec,
         artwork: t.artwork_url,
         energy: t.energy,
+        bpm: t.bpm,
+        musicalKey: (t as { music_key?: string | null }).music_key ?? null,
+        beatGrid: (t as { beat_grid?: number[] | null }).beat_grid ?? null,
+        cues: (t as { cues?: { introEnd: number; firstDrop: number; outroStart: number } | null }).cues ?? null,
+        vocalMap: (t as { vocal_map?: { t: number; voiced: number }[] | null }).vocal_map ?? null,
       },
     ]);
+  }
+
+  async function reanalyze(t: (typeof tracks)[number]) {
+    if (!t.storage_path) return;
+    setAnalyzingId(t.id);
+    try {
+      const { data } = await supabase.storage.from("tracks").createSignedUrl(t.storage_path, 60 * 60);
+      if (!data?.signedUrl) throw new Error("Track nicht ladbar");
+      const res = await fetch(data.signedUrl);
+      const buf = await decodeToBuffer(await res.arrayBuffer());
+      const a = await analyzeAudio(buf);
+      await supabase.from("tracks").update({
+        bpm: a.bpm,
+        music_key: a.musicalKey,
+        beat_grid: a.beatGrid,
+        energy_curve: a.energyCurve,
+        cues: a.cues,
+        vocal_map: a.vocalMap,
+        analyzed_at: new Date().toISOString(),
+      }).eq("id", t.id);
+      qc.invalidateQueries({ queryKey: ["tracks"] });
+      toast.success(`Analysiert: ${Math.round(a.bpm)} BPM · ${a.musicalKey}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Analyse fehlgeschlagen");
+    } finally {
+      setAnalyzingId(null);
+    }
   }
 
   async function favorite(t: (typeof tracks)[number]) {
@@ -155,6 +207,15 @@ function Library() {
                 <div className="min-w-0">
                   <p className="truncate font-display text-base font-semibold">{t.title}</p>
                   <p className="truncate text-xs text-muted-foreground">{t.artist ?? "Unknown"}</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {t.bpm ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">{Math.round(t.bpm)} BPM</span> : null}
+                    {(t as { music_key?: string | null }).music_key ? (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">{(t as { music_key?: string | null }).music_key}</span>
+                    ) : null}
+                    {!(t as { analyzed_at?: string | null }).analyzed_at ? (
+                      <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">unanalysiert</span>
+                    ) : null}
+                  </div>
                 </div>
                 <button
                   onClick={() => favorite(t)}
@@ -164,13 +225,25 @@ function Library() {
                   <Heart className={"h-4 w-4 " + (t.is_favorite ? "fill-current" : "")} />
                 </button>
               </div>
-              <Button
-                size="sm"
-                onClick={() => play(t)}
-                className="mt-3 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Play className="mr-2 h-4 w-4" /> Play
-              </Button>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => play(t)}
+                  className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  <Play className="mr-2 h-4 w-4" /> Play
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => reanalyze(t)}
+                  disabled={analyzingId === t.id}
+                  className="rounded-full"
+                  title="BPM/Tonart neu analysieren"
+                >
+                  {analyzingId === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           ))}
         </div>

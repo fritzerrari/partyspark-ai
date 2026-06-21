@@ -29,6 +29,7 @@ import { useQuery } from "@tanstack/react-query";
 import { isAdminOptions } from "@/lib/db/queries";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { TransportBar } from "@/components/player/TransportBar";
 
 // Primary nav for desktop sidebar (and mostly mobile bottom bar).
 const NAV = [
@@ -231,6 +232,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </>
       )}
+      <TransportBar />
     </div>
   );
 }
