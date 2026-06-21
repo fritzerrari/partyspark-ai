@@ -36,6 +36,7 @@ const SECONDARY = [
   { to: "/soundpool", label: "Soundpool", icon: Layers },
   { to: "/loops", label: "Loop Creator", icon: Repeat },
   { to: "/karaoke", label: "Karaoke", icon: Mic },
+  { to: "/studio", label: "Studio", icon: Layers },
   { to: "/party-host", label: "Party Host", icon: Bot },
   { to: "/moments", label: "Moments", icon: CalendarHeart },
   { to: "/autotune", label: "Autotune", icon: Mic },
