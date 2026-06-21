@@ -920,6 +920,109 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     }
   },
 
+  setStem(side, stem, value, sec = 0.05) {
+    ensureCtx(); wireDeck(side);
+    deck[side].stems?.setGain(stem, value, sec);
+  },
+  resetStems(side) {
+    deck[side].stems?.reset();
+  },
+  getStemGains(side) {
+    const s = deck[side].stems;
+    if (!s) return { drums: 1, bass: 1, vocals: 1, other: 1 };
+    return {
+      drums: s.gains.drums.gain.value,
+      bass: s.gains.bass.gain.value,
+      vocals: s.gains.vocals.gain.value,
+      other: s.gains.other.gain.value,
+    };
+  },
+  async runStemRecipe(from, to, id) {
+    ensureCtx(); wireDeck("A"); wireDeck("B");
+    if (!ctx) return;
+    const st = get();
+    const fromTrack = st[from].track;
+    const toTrack = st[to].track;
+    if (!fromTrack || !toTrack) return;
+    if (st.transitionInFlight) return;
+    const fromStems = deck[from].stems;
+    const toStems = deck[to].stems;
+    if (!fromStems || !toStems) return;
+    set({ transitionInFlight: true });
+    try {
+      // BPM sync + beat align like the normal transition.
+      const fromDeck = deck[from];
+      const toDeck = deck[to];
+      const toUserVol = st[to].volume;
+      const fromUserVol = st[from].volume;
+      // Start incoming if needed.
+      if (toDeck.el && toDeck.el.paused) {
+        try { await toDeck.el.play(); } catch { /* user gesture */ }
+      }
+      if (ctx.state === "suspended") void ctx.resume();
+      const ratio = syncTempo(from, to);
+      beatAlign(from, to);
+      // Make sure deck volumes are open — recipe rides the stems, not the main gain.
+      if (toDeck.gain) toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
+      if (toDeck.gain) toDeck.gain.gain.setValueAtTime(toUserVol, ctx.currentTime);
+      if (fromDeck.gain) fromDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
+      if (fromDeck.gain) fromDeck.gain.gain.setValueAtTime(fromUserVol, ctx.currentTime);
+      // Reset incoming stems to "muted but ready" so the recipe can sneak them in.
+      toStems.setGain("drums", 0, 0.02);
+      toStems.setGain("bass", 0, 0.02);
+      toStems.setGain("vocals", 0, 0.02);
+      toStems.setGain("other", 0, 0.02);
+      fromStems.setGain("drums", 1, 0.02);
+      fromStems.setGain("bass", 1, 0.02);
+      fromStems.setGain("vocals", 1, 0.02);
+      fromStems.setGain("other", 1, 0.02);
+      // Wait for first downbeat so the recipe's beats are aligned.
+      await waitForNextBeat(from);
+      // Choose recipe.
+      const bpmDeltaPct = (fromTrack.bpm && toTrack.bpm) ? Math.abs(fromTrack.bpm - toTrack.bpm) / fromTrack.bpm : 0;
+      const fromVoc = (fromTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false;
+      const toVoc = (toTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false;
+      const fromE = fromTrack.energy ?? 0.5;
+      const toE = toTrack.energy ?? 0.5;
+      const recipeId: RecipeId = id ?? pickRecipe({
+        bpmDeltaPct,
+        keyCompatible: camelotCompatible(fromTrack.camelot ?? "", toTrack.camelot ?? ""),
+        fromHasVocals: fromVoc,
+        toHasVocals: toVoc,
+        energyJump: toE - fromE,
+      });
+      const secPerBar = fromTrack.bpm ? (60 / fromTrack.bpm) * 4 : 2;
+      const bars = 8;
+      // Animate the crossfader visually toward the incoming side; the *audio* is
+      // handled by stem swaps so the crossfader is mostly cosmetic here.
+      animateCrossfader(to === "B" ? 1 : 0, secPerBar * bars * 1000);
+      await runRecipe(recipeId, {
+        ctx,
+        fromStems, toStems,
+        secPerBar, bars,
+        waitForBeat: () => waitForNextBeat(from),
+      });
+      // Clean up: pause outgoing, reset its stems to neutral so it's ready to be
+      // reused, restore the deck gain to user volume.
+      try { fromDeck.el?.pause(); } catch { /* noop */ }
+      fromStems.reset();
+      // Incoming stems should all be at 1 by now; force it.
+      toStems.setGain("drums", 1, 0.1);
+      toStems.setGain("bass", 1, 0.1);
+      toStems.setGain("vocals", 1, 0.1);
+      toStems.setGain("other", 1, 0.1);
+      recomputeEffective(to);
+      const ratioNote = ratio !== 1 ? ` · sync ×${ratio.toFixed(3)}` : "";
+      set({
+        lastTransitionNote: `${RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId} · ${bars} bars${ratioNote}`,
+        transitionInFlight: false,
+      });
+    } catch (e) {
+      console.warn("stem recipe failed", e);
+      set({ transitionInFlight: false });
+    }
+  },
+
   async startRecording() {
     ensureCtx();
     if (!ctx || !masterGain) return;
