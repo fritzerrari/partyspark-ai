@@ -1,65 +1,104 @@
-## Status der 6 „Coming Soon"-Karten
+# DJ-Cockpit + integriertes Live-Vocal-System
 
-| Karte | Status | Was wir kostenlos liefern können |
-|---|---|---|
-| **AI Mashups** | ✅ bereits live (`/battle`) | Karte auf "Open" umstellen, auf `/battle` linken |
-| **AI Vocal Producer** | ✅ bereits live (`PostProcessSheet` in `/karaoke`) | Karte auf "Open" umstellen, FX-Sheet öffnen |
-| **AI Choir** | ✅ Engine vorhanden (`vocalPost.ts`) | Eigene Route `/choir` mit Preset-Auswahl (3/5/8/16/50 Stimmen), Detune-Spread, Reverb-Halle |
-| **AI Sound Designer** | 🆕 neu, machbar | Gemini gibt JSON-FX-Parameter zurück (Oscillator-Typ, Hüllkurve, Filter, FM-Mod) → Web Audio synthetisiert in Echtzeit + Download als WAV |
-| **AI Crowd Reactions** | 🆕 neu, machbar | Procedurale Crowd-Engine (Noise + viele Stimmen-TTS gemischt) + Preset-Buttons "Jubel/Lacher/Applaus/Pfiffe/Buh"; Gemini wählt passendes Preset zur Szene |
-| **AI Remix** | 🆕 neu, machbar | 90-Sek Dance-Edit: BPM-Detect (vorhanden) → Time-Stretch auf Ziel-BPM → Intro/Drop/Outro-Struktur via Filter-Sweeps & Loop-Wiederholungen aus bestehendem `engine.ts` |
+Ziel: Aus den heute eigenständigen Modulen (Library, Loops, Karaoke, Remix, Autotune, Choir) wird **ein zusammenhängendes Live-Tool** mit einem zentralen Player, Zeitleiste, vorbereiteten Transitions und Vocal-Recording über laufende Songs.
 
-Alles funktioniert kostenlos: Lovable AI Gateway (Gemini Text + TTS, schon im Projekt) + Web Audio API. Keine zusätzlichen API-Keys nötig.
+## 1) Zentraler Player mit Zeitleiste & Seek
 
-## Umsetzung
+Heute: `engine.ts` spielt Tracks ab, aber die UI hat keinen sichtbaren Zeitstrahl mit Vor-/Zurückspulen, und Karaoke/Loops/Remix nutzen ihre eigenen Mini-Player.
 
-### 1. AI Lab Karten aktualisieren (`ai-lab.tsx`)
-- "Mashups", "Vocal Producer", "Choir" → grüner "Open" Badge + Link
-- Neue Karten "Sound Designer", "Crowd Reactions", "Remix" → eigene Routen
+Neu: **Persistente Transport-Bar** unten in `AppShell` (analog Spotify), die `useEngine` nutzt:
+- Waveform-Zeitstrahl (gerendert via `buildPeaks` aus `multitrack.ts`) + Playhead
+- Klick/Drag zum Spulen → `engine.seek(sec)`
+- Play/Pause, Skip, Lautstärke, aktueller Track + Cover
+- Mini-Buttons: "Vocal aufnehmen", "Loop-Pads", "Auto-Mix" → öffnen Overlays statt zu navigieren
+- Sichtbar auf allen Routen außer `/auth`
 
-### 2. AI Choir — `/choir`
-- Auswahl Recording aus `recordings`
-- Slider: Stimmenzahl (1–50), Detune-Spread (Cents), Stereo-Spread, Hall-Größe
-- Nutzt `pitchShiftBuffer` × N mit zufälligem Detune/Timing-Offset → Offline-Mixdown → Upload als neue Aufnahme
+## 2) Upload-Analyse-Pipeline (BPM, Key, Energy, Beat-Grid, Hot-Cues)
 
-### 3. AI Sound Designer — `/sound-designer`
-- Textprompt: "Laser-Schuss", "UFO-Landung", "Tropfen im Eimer", "Cyber-Drone 4s"
-- Server-Function: Gemini → strikt JSON `{ oscType, freqStart, freqEnd, duration, attack, decay, sustain, release, filterType, filterFreq, filterQ, lfoRate, lfoDepth, distortion, reverb }`
-- Client synthetisiert via `OfflineAudioContext` → WAV-Download + Speichern als Recording
+Heute: Uploads in `library.tsx` speichern nur Dauer. Keine BPM/Key/Beat-Analyse → "perfekte virtuose Transitions" sind nicht möglich.
 
-### 4. AI Crowd Reactions — `/crowd`
-- 5 Presets: Jubel, Lacher, Applaus, Buhrufe, "Ohhhh"
-- Procedural Engine: 6–40 TTS-Clips ("Yeaaah", "Bravo", "Hahaha"…) mit unterschiedlichen Voices + leichtem Pitch-Offset + Stereo-Spread + Crowd-Noise-Layer (gefiltertes Pink Noise)
-- "AI Pick": Gemini bekommt Szenenbeschreibung → wählt Preset + Intensität
-- Direkt abspielen oder in FX-Library speichern
+Neu: Beim Upload (und nachträglich per Button "Analysieren") läuft eine **Web-Audio-Analyse im Browser**:
+- BPM via `estimateBPM` (existiert in `mashup.ts`) + verfeinert durch Onset-Detection
+- **Beat-Grid** (Array von Beat-Timestamps) → ermöglicht beat-synchrones Mixen
+- **Key/Tonart** via Chroma-Feature + Krumhansl-Profil (Pure-JS, neue `keyDetect.ts`)
+- **Energy-Kurve** (RMS pro 1s) → für Drop-Detection
+- **Hot-Cues**: Intro-Ende, erster Drop, Outro-Start (Heuristik aus Energy-Kurve)
+- **Vocal-Pausen-Map** (laute Sektionen vs. instrumentale Breaks via Spektral-Flatness) → für Vocal-Layering & Mix-In-Punkte
 
-### 5. AI Remix — `/remix`
-- Wähle ein Recording (oder Track aus `tracks`)
-- Slider: Ziel-BPM (default 128), Länge (60/90/120s), Style (House/Techno/Disco)
-- Pipeline: `estimateBPM` → time-stretch → Aufbau: Intro (8 bars, Lowpass-Sweep) → Body (16 bars, full) → Break (4 bars, Highpass + Echo-Tail) → Drop (16 bars) → Outro (8 bars, Fade)
-- Nutzt vorhandene `mashup.ts`-Bausteine + `engine.ts` Filter-Logik
-- Mixdown als WAV + Save
+Persistenz: Erweiterung Tabelle `tracks` um Spalten `bpm float`, `musical_key text`, `beat_grid jsonb`, `energy_curve jsonb`, `cues jsonb`, `vocal_map jsonb`, `analyzed_at timestamptz`. Analyse läuft als Web-Worker → blockiert UI nicht.
 
-### 6. Neue Server-Funktionen
-- `src/lib/ai/soundDesigner.functions.ts` — Gemini JSON → FX-Parameter
-- `src/lib/ai/crowdPick.functions.ts` — Szene → Preset-Empfehlung
-- Wiederverwendung: `duet.functions.ts` (TTS für Crowd), bestehende `lyrics`/`coach`
+## 3) Virtuoses Auto-DJ-System
 
-### 7. Audio-Module
-- `src/lib/audio/synth.ts` — Parameter → AudioBuffer (Oscillator + ADSR + Filter + LFO + Distortion + Reverb)
-- `src/lib/audio/choir.ts` — N-stimmiger Chor via Pitch-Shift + Detune
-- `src/lib/audio/crowd.ts` — TTS-Layering + Noise-Bett
-- `src/lib/audio/remix.ts` — BPM-sync Dance-Edit-Builder
+Heute: `engine.ts` hat Transition-Modi (crossfade, filterSweep, echoTail …), aber wählt nicht intelligent nach Tracks aus.
 
-### 8. Nav (`AppShell.tsx`)
-- `/choir`, `/sound-designer`, `/crowd`, `/remix` in SECONDARY-Nav aufnehmen (oder als Untergruppe „AI Lab")
+Neu: **AI-Mix-Planner** (`mixPlanner.ts` + Gemini `planMix.functions.ts`):
+- Nimmt die nächsten 2–3 Tracks aus der Queue
+- Berechnet **Kompatibilität** (BPM-Differenz < 8%, harmonischer Key via Camelot-Wheel)
+- Wählt **Transition-Typ + Länge** abhängig vom Material:
+  - Ähnliche Energy/BPM → **langer harmonischer Crossfade** (16–32 Beats) am nächsten Phrasen-Ende von A + Intro von B
+  - Großer Energy-Sprung → **Filter Sweep + Drop-Sync** (B startet exakt auf Drop)
+  - Verschiedene Keys → **Echo-Tail + Cut** auf Beat
+  - Wenn A noch nicht zu Ende: **kurzes In-Mix** von B als "Loop-Snippet" (8 Beats vom Hook) während A's instrumentaler Sektion läuft, dann zurück zu A
+- Time-Stretch (existiert in `remix.ts`) angleicht BPM **ohne Tonhöhenverschiebung** (Pitch-Korrektur ist schon drin)
+- Phrase-aligned: Mix-Punkte snappen auf Beat-Grid + 8/16/32-Takt-Grenzen
 
-## Reihenfolge
+UI: Im Player-Bar Button "Auto-Mix an", optional Slider "Mix-Stil" (Smooth ↔ Creative).
 
-1. AI Lab Karten umstellen + 3 ✅-Karten verlinken (5 min)
-2. AI Choir Route (existing engine, schnellster Win)
-3. AI Crowd Reactions (TTS-Layering)
-4. AI Sound Designer (synth engine)
-5. AI Remix (komplexester Build)
+## 4) Loop-Pads über laufendem Song
 
-Soll ich alle 4 neuen Routen + Card-Updates in einem Rutsch bauen, oder Schritt für Schritt mit Zwischenfreigabe?
+Heute: `/loops` hat ein Pad-Grid, aber spielt unabhängig vom Library-Player und nicht beat-synchron.
+
+Neu: **Loop-Pad-Overlay** (aufrufbar aus Player-Bar):
+- 4×4 Pad-Grid mit eigenen Loops + Preset-Packs (Drums, Vocal-Chops, FX, Bass)
+- Klick startet Loop **quantisiert auf nächsten Beat** des laufenden Songs (Beat-Grid kommt aus Schritt 2)
+- Loops werden auto-time-stretched auf Song-BPM
+- Per-Pad: Volume, Mute, Loop-Length (1/2/4/8 Takte), Pitch-Shift in Semitönen
+- "Record Performance" → mischt Song + alle gespielten Pads + Vocal in eine neue Aufnahme (`recordings`)
+- Loops können auch aus jedem `recordings`-Eintrag gemacht werden ("Slice & Pad")
+
+## 5) Live-Vocal-Layer auf Song mit Smart-Autotune
+
+Das Kernstück. Heute: Karaoke nimmt Vocals auf, aber ohne laufenden Song als Background, und Autotune ist ein separater Schritt.
+
+Neu: **Vocal-Live-Layer** (Sheet/Overlay über Player):
+- Großer **"Mic"-Button** → startet Aufnahme während Song läuft
+- Song läuft weiter, Mikrofon-Input geht durch **Live-VocalChain** (`vocalChain.ts` existiert): EQ, Kompressor, optional Live-Autotune zur Song-Tonart (aus Schritt 2), Reverb, Echo
+- **Monitoring**: User hört eigene Stimme mit Effekten (Kopfhörer-Modus, mit Latenz-Hinweis)
+- **DJ-Button "Drop Vocal"**: Bei Klick markiert das Tool den Zeitpunkt; Tool platziert die Vocal-Phrase **automatisch an der musikalisch passenden Stelle**:
+  - Snap auf nächsten Downbeat
+  - Wenn die laufende Song-Sektion gerade Vocals hat → schiebt es in nächste instrumentale Lücke (aus `vocal_map`)
+  - Tonart-Korrektur via existierendem `pitchShiftBuffer` an Song-Key
+  - Optionaler Echo-Tail auf Beat-Grid
+- **Auto-Modus**: AI entscheidet anhand `vocal_map` + Energy-Kurve selbst, wann die letzte aufgenommene Phrase eingespielt wird (z. B. nur in Breaks oder als Echo-Layer im Drop)
+- Export als neue `recordings` (Song-Mix + Vocal-Layer) per Offline-Render
+
+## 6) Modul-Konsolidierung (alles arbeitet zusammen)
+
+Statt 12 unabhängiger Routen → **eine zentrale `/studio`-Surface** mit Tabs:
+- **Decks** (Library + Queue + Player)
+- **Pads** (Loops, beat-sync)
+- **Mic** (Vocal-Layer + Autotune)
+- **FX** (existierende FX-Bibliothek)
+- **Mixdown** (Multitrack-Editor — `multitrack.ts` existiert bereits)
+
+Bestehende Routen (`/loops`, `/karaoke`, `/autotune`, `/choir`, `/remix`, `/lyric-writer`) bleiben als Deep-Links bestehen, aber teilen sich denselben globalen Engine-State (`engine.ts`), dieselbe `recordings`-Tabelle, denselben Vocal-Chain. Der Studio-Wizard wird auf diese Tabs umgestellt.
+
+## Umfang (in dieser Etappe)
+
+Vorschlag: in **3 Sub-Etappen** liefern, jede testbar:
+
+- **3a — Player & Analyse-Fundament**: Persistente Transport-Bar mit Waveform & Seek + Upload-Analyse (BPM/Key/Beat-Grid/Energy/Vocal-Map) + DB-Migration + Re-Analyse-Button in Library.
+- **3b — Auto-DJ + Loop-Pads über Song**: Mix-Planner + intelligente Transitions + beat-quantisierte Loop-Pads als Overlay.
+- **3c — Live-Vocal-Layer + Studio-Konsolidierung**: Vocal-Live-Recording über Song mit Smart-Drop, Live-Autotune zur Song-Key, `/studio` als zentrale Tab-Surface.
+
+## Technische Hinweise
+
+- Alle Audio-Analyse läuft client-seitig im Web-Worker (keine Kosten, kein Upload-Roundtrip).
+- AI-Aufrufe nur für: Mix-Plan-Vorschläge, Vocal-Auto-Drop-Entscheidungen, Lyric-Vorschläge — alles über Lovable AI (`gemini-3-flash-preview`).
+- Migration für `tracks`-Spalten + GRANTs.
+- Web-Worker via `?worker`-Import in Vite; Worker-Code in `src/lib/audio/workers/`.
+- Beat-Grid + Vocal-Map in `jsonb` reicht (≤ 50 KB pro Track typisch).
+
+## Frage vor Start
+
+Soll ich **alle 3 Sub-Etappen in einem Rutsch** bauen (umfangreich, ~15–20 Dateien neu/geändert), oder mit **3a starten und nach jedem Schritt Zwischenfreigabe** holen?
