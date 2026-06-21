@@ -37,6 +37,8 @@ type BusState = {
   autoShuffle: boolean;
   pool: EngineTrack[];        // track pool for timer auto-DJ
   needsUserGesture: boolean;
+  recording: boolean;
+  lastRecordingUrl: string | null;
 };
 
 type Actions = {
@@ -58,6 +60,11 @@ type Actions = {
   setAutoTimerOn: (on: boolean) => void;
   /** Lazy analyze a deck's currently loaded track + persist to DB. */
   ensureAnalysis: (side: DeckSide, opts?: { force?: boolean }) => Promise<void>;
+  /** One-click Auto-DJ start: loads two tracks if needed and starts playback. */
+  startAutoDj: () => Promise<void>;
+  stopAutoDj: () => void;
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<Blob | null>;
   dispose: () => void;
 };
 
@@ -178,16 +185,25 @@ function animateCrossfader(toValue: number, durationMs: number) {
 }
 
 let autoTimerInterval: number | null = null;
-let nextAutoFromSide: DeckSide = "A";
 let poolCursor = 0;
+const recentlyPlayedIds: string[] = [];
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: BlobPart[] = [];
+let recorderStream: MediaStreamAudioDestinationNode | null = null;
 
 function pickNextTrack(state: BusState): EngineTrack | null {
   const pool = state.pool;
   if (pool.length < 1) return null;
+  const loadedIds = new Set([state.A.track?.id, state.B.track?.id].filter(Boolean) as string[]);
+  const recent = new Set(recentlyPlayedIds.slice(-Math.min(4, Math.max(0, pool.length - 2))));
+  const avoid = new Set<string>([...loadedIds, ...recent]);
+  const candidates = pool.filter((t) => !avoid.has(t.id));
+  const choosable = candidates.length > 0 ? candidates : pool.filter((t) => !loadedIds.has(t.id));
+  if (choosable.length === 0) return null;
   if (state.autoShuffle) {
-    return pool[Math.floor(Math.random() * pool.length)];
+    return choosable[Math.floor(Math.random() * choosable.length)];
   }
-  const t = pool[poolCursor % pool.length];
+  const t = choosable[poolCursor % choosable.length];
   poolCursor++;
   return t;
 }
@@ -199,10 +215,13 @@ function startAutoTimer() {
     const st = useTwinDeck.getState();
     if (!st.autoTimerOn) return;
     if (st.transitionInFlight) return;
+    // If neither deck is playing yet, do not count down — wait for cold start
+    if (!st.A.isPlaying && !st.B.isPlaying) return;
     let cd = st.autoTimerCountdown - 1;
     if (cd <= 0) {
-      // Determine from/to: from = louder deck
-      const from: DeckSide = st.crossfader < 0.5 ? "A" : "B";
+      // from = whichever deck is currently audible/playing
+      const aLoud = st.A.isPlaying && (st.crossfader < 0.5 || !st.B.isPlaying);
+      const from: DeckSide = aLoud ? "A" : "B";
       const to: DeckSide = from === "A" ? "B" : "A";
       const next = pickNextTrack(st);
       if (!next) { cd = st.autoTimerSec; useTwinDeck.setState({ autoTimerCountdown: cd }); return; }
@@ -210,10 +229,13 @@ function startAutoTimer() {
       void (async () => {
         try {
           await useTwinDeck.getState().loadDeck(to, next);
+          // Wait a tick for analysis to start; force-ensure analyzed before mix
+          await useTwinDeck.getState().ensureAnalysis(to).catch(() => {});
+          recentlyPlayedIds.push(next.id);
+          if (recentlyPlayedIds.length > 16) recentlyPlayedIds.shift();
           await useTwinDeck.getState().transition(from, to);
         } finally {
           useTwinDeck.setState({ autoTimerCountdown: useTwinDeck.getState().autoTimerSec });
-          nextAutoFromSide = to;
         }
       })();
       cd = st.autoTimerSec; // reset for display until transition completes
