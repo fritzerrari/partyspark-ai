@@ -17,11 +17,13 @@ import {
 } from "lucide-react";
 import { partyOptions, queueOptions, tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
-import { useEngine, type EngineTrack } from "@/lib/audio/engine";
+import { useEngine, TRANSITION_LABELS, type EngineTrack, type TransitionMode } from "@/lib/audio/engine";
 import { Button } from "@/components/ui/button";
 import { EnergyMeter } from "@/components/party/EnergyMeter";
 import { MoodPill, type Mood } from "@/components/party/MoodPill";
 import { Timeline } from "@/components/party/Timeline";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 
 export const Route = createFileRoute("/_authenticated/parties/$partyId")({
   head: () => ({ meta: [{ title: "Party Control Center — PartyPilot AI" }] }),
@@ -284,7 +286,6 @@ function ControlCenter() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { t: "Beat Match", body: "Phase-locking next track" },
-          { t: "Crossfade", body: `${engine.crossfadeSec}s smooth blend` },
           { t: "Mood Engine", body: `Tuned to ${engine.mood}` },
           { t: "Energy AI", body: `Holding ${Math.round(engine.energy)}/100` },
         ].map((c) => (
@@ -296,6 +297,22 @@ function ControlCenter() {
             </div>
           </div>
         ))}
+        <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Transition</p>
+          <Select value={engine.transitionMode} onValueChange={(v) => engine.setTransitionMode(v as TransitionMode)}>
+            <SelectTrigger className="rounded-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Object.entries(TRANSITION_LABELS).map(([id, label]) => (
+                <SelectItem key={id} value={id}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Länge</span>
+            <Slider value={[engine.crossfadeSec]} onValueChange={([v]) => engine.setCrossfade(v)} min={0} max={12} step={0.5} className="flex-1" />
+            <span className="tabular-nums w-8 text-right">{engine.crossfadeSec}s</span>
+          </div>
+        </div>
       </section>
     </div>
   );

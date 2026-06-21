@@ -1,85 +1,98 @@
 
-# Plan: AI Party Host + AI Party Moments + Passwort-Wechsel
+# Karaoke Upgrade — Vocal Chain, Intro & Transitions
 
-Drei Features in einem Wurf. Audio-DSP-Features (Autotune/Remix/Mashup/Choir/Vocal Producer) bleiben "Coming Soon" — die brauchen spezialisierte Audio-AI, die Lovable AI nicht bietet.
+Alles läuft im Browser über Web Audio API — kostenlos, kein externer Service.
 
----
+## 1) Vocal Chain für Karaoke
 
-## 1. AI Party Host (kostenlos via Lovable AI)
+Zwei Ebenen, weil **live** und **offline** technisch unterschiedlich sind:
 
-**Was es macht:** Zwischen Songs spricht eine KI-Stimme Hype-Ansagen, Übergänge, Geburtstags-Shoutouts. Komplett serverseitig — Gemini schreibt den Text, gpt-4o-mini-tts spricht ihn.
+### A) Live während der Aufnahme (Web Audio Realtime-Kette)
+Mic → Compressor → EQ (3-Band) → Reverb → Delay → Monitor-Out (Kopfhörer)
 
-- **Server-Function** `src/lib/ai/partyHost.functions.ts`:
-  - `generateHypeLine({ context, vibe, lastTrack, nextTrack })` → Gemini schreibt 1–2 Sätze auf Deutsch/Englisch
-  - `speakHypeLine({ text, voice })` → TTS-Stream zurück an Browser
-- **Route** `/_authenticated/party-host` (neu, eigenständig statt nur "Notify me"):
-  - Vibe-Auswahl (Hype / Smooth / Funny / Romantic / Crowd-Surf)
-  - Sprache (DE/EN), Stimme (alloy/verse/coral/...)
-  - "Generieren"-Button → zeigt Text + spielt Stimme über Master-Output ab
-  - History der letzten 10 Lines mit Re-Play
-  - Auto-Mode Toggle: alle N Minuten / bei Track-Wechsel automatisch eine Ansage
-- **Engine-Hook:** Wenn aktiv, vor Track-Wechsel kurz ducken (-12 dB für 4s), Ansage spielen, dann ramp up
+- **Vocal-FX live** (alles über native Web Audio Nodes):
+  - Compressor (Threshold, Ratio)
+  - 3-Band EQ (Lo/Mid/Hi)
+  - Reverb (ConvolverNode + 4 Presets: Room / Hall / Plate / Cathedral)
+  - Delay/Echo (Time, Feedback, Mix)
+  - Doubler (kurzer Delay 20–40ms für Fülle)
+- **Live-Pitch-Monitor** (wie schon in `/autotune`): zeigt während des Singens Note + Cents-Abweichung — kein Realtime-Pitch-Shift (das bräuchte einen handgeschriebenen AudioWorklet-PSOLA, Wochen-Aufwand)
+- **Bypass-Toggle** pro Effekt
 
-## 2. AI Party Moments (kostenlos via Lovable AI)
+### B) Nach der Aufnahme — KI-Vocal-Producer
+Auf die fertige Aufnahme angewandt, ein Klick im Recordings-Panel:
 
-**Was es macht:** Aus den Aufnahmen (`recordings` Bucket) automatisch die besten 15-Sekunden-Highlights extrahieren — Lacher, Sing-alongs, Drops, lautstarke Crowd-Momente. Als teilbare Clips.
+- **Autotune** (bereits gebaut, hier auf Karaoke-Aufnahme anwendbar machen)
+- **AI Harmonies**: per `soundtouchjs` Pitch-Shifts der Stimme erzeugen
+  - Terz oben (+4 HT) · Quinte oben (+7 HT) · Oktave (+12 / –12)
+  - User wählt Intervalle, jede Harmonie kommt als zusätzliche Spur (gemischt 30–40 %)
+- **AI Choir**: 6–10 leicht detunte Kopien (±10 cents) + Mikro-Delays (5–30 ms) + leichtes Stereo-Spread → klingt wie Chor
+- **Vocal FX-Presets** als One-Click:
+  - "Stadion" (Big Reverb + Slap Delay)
+  - "Whisper" (Compressor + High-Pass + close Reverb)
+  - "T-Pain" (Hard Autotune + Doubler)
+  - "Telephone" (Bandpass 300–3000 Hz)
+  - "Megafon" (Distortion + Bandpass)
 
-- **Detection:** Loudness-Spikes via WebAudio AnalyserNode beim Recording → Timestamps speichern
-- **Server-Function** `analyzeMoment({ recordingId, startSec, endSec })`:
-  - Audio-Slice → `openai/gpt-4o-mini-transcribe` für Transkription
-  - Gemini bekommt Transkript + Loudness-Curve → klassifiziert (sing-along/laugh/drop/cheer/quiet-talk) + schreibt Caption
-- **Neue Tabelle** `recording_moments` (id, recording_id, start_sec, end_sec, kind, caption, score, created_at)
-- **Route** `/_authenticated/moments`:
-  - Liste aller Recordings mit ihren Moments
-  - Inline-Player pro Moment (15s Slice), Caption, "Share"-Button → kopiert teilbaren Link, "Download"-Button → MP3-Slice
-  - "Analysieren"-Button pro Recording (triggert Detection + AI)
+Output: gemischte WAV-Datei, wird zurück in Storage gespeichert als neue Recording-Variante.
 
-## 3. Passwort-Wechsel (beides: Settings + Reset-Link)
+## 2) Intro-Feature (vor jedem Karaoke-Take)
 
-### a) Direkt in Settings
-- In `settings.tsx` neue Card **Account → Passwort ändern**:
-  - Felder: neues Passwort + Bestätigung
-  - Button "Passwort aktualisieren" → `supabase.auth.updateUser({ password })`
-  - Validierung: min 8 Zeichen, Bestätigung matched
-  - Toast Success/Error
+Wählbar im Karaoke-Screen vor dem Aufnahme-Start:
 
-### b) Reset-per-Mail
-- Auth-Seite (`/auth`) bekommt "Passwort vergessen?" Link → öffnet kleines Sheet
-  - Email-Input → `supabase.auth.resetPasswordForEmail(email, { redirectTo: origin + "/reset-password" })`
-- **Neue öffentliche Route** `/reset-password`:
-  - Erkennt `type=recovery` im URL-Hash
-  - Formular: neues Passwort + Bestätigung → `supabase.auth.updateUser({ password })`
-  - Nach Erfolg → Redirect zu `/dashboard`
+- **Countdown** 3-2-1 (visuell + Beep)
+- **Beat-Count** 4-Bar Click bei einstellbarer BPM
+- **AI-Voice-Intro**: "Als Nächstes — [Name] singt [Titel]!" via Lovable AI TTS (nutzt bestehende Party-Host-Infra) — kostenlos via `openai/gpt-4o-mini-tts`
+- **Custom Audio**: eigene Intro-Datei (1–10 s Clip)
+- **Stille / Kein Intro** (Default)
 
----
+Eingabefelder: Singer-Name + Song-Titel, werden in die TTS-Ansage eingesetzt. Auswahl pro Take, Standard merken in `settings`.
 
-## AI Lab Aufräumen
+## 3) Track-Transitions (Übergänge zwischen Songs)
 
-- `ai-lab.tsx`: "AI Party Host" und "AI Party Moments" verlieren den "Coming Soon"-Badge, bekommen "Öffnen"-Button statt "Notify me"
-- Die restlichen 7 Features bleiben "Coming Soon" mit klarem Hinweis in der Card-Description, dass sie spezielle Audio-AI brauchen
+Aktuell macht die Engine nur Linear-Crossfade. Erweitert auf 6 Modi, wählbar im Player:
 
----
+| Modus | Was passiert |
+|---|---|
+| **Crossfade** | Equal-power, Länge 0–12 s |
+| **Cut** | Harter Schnitt |
+| **Fade-Gap** | A faded out → Pause (0–3 s) → B faded in |
+| **Filter-Sweep** | Tiefpass-Filter schließt auf A während B startet |
+| **Echo-Tail** | A bekommt Delay-Feedback-Tail beim Verschwinden |
+| **Stinger** | Kurzer FX-Sound (DJ-Drop, Scratch) zwischen A und B |
+
+UI: Modus-Dropdown im Player, Crossfade-Slider bleibt für die Modi, die Länge nutzen. Bei "Stinger" Auswahl aus FX-Library.
 
 ## Technische Details
 
-**Neue Dateien:**
-- `src/lib/ai/partyHost.functions.ts` (Gemini + TTS Stream Route via `/api/ai/party-host`)
-- `src/lib/ai/gateway.server.ts` (Lovable AI Gateway Helper)
-- `src/lib/ai/moments.functions.ts` (Transkription + Klassifikation)
-- `src/routes/api/ai/party-host-speak.ts` (TTS-Streaming HTTP-Route)
-- `src/routes/_authenticated/party-host.tsx`
-- `src/routes/_authenticated/moments.tsx`
-- `src/routes/reset-password.tsx`
-- `src/components/auth/ChangePasswordCard.tsx`
-- `src/components/auth/ForgotPasswordSheet.tsx`
+### Neue Dateien
+- `src/lib/audio/vocalChain.ts` — Live Web Audio Kette (Compressor, EQ, Reverb, Delay)
+- `src/lib/audio/vocalPost.ts` — Offline Harmonies/Choir/Presets
+- `src/lib/audio/intro.ts` — Countdown/Click/TTS-Intro Generierung
+- `src/lib/audio/transitions.ts` — 6 Transition-Modi (Filter, Echo-Tail, Stinger)
+- `src/components/karaoke/VocalChainPanel.tsx`
+- `src/components/karaoke/IntroPicker.tsx`
+- `src/components/karaoke/PostProcessSheet.tsx`
 
-**DB-Migration:** Tabelle `recording_moments` mit RLS (user-scoped via `recordings.user_id`)
+### Geänderte Dateien
+- `src/routes/_authenticated/karaoke.tsx` — Vocal-Chain Panel, Intro-Picker, Post-Process-Button pro Recording
+- `src/lib/audio/engine.ts` — `transitionMode` Feld + Implementierungen
+- Player-UI: Transition-Mode-Selector
 
-**Nav:** "Party Host" + "Moments" in Sidebar/More-Menu
+### Reverb-Impulse
+4 kurze Impulse-Responses (WAV, je < 80 KB) generieren wir synthetisch im Browser (exponentieller Decay-Noise) — keine Asset-Downloads nötig.
 
-**Lovable AI Models:**
-- Text: `google/gemini-3-flash-preview` (default)
-- TTS: `openai/gpt-4o-mini-tts` mit SSE-Streaming + PCM für Echtzeit-Playback
-- STT: `openai/gpt-4o-mini-transcribe`
+### Speicherung
+Post-processed Vocal-Versionen als zusätzliche Spalte `processed_path` in `recordings`, plus `vocal_preset` als JSON.
 
-**Reihenfolge:** Passwort-Wechsel zuerst (klein, schnell), dann AI Party Host, dann AI Party Moments.
+### TTS für Intro
+Reuse von `/api/ai/party-host-speak` — kein neuer Endpoint, nur ein neues Frontend-Aufruf-Pattern.
+
+## Aufwand & Reihenfolge
+
+1. **Live Vocal-Chain + FX** (Reverb/Delay/EQ/Compressor) — Sofort spürbarer Effekt
+2. **Intro-Feature** (Countdown + TTS) — Klein, hoher Wow-Faktor
+3. **Harmonies + Choir + Presets** (offline) — Mehr DSP-Arbeit
+4. **6 Transitions** im Engine — Berührt zentrale Engine-Logik, am Ende
+
+Soll ich alles in dieser Reihenfolge bauen, oder nur Teile?

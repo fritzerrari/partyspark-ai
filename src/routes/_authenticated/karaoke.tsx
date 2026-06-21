@@ -1,13 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Mic, Square, Sparkles, Play, Trash2 } from "lucide-react";
+import { Mic, Square, Play, Trash2, Wand2 } from "lucide-react";
 import { recordingsOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { VocalChainPanel } from "@/components/karaoke/VocalChainPanel";
+import { IntroPicker } from "@/components/karaoke/IntroPicker";
+import { PostProcessSheet } from "@/components/karaoke/PostProcessSheet";
+import { VocalChain, DEFAULT_VOCAL_CHAIN, type VocalChainSettings } from "@/lib/audio/vocalChain";
+import { runIntro, type IntroConfig } from "@/lib/audio/intro";
 
 export const Route = createFileRoute("/_authenticated/karaoke")({
   head: () => ({ meta: [{ title: "Karaoke — PartyPilot AI" }] }),
@@ -19,17 +24,52 @@ function Karaoke() {
   const qc = useQueryClient();
   const { data: recs = [] } = useQuery(recordingsOptions());
   const [recording, setRecording] = useState(false);
+  const [introCountdown, setIntroCountdown] = useState<string | null>(null);
+  const [chain, setChain] = useState<VocalChainSettings>(DEFAULT_VOCAL_CHAIN);
+  const [intro, setIntro] = useState<IntroConfig>({ kind: "countdown", voice: "alloy" });
+  const [selectedRec, setSelectedRec] = useState<null | { id: string; storage_path: string; title: string | null; kind: string }>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const chainRef = useRef<VocalChain | null>(null);
+  const ctxRef = useRef<AudioContext | null>(null);
+
+  // Live-apply chain settings to the running graph
+  useEffect(() => {
+    if (chainRef.current) {
+      chainRef.current.apply(chain);
+      chainRef.current.setReverbPreset(chain.reverbPreset);
+    }
+  }, [chain]);
 
   async function start() {
     try {
+      // Run intro first
+      if (intro.kind !== "none") {
+        setIntroCountdown(intro.kind === "countdown" ? "3" : "…");
+        if (intro.kind === "countdown") {
+          let n = 3;
+          const tick = setInterval(() => { n--; setIntroCountdown(n > 0 ? String(n) : "GO"); if (n <= 0) clearInterval(tick); }, 1000);
+        }
+        try { await runIntro(intro); } catch (e) { console.error(e); }
+        setIntroCountdown(null);
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      const ctx = new AudioContext();
+      ctxRef.current = ctx;
+      const vc = new VocalChain(ctx, stream);
+      vc.setReverbPreset(chain.reverbPreset);
+      vc.apply(chain);
+      chainRef.current = vc;
+      const mr = new MediaRecorder(vc.recordDest.stream);
       chunks.current = [];
       mr.ondataavailable = (e) => chunks.current.push(e.data);
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
+        chainRef.current?.dispose();
+        chainRef.current = null;
+        ctxRef.current?.close();
+        ctxRef.current = null;
         const blob = new Blob(chunks.current, { type: "audio/webm" });
         const path = `${user!.id}/kara-${Date.now()}.webm`;
         const { error } = await supabase.storage.from("recordings").upload(path, blob);
@@ -78,6 +118,11 @@ function Karaoke() {
 
       <section className="relative overflow-hidden rounded-3xl stage-gradient p-10 text-stage-foreground shadow-stage">
         <div className="flex flex-col items-center text-center">
+          {introCountdown && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-stage/80 backdrop-blur">
+              <div className="font-display text-9xl font-bold text-accent animate-pulse">{introCountdown}</div>
+            </div>
+          )}
           <button
             onClick={recording ? stop : start}
             className={
@@ -99,6 +144,11 @@ function Karaoke() {
         </div>
       </section>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <IntroPicker value={intro} onChange={setIntro} />
+        <VocalChainPanel settings={chain} onChange={setChain} />
+      </div>
+
       <section>
         <h2 className="mb-3 font-display text-lg font-semibold">Tonight's moments</h2>
         {recs.length === 0 ? (
@@ -111,9 +161,12 @@ function Karaoke() {
               <div key={r.id} className="rounded-2xl border border-border bg-card p-4">
                 <p className="truncate font-display text-base font-semibold">{r.title ?? r.kind}</p>
                 <p className="mt-0.5 text-xs uppercase tracking-widest text-muted-foreground">{r.kind}</p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => play(r.storage_path)} className="rounded-full bg-primary text-primary-foreground">
                     <Play className="mr-2 h-4 w-4" /> Play
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setSelectedRec(r)} className="rounded-full">
+                    <Wand2 className="mr-2 h-4 w-4" /> FX
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => remove(r.id)} className="text-muted-foreground">
                     <Trash2 className="h-4 w-4" />
@@ -125,12 +178,7 @@ function Karaoke() {
         )}
       </section>
 
-      <section className="rounded-3xl border border-border bg-card p-6">
-        <h3 className="font-display text-lg font-semibold">
-          <Sparkles className="mr-2 inline h-4 w-4 text-primary" /> Coming soon
-        </h3>
-        <p className="mt-1 text-sm text-muted-foreground">AI Autotune · AI Harmonies · AI Choir · Vocal FX</p>
-      </section>
+      <PostProcessSheet recording={selectedRec} onClose={() => setSelectedRec(null)} />
     </div>
   );
 }
