@@ -5,7 +5,8 @@ import type { StemId } from "@/lib/audio/stemSplit";
 import { cn } from "@/lib/utils";
 import { Drum, Music2, Mic2, Piano, Sparkles } from "lucide-react";
 
-const STEM_META: Record<StemId, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
+type IconCmp = React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+const STEM_META: Record<StemId, { label: string; color: string; icon: IconCmp }> = {
   drums:  { label: "Drums",  color: "var(--neon-magenta)", icon: Drum },
   bass:   { label: "Bass",   color: "var(--neon-cyan)",    icon: Music2 },
   vocals: { label: "Vocals", color: "var(--neon-amber)",   icon: Mic2 },
