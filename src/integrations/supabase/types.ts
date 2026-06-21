@@ -215,38 +215,47 @@ export type Database = {
       }
       loops: {
         Row: {
+          bars: number | null
           bpm: number | null
           color: string | null
           created_at: string
+          duration_sec: number | null
           id: string
           is_muted: boolean
           name: string
           owner_id: string
           party_id: string | null
+          peaks: Json | null
           storage_path: string | null
           volume: number
         }
         Insert: {
+          bars?: number | null
           bpm?: number | null
           color?: string | null
           created_at?: string
+          duration_sec?: number | null
           id?: string
           is_muted?: boolean
           name: string
           owner_id: string
           party_id?: string | null
+          peaks?: Json | null
           storage_path?: string | null
           volume?: number
         }
         Update: {
+          bars?: number | null
           bpm?: number | null
           color?: string | null
           created_at?: string
+          duration_sec?: number | null
           id?: string
           is_muted?: boolean
           name?: string
           owner_id?: string
           party_id?: string | null
+          peaks?: Json | null
           storage_path?: string | null
           volume?: number
         }
