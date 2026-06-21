@@ -121,6 +121,15 @@ function ensureCtx() {
     masterGain = ctx.createGain();
     masterGain.gain.value = 1;
     masterGain.connect(ctx.destination);
+    // Bridge bus
+    bridgeGain = ctx.createGain();
+    bridgeGain.gain.value = 0;
+    bridgeFilter = ctx.createBiquadFilter();
+    bridgeFilter.type = "highpass";
+    bridgeFilter.frequency.value = 220;
+    bridgeFilter.Q.value = 0.7;
+    bridgeFilter.connect(bridgeGain);
+    bridgeGain.connect(masterGain);
   }
 }
 
