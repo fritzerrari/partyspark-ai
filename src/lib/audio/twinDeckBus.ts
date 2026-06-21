@@ -287,6 +287,25 @@ async function waitForNextBeat(side: DeckSide, maxMs = 2000): Promise<void> {
   await new Promise((r) => setTimeout(r, waitMs));
 }
 
+/** Recompute perceived BPM + key based on current playbackRate / pitch. */
+function recomputeEffective(side: DeckSide) {
+  const st = useTwinDeck.getState();
+  const t = st[side].track;
+  const rate = deck[side].el?.playbackRate ?? st[side].pitch ?? 1;
+  const bpm = t?.bpm ? +(t.bpm * rate).toFixed(1) : null;
+  // Pitch is multiplicative on playbackRate; convert to semitones for key shift.
+  const semis = Math.round(12 * Math.log2(rate));
+  const newKey = t?.musicalKey ? shiftKey(t.musicalKey, semis) : null;
+  useTwinDeck.setState((s) => ({
+    [side]: {
+      ...s[side],
+      effectiveBpm: bpm,
+      effectiveKey: newKey,
+      keyShiftSemis: semis,
+    },
+  } as Partial<BusState>));
+}
+
 function applyCrossfader(state: BusState) {
   if (!deck.A.gain || !deck.B.gain) return;
   const gA = Math.cos((state.crossfader * Math.PI) / 2);
