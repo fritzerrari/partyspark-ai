@@ -455,6 +455,63 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
 
     // Effect choreography per mode — uses 3-band EQ + filter + gain.
     const mode = plan.mode;
+
+    // -------- GENRE-BRIDGE: a separate flow (uses pre-rendered snippet) --------
+    if (mode === "genreBridge" && bridgeBuffers[to] && bridgeFilter && bridgeGain) {
+      const bridge = bridgeBuffers[to]!;
+      // Reset the standard pre-prime EQ — bridge handles its own taper.
+      rampEqGain(toDeck.eqLow, -24, 0.05);
+      // The bridge plays IN TEMPO + KEY of outgoing → listener stays in groove.
+      const src = ctx.createBufferSource();
+      src.buffer = bridge.buffer;
+      src.connect(bridgeFilter);
+      bridgeSource = src;
+      // Start bridge highpassed (percussion only) and silent.
+      bridgeFilter.frequency.cancelScheduledValues(ctx.currentTime);
+      bridgeFilter.frequency.setValueAtTime(900, ctx.currentTime);
+      bridgeGain.gain.cancelScheduledValues(ctx.currentTime);
+      bridgeGain.gain.setValueAtTime(0, ctx.currentTime);
+      const bridgeLen = Math.max(8, bridge.durationSec);
+      const sneak = Math.min(bridgeLen * 0.45, 8);
+      const reveal = Math.min(bridgeLen - sneak - 2, 12);
+      src.start();
+      // Phase A — sneak the bridge percussion in over the outgoing groove.
+      bridgeGain.gain.linearRampToValueAtTime(0.55, ctx.currentTime + sneak);
+      bridgeFilter.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + sneak + reveal);
+      rampEqGain(fromDeck.eqHigh, -4, sneak);
+      await new Promise((r) => setTimeout(r, sneak * 1000));
+      // Phase B — open the bridge fully (full-band snippet sitting in groove).
+      bridgeGain.gain.linearRampToValueAtTime(0.85, ctx.currentTime + reveal * 0.5);
+      rampEqGain(fromDeck.eqHigh, -8, reveal * 0.6);
+      rampEqGain(fromDeck.eqMid, -4, reveal * 0.6);
+      await new Promise((r) => setTimeout(r, reveal * 1000));
+      // Phase C — REVEAL: bridge fades, real incoming starts at its native tempo+key.
+      if (toDeck.el) {
+        toDeck.el.playbackRate = 1;
+        useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
+        try { if (plan.startAtSecOfNext > 0.5) toDeck.el.currentTime = plan.startAtSecOfNext; } catch { /* noop */ }
+        if (toDeck.el.paused) { try { await toDeck.el.play(); } catch { /* noop */ } }
+      }
+      if (toDeck.gain) toDeck.gain.gain.value = 0;
+      rampEqGain(toDeck.eqLow, 0, 0.6);
+      rampGain(toDeck.gain, toUserVol, 1.0);
+      rampGain(fromDeck.gain, 0, 1.2);
+      bridgeGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.0);
+      animateCrossfader(to === "B" ? 1 : 0, 1000);
+      await new Promise((r) => setTimeout(r, 1400));
+      try { src.stop(); } catch { /* noop */ }
+      bridgeSource = null;
+      try { fromDeck.el?.pause(); } catch { /* noop */ }
+      resetFilter(from); resetEq(from); resetEq(to);
+      recomputeEffective(to);
+      useTwinDeck.setState({
+        lastTransitionNote: `${plan.note} · ${bridge.notes}`,
+        transitionInFlight: false,
+      });
+      return;
+    }
+    // ------------------------------------------------------------------
+
     // Pre-prime EQ for incoming (bass-cut to slide in cleanly).
     rampEqGain(toDeck.eqLow, -24, 0.05);
     switch (mode) {
