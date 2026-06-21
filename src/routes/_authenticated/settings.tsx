@@ -2,13 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
-import { settingsOptions } from "@/lib/db/queries";
+import { settingsOptions, storageQuotaOptions } from "@/lib/db/queries";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { bytesToHuman } from "@/lib/fx/utils";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — PartyPilot AI" }] }),
@@ -19,6 +20,7 @@ function Settings() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const { data: s } = useQuery(settingsOptions(user!.id));
+  const { data: quota } = useQuery(storageQuotaOptions(user!.id));
 
   async function update(patch: TablesUpdate<"settings">) {
     const { error } = await supabase.from("settings").update(patch).eq("user_id", user!.id);
@@ -31,6 +33,21 @@ function Settings() {
   return (
     <div className="space-y-6 animate-fade-up">
       <PageHeader title="Settings" subtitle="Tune your engine and your account." />
+
+      <Card title="Speicher" subtitle="Wie viel Cloud-Speicher du verbrauchst.">
+        {quota ? (
+          <div className="space-y-4 py-2">
+            <QuotaBar label="Tracks" used={quota.tracks_bytes_used} total={quota.tracks_quota_bytes} />
+            <QuotaBar label="Community FX" used={quota.fx_bytes_used} total={quota.fx_quota_bytes} />
+            <QuotaBar label="Aufnahmen" used={quota.recordings_bytes_used} total={quota.recordings_quota_bytes} />
+            <p className="pt-1 text-xs text-muted-foreground">
+              Tarif: <span className="font-medium uppercase">{quota.tier}</span>. Tracks ohne Plays seit 90 Tagen werden nach 14 Tagen Vorwarnung automatisch entfernt.
+            </p>
+          </div>
+        ) : (
+          <p className="py-2 text-sm text-muted-foreground">Lade Quota…</p>
+        )}
+      </Card>
 
       <Card title="Auto DJ Engine" subtitle="How PartyPilot moves between songs.">
         <Row>
@@ -112,6 +129,27 @@ function Settings() {
           </div>
         </Row>
       </Card>
+    </div>
+  );
+}
+
+function QuotaBar({ label, used, total }: { label: string; used: number; total: number }) {
+  const pct = total ? Math.min(100, (used / total) * 100) : 0;
+  const danger = pct > 90;
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium">{label}</span>
+        <span className="text-muted-foreground">
+          {bytesToHuman(used)} / {bytesToHuman(total)}
+        </span>
+      </div>
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className={danger ? "h-full bg-destructive" : "h-full bg-primary"}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
     </div>
   );
 }
