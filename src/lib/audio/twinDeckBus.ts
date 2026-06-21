@@ -428,6 +428,56 @@ function pickActualMode(hint: TransitionModeHint, from: EngineTrack | null, to: 
   return { mode: plan.mode, crossfadeSec: plan.crossfadeSec, note: plan.notes, startAtSecOfNext: plan.startAtSecOfNext, bpmRatio: plan.bpmRatio };
 }
 
+/** Public: peek what the next transition would do, for UI preview. */
+export function peekNextPlan(): null | {
+  mode: TransitionMode;
+  crossfadeSec: number;
+  note: string;
+  midBpm: number | null;
+  keyShiftSemis: number;
+  from: DeckSide;
+  to: DeckSide;
+  triggerInSec: number | null;
+} {
+  const st = useTwinDeck.getState();
+  const aLoud = st.A.isPlaying && (st.crossfader < 0.5 || !st.B.isPlaying);
+  const from: DeckSide = aLoud ? "A" : st.B.isPlaying ? "B" : "A";
+  const to: DeckSide = from === "A" ? "B" : "A";
+  const fromTrack = st[from].track;
+  const toTrack = st[to].track;
+  if (!fromTrack || !toTrack) return null;
+  const plan = pickActualMode(st.transitionMode, fromTrack, toTrack, st[from].position);
+  const midBpm = fromTrack.bpm && toTrack.bpm ? +(Math.sqrt(fromTrack.bpm * toTrack.bpm)).toFixed(1) : null;
+  // semitones outgoing → incoming using existing helper math (inverse)
+  const semi = (() => {
+    const a = fromTrack.musicalKey ?? null;
+    const b = toTrack.musicalKey ?? null;
+    if (!a || !b) return 0;
+    // Reuse helper imported in this file via keyDelta.
+    return semitoneShiftToKey(a, b);
+  })();
+  const triggerInSec = st.autoTimerOn ? st.autoTimerCountdown : null;
+  return { mode: plan.mode, crossfadeSec: plan.crossfadeSec, note: plan.note, midBpm, keyShiftSemis: semi, from, to, triggerInSec };
+}
+
+/** Public: access deck signals for scorers + visualizers. */
+export function getDeckSignal(side: DeckSide) {
+  const d = deck[side];
+  const st = useTwinDeck.getState();
+  const ds = st[side];
+  return {
+    analyser: d.analyser,
+    bpm: ds.track?.bpm ?? null,
+    effectiveBpm: ds.effectiveBpm,
+    effectiveKey: ds.effectiveKey,
+    camelot: ds.track?.camelot ?? null,
+    beatGrid: ds.track?.beatGrid ?? null,
+    currentTime: d.el?.currentTime ?? 0,
+    playing: ds.isPlaying,
+    volume: (d.gain?.gain.value ?? 0),
+  };
+}
+
 async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeHint) {
   ensureCtx(); wireDeck("A"); wireDeck("B");
   if (!ctx) return;
