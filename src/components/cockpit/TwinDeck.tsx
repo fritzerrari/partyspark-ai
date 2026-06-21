@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useEngine, type EngineTrack } from "@/lib/audio/engine";
+import { useEffect, useState } from "react";
+import type { EngineTrack } from "@/lib/audio/engine";
+import { TRANSITION_LABELS } from "@/lib/audio/engine";
+import { useTwinDeck, compatHint, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { Turntable } from "./Turntable";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { Led } from "@/components/ui/LedIndicator";
 import { RotaryKnob } from "@/components/ui/RotaryKnob";
-import { Play, Pause, RotateCw, Headphones, Zap } from "lucide-react";
+import { Play, Pause, RotateCw, Headphones, Zap, Wand2, ArrowLeftRight, RefreshCw, Timer, Shuffle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Props = {
-  tracks: EngineTrack[];   // selectable tracks for Deck B (and A pickers)
-};
+type Props = { tracks: EngineTrack[] };
 
 function fmt(s: number) {
   if (!Number.isFinite(s) || s <= 0) return "0:00";
@@ -19,125 +19,58 @@ function fmt(s: number) {
 }
 
 export function TwinDeck({ tracks }: Props) {
-  // --- Deck A: bound to global engine ---
-  const current = useEngine((s) => s.current);
-  const positionA = useEngine((s) => s.positionSec);
-  const durationA = useEngine((s) => s.durationSec);
-  const playingA = useEngine((s) => s.isPlaying);
-  const seek = useEngine((s) => s.seek);
-  const toggleA = useEngine((s) => s.toggle);
-  const loadQueue = useEngine((s) => s.loadQueue);
+  const A = useTwinDeck((s) => s.A);
+  const B = useTwinDeck((s) => s.B);
+  const crossfader = useTwinDeck((s) => s.crossfader);
+  const transitionMode = useTwinDeck((s) => s.transitionMode);
+  const inFlight = useTwinDeck((s) => s.transitionInFlight);
+  const lastNote = useTwinDeck((s) => s.lastTransitionNote);
+  const autoTimerOn = useTwinDeck((s) => s.autoTimerOn);
+  const autoTimerSec = useTwinDeck((s) => s.autoTimerSec);
+  const autoTimerCountdown = useTwinDeck((s) => s.autoTimerCountdown);
+  const autoShuffle = useTwinDeck((s) => s.autoShuffle);
 
-  // --- Deck B: private <audio> ---
-  const audioBRef = useRef<HTMLAudioElement | null>(null);
-  const [trackB, setTrackB] = useState<EngineTrack | null>(null);
-  const [playingB, setPlayingB] = useState(false);
-  const [positionB, setPositionB] = useState(0);
-  const [durationB, setDurationB] = useState(0);
-  const [pitchB, setPitchB] = useState(1); // 0.94..1.06
+  const init = useTwinDeck((s) => s.init);
+  const setCrossfader = useTwinDeck((s) => s.setCrossfader);
+  const setVolume = useTwinDeck((s) => s.setVolume);
+  const loadDeck = useTwinDeck((s) => s.loadDeck);
+  const toggle = useTwinDeck((s) => s.toggle);
+  const scrub = useTwinDeck((s) => s.scrub);
+  const sync = useTwinDeck((s) => s.sync);
+  const transition = useTwinDeck((s) => s.transition);
+  const setTransitionMode = useTwinDeck((s) => s.setTransitionMode);
+  const ensureAnalysis = useTwinDeck((s) => s.ensureAnalysis);
+  const setPool = useTwinDeck((s) => s.setPool);
+  const setAutoTimerSec = useTwinDeck((s) => s.setAutoTimerSec);
+  const setAutoTimerOn = useTwinDeck((s) => s.setAutoTimerOn);
+  const setAutoShuffle = useTwinDeck((s) => s.setAutoShuffle);
 
-  // --- Mixer ---
-  const [crossfader, setCrossfader] = useState(0.5); // 0 = full A, 1 = full B
-  const [volA, setVolA] = useState(0.9);
-  const [volB, setVolB] = useState(0.9);
+  useEffect(() => { init(); }, [init]);
+  useEffect(() => { setPool(tracks); }, [tracks, setPool]);
 
-  // init audio B
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const a = new Audio();
-    a.crossOrigin = "anonymous";
-    a.preload = "auto";
-    audioBRef.current = a;
-    const onTime = () => setPositionB(a.currentTime);
-    const onMeta = () => setDurationB(a.duration || 0);
-    const onEnd = () => setPlayingB(false);
-    a.addEventListener("timeupdate", onTime);
-    a.addEventListener("loadedmetadata", onMeta);
-    a.addEventListener("ended", onEnd);
-    return () => {
-      a.pause();
-      a.removeEventListener("timeupdate", onTime);
-      a.removeEventListener("loadedmetadata", onMeta);
-      a.removeEventListener("ended", onEnd);
-      audioBRef.current = null;
-    };
-  }, []);
-
-  // apply crossfader to deck volumes
-  useEffect(() => {
-    const gainA = Math.cos((crossfader * Math.PI) / 2); // equal-power
-    const gainB = Math.sin((crossfader * Math.PI) / 2);
-    // Deck A: control engine audio element via setVolume
-    useEngine.getState().setVolume(volA * gainA);
-    if (audioBRef.current) audioBRef.current.volume = volB * gainB;
-  }, [crossfader, volA, volB]);
-
-  // load Deck B
-  const loadB = useCallback(async (t: EngineTrack) => {
-    setTrackB(t);
-    if (!audioBRef.current) return;
-    audioBRef.current.src = t.url;
-    audioBRef.current.playbackRate = pitchB;
-    audioBRef.current.volume = volB * Math.sin((crossfader * Math.PI) / 2);
-  }, [pitchB, volB, crossfader]);
-
-  const toggleB = useCallback(async () => {
-    const a = audioBRef.current;
-    if (!a || !trackB) return;
-    if (a.paused) { await a.play().catch(() => {}); setPlayingB(true); }
-    else { a.pause(); setPlayingB(false); }
-  }, [trackB]);
-
-  // pitch (used for sync)
-  useEffect(() => {
-    if (audioBRef.current) audioBRef.current.playbackRate = pitchB;
-  }, [pitchB]);
-
-  // sync B → A by BPM
-  const sync = useCallback(() => {
-    if (!current?.bpm || !trackB?.bpm) return;
-    const ratio = current.bpm / trackB.bpm;
-    setPitchB(Math.max(0.85, Math.min(1.15, ratio)));
-  }, [current, trackB]);
-
-  // scrub callbacks
-  const scrubA = useCallback((dSec: number) => {
-    const next = Math.max(0, Math.min(durationA, positionA + dSec));
-    seek(next);
-  }, [positionA, durationA, seek]);
-
-  const scrubB = useCallback((dSec: number) => {
-    const a = audioBRef.current;
-    if (!a) return;
-    a.currentTime = Math.max(0, Math.min(a.duration || 0, a.currentTime + dSec));
-  }, []);
+  const compat = compatHint(A.track, B.track);
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_220px_1fr]">
-      {/* Deck A */}
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px_1fr]">
       <DeckColumn
         side="A" color="cyan"
-        track={current}
-        playing={playingA}
-        position={positionA}
-        duration={durationA}
-        onToggle={toggleA}
-        onScrub={scrubA}
-        volume={volA} onVolume={setVolA}
+        deck={A}
+        onToggle={() => toggle("A")}
+        onScrub={(d) => scrub("A", d)}
+        onVolume={(v) => setVolume("A", v)}
         tracks={tracks}
-        onLoadTrack={(t) => loadQueue([t], { autoplay: false })}
+        onLoadTrack={(t) => loadDeck("A", t)}
+        onReanalyze={() => ensureAnalysis("A", { force: true })}
       />
 
-      {/* Mixer column */}
-      <div className="neon-surface rounded-2xl p-4 flex flex-col gap-4">
+      <div className="neon-surface rounded-2xl p-4 flex flex-col gap-3">
         <div className="text-center text-[10px] uppercase tracking-[0.2em] text-stage-foreground/60">Mixer</div>
 
         <div className="flex items-center justify-around">
-          <RotaryKnob value={volA} onChange={setVolA} label="Vol A" color="cyan" size={48} />
-          <RotaryKnob value={volB} onChange={setVolB} label="Vol B" color="magenta" size={48} />
+          <RotaryKnob value={A.volume} onChange={(v) => setVolume("A", v)} label="Vol A" color="cyan" size={44} />
+          <RotaryKnob value={B.volume} onChange={(v) => setVolume("B", v)} label="Vol B" color="magenta" size={44} />
         </div>
 
-        {/* Crossfader */}
         <div className="space-y-1">
           <div className="flex justify-between text-[9px] uppercase tracking-widest text-stage-foreground/60">
             <span>A</span><span>Crossfader</span><span>B</span>
@@ -150,57 +83,134 @@ export function TwinDeck({ tracks }: Props) {
           />
         </div>
 
-        <NeonButton onClick={sync} variant="armed" size="sm" disabled={!current?.bpm || !trackB?.bpm}>
-          <Zap className="h-3 w-3" /> Sync
-          {current?.bpm && trackB?.bpm && (
-            <span className="ml-1 font-mono">{Math.round(current.bpm)}↔{Math.round(trackB.bpm)}</span>
+        {/* Transition mode select */}
+        <div className="space-y-1">
+          <div className="text-[9px] uppercase tracking-widest text-stage-foreground/60">Transition-Stil</div>
+          <select
+            value={transitionMode}
+            onChange={(e) => setTransitionMode(e.target.value as keyof typeof TRANSITION_LABELS)}
+            className="w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-xs text-stage-foreground outline-none"
+          >
+            {(Object.keys(TRANSITION_LABELS) as (keyof typeof TRANSITION_LABELS)[]).map((k) => (
+              <option key={k} value={k}>{TRANSITION_LABELS[k]}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Transition trigger buttons */}
+        <div className="grid grid-cols-2 gap-2">
+          <NeonButton onClick={() => transition("A", "B")}
+            variant="active" size="sm"
+            disabled={!A.track || !B.track || inFlight}>
+            <Wand2 className="h-3 w-3" /> A → B
+          </NeonButton>
+          <NeonButton onClick={() => transition("B", "A")}
+            variant="danger" size="sm"
+            disabled={!A.track || !B.track || inFlight}>
+            <Wand2 className="h-3 w-3" /> B → A
+          </NeonButton>
+        </div>
+
+        <NeonButton onClick={() => sync("A", "B")} variant="armed" size="sm" disabled={!A.track?.bpm || !B.track?.bpm}>
+          <Zap className="h-3 w-3" /> Sync B→A
+          {A.track?.bpm && B.track?.bpm && (
+            <span className="ml-1 font-mono">{Math.round(A.track.bpm)}↔{Math.round(B.track.bpm)}</span>
           )}
         </NeonButton>
 
-        <div className="flex items-center justify-between">
-          <Led color={playingA ? "cyan" : "off"} label="A" blink={playingA} />
-          <Led color={playingB ? "magenta" : "off"} label="B" blink={playingB} />
+        <div className="flex items-center justify-between text-[9px]">
+          <span className={cn("rounded px-1.5 py-0.5", compat.keyOk ? "bg-emerald-500/30 text-emerald-200" : "bg-white/10 text-stage-foreground/60")}>
+            Key {compat.keyOk ? "✓" : "—"} {A.track?.camelot ?? "?"}↔{B.track?.camelot ?? "?"}
+          </span>
+          <span className={cn("rounded px-1.5 py-0.5", compat.bpmOk ? "bg-emerald-500/30 text-emerald-200" : "bg-white/10 text-stage-foreground/60")}>
+            BPM Δ {compat.bpmDelta ?? "?"}
+          </span>
         </div>
 
-        <div className="text-center text-[10px] font-mono text-stage-foreground/60">
-          Pitch B: {pitchB.toFixed(3)}x
+        {/* Timer Auto-DJ */}
+        <div className="rounded-md border border-white/10 bg-black/30 p-2 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] uppercase tracking-widest text-stage-foreground/70 flex items-center gap-1">
+              <Timer className="h-3 w-3" /> Auto-Transition
+            </span>
+            <button
+              onClick={() => setAutoTimerOn(!autoTimerOn)}
+              disabled={tracks.length < 2}
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest disabled:opacity-40",
+                autoTimerOn ? "bg-[var(--neon-cyan)] text-black" : "bg-white/10 text-stage-foreground/60",
+              )}
+              title={tracks.length < 2 ? "Mindestens 2 Tracks nötig" : ""}
+            >
+              {autoTimerOn ? `läuft · ${autoTimerCountdown}s` : "aus"}
+            </button>
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-[9px] text-stage-foreground/60">
+              <span>Intervall</span><span className="font-mono">{autoTimerSec}s</span>
+            </div>
+            <input
+              type="range" min={20} max={300} step={5}
+              value={autoTimerSec}
+              onChange={(e) => setAutoTimerSec(parseInt(e.target.value, 10))}
+              className="w-full accent-[var(--neon-cyan)]"
+            />
+          </div>
+          <button
+            onClick={() => setAutoShuffle(!autoShuffle)}
+            className="flex w-full items-center justify-center gap-1 rounded border border-white/10 px-2 py-1 text-[10px] uppercase tracking-widest text-stage-foreground/80 hover:bg-white/5"
+          >
+            <Shuffle className="h-3 w-3" /> {autoShuffle ? "Shuffle" : "Linear"}
+          </button>
+          {tracks.length < 2 && (
+            <div className="text-center text-[9px] text-stage-foreground/50">
+              Lade mindestens 2 Tracks in die Library für Auto-Transitions.
+            </div>
+          )}
         </div>
+
+        <div className="flex items-center justify-between">
+          <Led color={A.isPlaying ? "cyan" : "off"} label="A" blink={A.isPlaying} />
+          <Led color={inFlight ? "amber" : "off"} label="MIX" blink={inFlight} />
+          <Led color={B.isPlaying ? "magenta" : "off"} label="B" blink={B.isPlaying} />
+        </div>
+
+        {lastNote && (
+          <div className="text-center text-[9px] font-mono text-stage-foreground/60 line-clamp-2 flex items-center justify-center gap-1">
+            <ArrowLeftRight className="h-3 w-3" /> {lastNote}
+          </div>
+        )}
       </div>
 
-      {/* Deck B */}
       <DeckColumn
         side="B" color="magenta"
-        track={trackB}
-        playing={playingB}
-        position={positionB}
-        duration={durationB}
-        onToggle={toggleB}
-        onScrub={scrubB}
-        volume={volB} onVolume={setVolB}
+        deck={B}
+        onToggle={() => toggle("B")}
+        onScrub={(d) => scrub("B", d)}
+        onVolume={(v) => setVolume("B", v)}
         tracks={tracks}
-        onLoadTrack={loadB}
+        onLoadTrack={(t) => loadDeck("B", t)}
+        onReanalyze={() => ensureAnalysis("B", { force: true })}
       />
     </div>
   );
 }
 
 function DeckColumn({
-  side, color, track, playing, position, duration,
-  onToggle, onScrub, volume: _v, onVolume: _ov, tracks, onLoadTrack,
+  side, color, deck, onToggle, onScrub, onVolume: _ov, tracks, onLoadTrack, onReanalyze,
 }: {
-  side: "A" | "B";
+  side: DeckSide;
   color: "cyan" | "magenta";
-  track: EngineTrack | null;
-  playing: boolean;
-  position: number;
-  duration: number;
+  deck: { track: EngineTrack | null; isPlaying: boolean; position: number; duration: number; analyzing: boolean; analyzeProgress: number };
   onToggle: () => void;
   onScrub: (dSec: number) => void;
-  volume: number; onVolume: (v: number) => void;
+  onVolume: (v: number) => void;
   tracks: EngineTrack[];
   onLoadTrack: (t: EngineTrack) => void;
+  onReanalyze: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const t = deck.track;
   return (
     <div className="neon-surface rounded-2xl p-4 flex flex-col items-center gap-3">
       <div className="flex w-full items-center justify-between">
@@ -208,28 +218,44 @@ function DeckColumn({
           "text-xs font-bold tracking-widest",
           color === "cyan" ? "text-[var(--neon-cyan)]" : "text-[var(--neon-magenta)]",
         )}>DECK {side}</span>
-        <span className="font-mono text-[10px] text-stage-foreground/70">{fmt(position)} / {fmt(duration)}</span>
+        <span className="font-mono text-[10px] text-stage-foreground/70">{fmt(deck.position)} / {fmt(deck.duration)}</span>
       </div>
 
       <Turntable
         size={220} color={color}
-        artwork={track?.artwork ?? undefined}
-        label={track?.title}
-        spinning={playing}
-        positionSec={position}
-        durationSec={duration}
+        artwork={t?.artwork ?? undefined}
+        label={t?.title}
+        spinning={deck.isPlaying}
+        positionSec={deck.position}
+        durationSec={deck.duration}
         onScrub={onScrub}
       />
 
-      <div className="line-clamp-1 text-sm font-semibold text-stage-foreground">{track?.title ?? "— kein Track —"}</div>
-      <div className="line-clamp-1 text-[10px] text-stage-foreground/60">
-        {track?.artist ?? ""}{track?.bpm ? ` • ${Math.round(track.bpm)} BPM` : ""}{track?.camelot ? ` • ${track.camelot}` : ""}
+      <div className="line-clamp-1 text-sm font-semibold text-stage-foreground">{t?.title ?? "— kein Track —"}</div>
+      <div className="flex items-center gap-1 text-[10px] text-stage-foreground/60">
+        <span className="line-clamp-1">
+          {t?.artist ?? ""}{t?.bpm ? ` • ${Math.round(t.bpm)} BPM` : ""}{t?.camelot ? ` • ${t.camelot}` : ""}
+        </span>
+        {t && (
+          <button onClick={onReanalyze} title="Erneut analysieren"
+            className="ml-1 rounded p-0.5 text-stage-foreground/60 hover:bg-white/10 hover:text-stage-foreground">
+            <RefreshCw className={cn("h-3 w-3", deck.analyzing && "animate-spin")} />
+          </button>
+        )}
       </div>
+      {deck.analyzing && (
+        <div className="w-full">
+          <div className="text-center text-[9px] text-stage-foreground/50">Analyse… {deck.analyzeProgress}%</div>
+          <div className="h-1 w-full rounded-full bg-white/10">
+            <div className="h-1 rounded-full bg-[var(--neon-cyan)]" style={{ width: `${deck.analyzeProgress}%` }} />
+          </div>
+        </div>
+      )}
 
       <div className="mt-1 flex w-full items-center justify-center gap-2">
-        <NeonButton onClick={onToggle} variant={playing ? "active" : "idle"} size="md" disabled={!track}>
-          {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          {playing ? "Pause" : "Play"}
+        <NeonButton onClick={onToggle} variant={deck.isPlaying ? "active" : "idle"} size="md" disabled={!t}>
+          {deck.isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          {deck.isPlaying ? "Pause" : "Play"}
         </NeonButton>
         <NeonButton onClick={() => setPickerOpen((o) => !o)} size="md" variant="ghost">
           <Headphones className="h-3.5 w-3.5" /> Load
@@ -242,13 +268,13 @@ function DeckColumn({
       {pickerOpen && (
         <div className="mt-2 max-h-40 w-full overflow-y-auto rounded-md border border-white/10 bg-black/40 p-1 text-xs">
           {tracks.length === 0 && <div className="p-2 text-stage-foreground/50">Keine Tracks in Library</div>}
-          {tracks.map((t) => (
+          {tracks.map((tt) => (
             <button
-              key={t.id}
-              onClick={() => { onLoadTrack(t); setPickerOpen(false); }}
+              key={tt.id}
+              onClick={() => { onLoadTrack(tt); setPickerOpen(false); }}
               className="block w-full truncate rounded px-2 py-1 text-left text-stage-foreground/90 hover:bg-white/10"
             >
-              {t.title}{t.bpm ? ` · ${Math.round(t.bpm)} BPM` : ""}
+              {tt.title}{tt.bpm ? ` · ${Math.round(tt.bpm)} BPM` : ""}{tt.camelot ? ` · ${tt.camelot}` : ""}
             </button>
           ))}
         </div>
