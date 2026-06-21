@@ -3,6 +3,7 @@
 // beat grids. Pure logic; the engine executes the plan.
 import { camelotCompatible, nextBeatAfter } from "./analyze";
 import type { TransitionMode } from "./engine";
+import { semitoneShiftToKey } from "./keyDelta";
 
 export type TrackMeta = {
   bpm?: number | null;
@@ -81,6 +82,7 @@ export function planMix(
   const bpmDiff = Math.abs(curBpm - nxtBpm) / curBpm; // 0..
   const keyCompat = camelotCompatible(current.camelot ?? "", next.camelot ?? "");
   const beatSec = 60 / curBpm;
+  const semiAbs = Math.abs(semitoneShiftToKey((current as { musicalKey?: string | null }).musicalKey ?? null, (next as { musicalKey?: string | null }).musicalKey ?? null));
 
   // Trigger near outro of current track. Prefer smart vocal-free out-point
   // if findTransitionPoints supplied any; otherwise fall back to outroStart.
@@ -102,15 +104,37 @@ export function planMix(
     mode = r.mode; bars = r.bars; notes = `🎲 ${r.notes}`;
   } else if (force !== "auto") {
     mode = force as TransitionMode;
-    bars = mode === "doubleDrop" ? 8 : mode === "loopRoll" ? 4 : mode === "bassSwap" ? 16 : mode === "genreBridge" ? 32 : 8;
+    bars = mode === "doubleDrop" ? 8
+      : mode === "loopRoll" ? 4
+      : mode === "bassSwap" ? 16
+      : mode === "genreBridge" ? 32
+      : mode === "pitchLock" ? 16
+      : mode === "meetMiddle" ? 16
+      : mode === "pedalDrone" ? 12
+      : 8;
     notes = `Manuell: ${mode}`;
-  } else if (bpmDiff > 0.18 || (!keyCompat && bpmDiff > 0.08)) {
+  } else if (bpmDiff > 0.18) {
     // Cross-genre territory: slow country → fast reggae. Use a pre-rendered
     // bridge snippet locked to the outgoing key+tempo so the listener stays
     // grooving while the new material sneaks in.
     mode = "genreBridge";
     bars = 24;
     notes = `Genre-Bridge ${curBpm.toFixed(0)}→${nxtBpm.toFixed(0)} BPM · ${current.camelot ?? "?"}→${next.camelot ?? "?"}`;
+  } else if (semiAbs >= 4 && bpmDiff <= 0.06) {
+    // Big tonal jump but tempos close → mask with a sustained pedal-drone.
+    mode = "pedalDrone";
+    bars = 12;
+    notes = `Pedal-Drone Pivot ${current.camelot ?? "?"}→${next.camelot ?? "?"} (Δ${semiAbs}st)`;
+  } else if (!keyCompat && bpmDiff <= 0.12) {
+    // Tempos OK, keys clash → pre-shift incoming snippet to outgoing key.
+    mode = "pitchLock";
+    bars = 16;
+    notes = `Pitch-Lock Pre-Shift ${current.camelot ?? "?"}→${next.camelot ?? "?"} (Δ${semiAbs}st)`;
+  } else if (bpmDiff >= 0.04 && bpmDiff <= 0.12 && keyCompat) {
+    // Mid BPM gap, keys friendly → mutual tempo bend.
+    mode = "meetMiddle";
+    bars = 16;
+    notes = `Meet-in-Middle ${curBpm.toFixed(0)}↔${nxtBpm.toFixed(0)} BPM`;
   } else if (bpmDiff <= 0.03 && keyCompat && current.cues && next.cues) {
     // Profi-Move: perfekt kompatibel → doubleDrop oder bassSwap
     const r = Math.random();
