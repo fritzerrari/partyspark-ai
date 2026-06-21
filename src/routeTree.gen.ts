@@ -26,6 +26,7 @@ import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCrowdRouteImport } from './routes/_authenticated/crowd'
 import { Route as AuthenticatedChoirRouteImport } from './routes/_authenticated/choir'
 import { Route as AuthenticatedBattleRouteImport } from './routes/_authenticated/battle'
 import { Route as AuthenticatedAutotuneRouteImport } from './routes/_authenticated/autotune'
@@ -127,6 +128,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedCrowdRoute = AuthenticatedCrowdRouteImport.update({
+  id: '/crowd',
+  path: '/crowd',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedChoirRoute = AuthenticatedChoirRouteImport.update({
   id: '/choir',
   path: '/choir',
@@ -211,6 +217,7 @@ export interface FileRoutesByFullPath {
   '/autotune': typeof AuthenticatedAutotuneRoute
   '/battle': typeof AuthenticatedBattleRoute
   '/choir': typeof AuthenticatedChoirRoute
+  '/crowd': typeof AuthenticatedCrowdRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -243,6 +250,7 @@ export interface FileRoutesByTo {
   '/autotune': typeof AuthenticatedAutotuneRoute
   '/battle': typeof AuthenticatedBattleRoute
   '/choir': typeof AuthenticatedChoirRoute
+  '/crowd': typeof AuthenticatedCrowdRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -277,6 +285,7 @@ export interface FileRoutesById {
   '/_authenticated/autotune': typeof AuthenticatedAutotuneRoute
   '/_authenticated/battle': typeof AuthenticatedBattleRoute
   '/_authenticated/choir': typeof AuthenticatedChoirRoute
+  '/_authenticated/crowd': typeof AuthenticatedCrowdRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
@@ -311,6 +320,7 @@ export interface FileRouteTypes {
     | '/autotune'
     | '/battle'
     | '/choir'
+    | '/crowd'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/autotune'
     | '/battle'
     | '/choir'
+    | '/crowd'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -376,6 +387,7 @@ export interface FileRouteTypes {
     | '/_authenticated/autotune'
     | '/_authenticated/battle'
     | '/_authenticated/choir'
+    | '/_authenticated/crowd'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
@@ -533,6 +545,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/crowd': {
+      id: '/_authenticated/crowd'
+      path: '/crowd'
+      fullPath: '/crowd'
+      preLoaderRoute: typeof AuthenticatedCrowdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/choir': {
       id: '/_authenticated/choir'
       path: '/choir'
@@ -639,6 +658,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAutotuneRoute: typeof AuthenticatedAutotuneRoute
   AuthenticatedBattleRoute: typeof AuthenticatedBattleRoute
   AuthenticatedChoirRoute: typeof AuthenticatedChoirRoute
+  AuthenticatedCrowdRoute: typeof AuthenticatedCrowdRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
@@ -664,6 +684,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAutotuneRoute: AuthenticatedAutotuneRoute,
   AuthenticatedBattleRoute: AuthenticatedBattleRoute,
   AuthenticatedChoirRoute: AuthenticatedChoirRoute,
+  AuthenticatedCrowdRoute: AuthenticatedCrowdRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
