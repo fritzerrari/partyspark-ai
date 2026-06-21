@@ -10,6 +10,7 @@ import { analyzeAudio, decodeToBuffer, camelotCompatible } from "./analyze";
 import { keyToCamelot } from "./keyToCamelot";
 import { shiftKey, semitoneShiftToKey } from "./keyDelta";
 import { buildBridge, type BridgePlan } from "./bridgeBuilder";
+import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -92,12 +93,14 @@ const deck: Record<DeckSide, {
   eqLow: BiquadFilterNode | null;
   eqMid: BiquadFilterNode | null;
   eqHigh: BiquadFilterNode | null;
+  analyser: AnalyserNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
+let activeDroneStop: (() => void) | null = null;
 // Bridge playback graph: a one-shot BufferSource → filter → gain → master.
 let bridgeGain: GainNode | null = null;
 let bridgeFilter: BiquadFilterNode | null = null;
@@ -173,12 +176,16 @@ function wireDeck(side: DeckSide) {
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
+      d.analyser = ctx.createAnalyser();
+      d.analyser.fftSize = 512;
+      d.analyser.smoothingTimeConstant = 0.6;
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
       d.filter.connect(d.gain);
-      d.gain.connect(masterGain);
+      d.gain.connect(d.analyser);
+      d.analyser.connect(masterGain);
     } catch {
       /* already wired */
     }
