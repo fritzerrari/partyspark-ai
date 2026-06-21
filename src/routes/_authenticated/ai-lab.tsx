@@ -10,6 +10,8 @@ import {
   Users,
   CalendarHeart,
   Bell,
+  Compass,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -20,8 +22,9 @@ export const Route = createFileRoute("/_authenticated/ai-lab")({
   component: AILab,
 });
 
-type Feature = { icon: typeof Mic; title: string; body: string; to?: "/party-host" | "/moments" | "/autotune" | "/battle" | "/karaoke" | "/choir" | "/sound-designer" | "/crowd" | "/remix" | "/lyric-writer" };
+type Feature = { icon: typeof Mic; title: string; body: string; to?: "/party-host" | "/moments" | "/autotune" | "/battle" | "/karaoke" | "/choir" | "/sound-designer" | "/crowd" | "/remix" | "/lyric-writer" | "/wizard" };
 const FEATURES: Feature[] = [
+  { icon: Compass, title: "Studio-Wizard", body: "Der geführte End-to-End-Flow: Lyrics → Aufnahme → Autotune → Chor → FX → Remix → Battle.", to: "/wizard" },
   { icon: Bot, title: "AI Party Host", body: "Gemini schreibt die Ansage, eine KI-Stimme spricht sie zwischen deinen Tracks.", to: "/party-host" },
   { icon: CalendarHeart, title: "AI Party Moments", body: "Findet automatisch die besten Momente aus deinen Aufnahmen.", to: "/moments" },
   { icon: Mic, title: "Autotune", body: "Live-Tuner zum Einsingen + Tonart-Korrektur für deine Aufnahmen.", to: "/autotune" },
