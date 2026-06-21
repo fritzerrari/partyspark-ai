@@ -2,7 +2,15 @@
 // delay, autotune snap and soft distortion, all bypassable in real time.
 // Pitch shift uses a delay-line granular trick (no worklet required) which
 // keeps it dependency-free and reliable in the browser.
-import { snapHzToMusicalKey } from "@/lib/audio/pitch";
+import { freqToMidi, midiToFreq, snapToScale } from "@/lib/audio/pitch";
+
+function snapHzToScale(hz: number, mode: "major" | "minor"): number | null {
+  if (!hz || !isFinite(hz)) return null;
+  const midi = freqToMidi(hz);
+  // Scale rooted at C — good enough for monophonic vocal snap.
+  const snapped = snapToScale(midi, mode === "minor" ? "Am" : "C");
+  return midiToFreq(snapped);
+}
 
 export type FxConfig = {
   pitchSemis: number;     // -12..+12
@@ -210,7 +218,7 @@ export function createFxChain(ctx: AudioContext, source: AudioNode, initial?: Pa
     lastSnap = now;
     const hz = detectPitchHz();
     if (!hz) return;
-    const snapped = snapHzToMusicalKey(hz, cfg.autoSnap === "minor" ? "minor" : "major");
+    const snapped = snapHzToScale(hz, cfg.autoSnap === "minor" ? "minor" : "major");
     if (!snapped) return;
     const cents = 1200 * Math.log2(snapped / hz);
     // Soft correction — push pitchSemis by partial semitone (max 0.2 step).
