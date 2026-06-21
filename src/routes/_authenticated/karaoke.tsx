@@ -12,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { VocalChainPanel } from "@/components/karaoke/VocalChainPanel";
 import { IntroPicker } from "@/components/karaoke/IntroPicker";
 import { PostProcessSheet } from "@/components/karaoke/PostProcessSheet";
+import { LiveCaptions } from "@/components/karaoke/LiveCaptions";
+import { SongIdentifier } from "@/components/karaoke/SongIdentifier";
+import { RoastToastButton } from "@/components/karaoke/RoastToastButton";
 import { VocalChain, DEFAULT_VOCAL_CHAIN, type VocalChainSettings } from "@/lib/audio/vocalChain";
 import { runIntro, type IntroConfig } from "@/lib/audio/intro";
 
@@ -162,6 +165,11 @@ function Karaoke() {
         <VocalChainPanel settings={chain} onChange={setChain} />
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <LiveCaptions active={recording} />
+        <SongIdentifier />
+      </div>
+
       <section>
         <h2 className="mb-3 font-display text-lg font-semibold">Tonight's moments</h2>
         {recs.length === 0 ? (
@@ -220,6 +228,8 @@ function RecordingCard({
           <Button size="sm" variant="secondary" onClick={onFx} className="rounded-full">
             <Wand2 className="mr-2 h-4 w-4" /> FX
           </Button>
+          <RoastToastButton title={rec.title} score={rec.score ?? null} mode="toast" />
+          <RoastToastButton title={rec.title} score={rec.score ?? null} mode="roast" />
           <Button size="sm" variant="ghost" onClick={onRemove} className="text-muted-foreground">
             <Trash2 className="h-4 w-4" />
           </Button>
