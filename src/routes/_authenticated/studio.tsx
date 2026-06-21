@@ -3,12 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import {
-  Mic, Square, Play, Pause, Save, Plus, ArrowLeft, Wand2, Loader2,
-  Layers, Trash2, Disc3,
-} from "lucide-react";
+import { Mic, Square, Play, Pause, Save, ArrowLeft, Wand2, Loader2, Layers, Disc3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TrackLane } from "@/components/studio/TrackLane";
