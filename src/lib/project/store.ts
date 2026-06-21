@@ -45,6 +45,8 @@ type ProjectState = {
   clear: () => void;
   /** Convenience: convert an artifact into an EngineTrack the audio engine can load. */
   toEngineTrack: (id: string) => EngineTrack | null;
+  /** Register an EngineTrack (e.g. from cockpit library) as an artifact, dedup by id. */
+  addEngineTrack: (t: EngineTrack) => string;
 };
 
 function uid() {
@@ -99,6 +101,29 @@ export const useProject = create<ProjectState>((set, get) => ({
       vocalMap: a.analysis?.vocalMap ?? null,
       durationSec: a.buffer ? a.buffer.duration : ((a.meta?.durationSec as number | null) ?? null),
     };
+  },
+  addEngineTrack: (t) => {
+    const existing = get().artifacts.find((a) => a.id === t.id);
+    if (existing) return existing.id;
+    const art: ProjectArtifact = {
+      id: t.id,
+      kind: "track",
+      title: t.title,
+      url: t.url,
+      analysis: t.bpm ? ({
+        bpm: t.bpm,
+        musicalKey: t.musicalKey ?? null,
+        camelot: t.camelot ?? null,
+        beatGrid: t.beatGrid ?? null,
+        cues: t.cues ?? null,
+        vocalMap: t.vocalMap ?? null,
+        energyCurve: null,
+      } as unknown as TrackAnalysis) : null,
+      meta: { artist: t.artist, artwork: t.artwork, durationSec: t.durationSec, bpm: t.bpm },
+      createdAt: Date.now(),
+    };
+    set((s) => ({ artifacts: [art, ...s.artifacts].slice(0, 200) }));
+    return art.id;
   },
 }));
 

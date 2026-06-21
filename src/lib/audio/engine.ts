@@ -481,7 +481,7 @@ export const useEngine = create<State & Actions>((set, get) => ({
   crossfadeSec: 6,
   energy: 50,
   mood: "Warm-up",
-  transitionMode: "crossfade",
+  transitionMode: "auto",
   stingerUrl: null,
   autoDj: false,
   pendingPlan: null,

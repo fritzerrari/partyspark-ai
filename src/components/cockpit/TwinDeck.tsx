@@ -51,7 +51,7 @@ export function TwinDeck({ tracks }: Props) {
   const compat = compatHint(A.track, B.track);
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px_1fr]">
+    <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[1fr_280px_1fr]">
       <DeckColumn
         side="A" color="cyan"
         deck={A}
@@ -63,8 +63,27 @@ export function TwinDeck({ tracks }: Props) {
         onReanalyze={() => ensureAnalysis("A", { force: true })}
       />
 
-      <div className="neon-surface rounded-2xl p-4 flex flex-col gap-3">
+      <div className="neon-surface rounded-2xl p-3 sm:p-4 flex flex-col gap-3 order-first lg:order-none">
         <div className="text-center text-[10px] uppercase tracking-[0.2em] text-stage-foreground/60">Mixer</div>
+
+        {/* Animated transition viz */}
+        <div className="relative h-6 w-full rounded-full overflow-hidden bg-black/40 border border-white/10">
+          <div
+            className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--neon-cyan)] via-transparent to-transparent transition-all duration-300"
+            style={{ width: `${(1 - crossfader) * 100}%`, opacity: 0.4 }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 bg-gradient-to-l from-[var(--neon-magenta)] via-transparent to-transparent transition-all duration-300"
+            style={{ width: `${crossfader * 100}%`, opacity: 0.4 }}
+          />
+          {inFlight && (
+            <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          )}
+          <div
+            className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_8px_white] transition-all duration-150"
+            style={{ left: `${crossfader * 100}%`, transform: "translateX(-50%)" }}
+          />
+        </div>
 
         <div className="flex items-center justify-around">
           <RotaryKnob value={A.volume} onChange={(v) => setVolume("A", v)} label="Vol A" color="cyan" size={44} />
@@ -79,7 +98,7 @@ export function TwinDeck({ tracks }: Props) {
             type="range" min={0} max={1} step={0.001}
             value={crossfader} onChange={(e) => setCrossfader(parseFloat(e.target.value))}
             onDoubleClick={() => setCrossfader(0.5)}
-            className="w-full accent-[var(--neon-cyan)]"
+            className="w-full h-2 accent-[var(--neon-cyan)]"
           />
         </div>
 
@@ -222,7 +241,7 @@ function DeckColumn({
       </div>
 
       <Turntable
-        size={220} color={color}
+        size={typeof window !== "undefined" && window.innerWidth < 480 ? 160 : 220} color={color}
         artwork={t?.artwork ?? undefined}
         label={t?.title}
         spinning={deck.isPlaying}

@@ -1,72 +1,77 @@
-# DJ-Cockpit Upgrade: Analyse, Transitions, Sing-along, FX, Timer-Auto-DJ
+## Befund nach Tiefenanalyse
 
-## Problem heute
-- **Twin-Decks im Cockpit** nutzen ein eigenes `<audio>`-Element für Deck B und sind **nicht** an die Engine-Transition-Pipeline gekoppelt. Es gibt nur Sync (Pitch-Match), aber keinerlei künstlerische Übergänge zwischen A und B.
-- Beim Laden eines Tracks ins Cockpit fehlt häufig die Analyse (BPM, Tonart, Beat-Grid, Cues, Vocal-Map). Ohne diese Daten kann die Transition-Planung nichts Profi-mäßiges berechnen → "transitions sind hier nicht möglich".
-- Sing-along und Sound-FX existieren als Module (`VocalOverlay`, `fxPlayer`, FX-Pads), sind aber im DJ-Cockpit gar nicht eingebunden.
-- Kein "alle XX Sekunden eine Transition"-Modus.
+Das System ist technisch fast vollständig, aber die "Auto-DJ"-Erfahrung scheitert an mehreren konkreten Bugs und Brüchen zwischen den Modulen. Hauptprobleme:
 
-## Was gebaut wird
+### Auto-DJ (Cockpit Timer)
+1. **Tote Logik bei kaltem Start**: `autoTimer` setzt `from = crossfader < 0.5 ? "A" : "B"`. Wenn weder Deck A noch B läuft (frischer Cockpit-Aufruf), feuert der Timer trotzdem alle XX Sekunden eine "Transition" — ohne Audio.
+2. **Inkomingsdeck wird nie aktiviert**: `loadDeck` setzt nur `src`, ruft kein `play()`. Bei `transition()` wird `el.play()` versucht, aber ohne vorherige User-Geste in iOS/Safari → stiller Fehler, kein Sound.
+3. **Track-Doppelung**: `pickNextTrack` darf den Track wählen, der bereits im anderen Deck läuft. Keine Dedup-Logik.
+4. **Countdown-UI lügt**: Sekunden zählen weiter runter, springen aber bei Transition zurück auf `autoTimerSec` — wirkt eingefroren.
+5. **Analyse-Pflicht fehlt**: Transitions ohne BPM/Cues fallen auf 6s-Crossfade zurück → klingt billig. Auto-DJ sollte vor Start sicherstellen, dass beide Decks analysiert sind.
+6. **Keine Vorschau / kein "Aufnehmen"** des Auto-DJ-Sets in den Project-Bus.
 
-### 1. Persistente Track-Analyse (Cache)
-- Beim Laden eines Tracks in **Deck A** oder **Deck B**: wenn `beatGrid`/`bpm`/`camelot`/`cues`/`vocalMap` fehlen, **lazy analysieren** (`analyzeAudio` aus `src/lib/audio/analyze.ts`) und in `tracks` schreiben (`bpm`, `musical_key`, `camelot`, `beat_grid`, `cues`, `vocal_map`, plus neu: `analyzed_at`).
-- Bereits analysierte Tracks → direkt nutzen (DB-Spalten werden im Cockpit-Loader schon gemappt; nur das Nachanalysieren+Persistieren fehlt).
-- Migration: Spalte `analyzed_at timestamptz` zur `tracks`-Tabelle (idempotent), plus passende GRANTs sind schon vorhanden.
-- Toast: "Track analysiert · 124 BPM · Am · 8A" mit Fortschritt.
+### Modul-Symbiose
+7. Cockpit-Aufnahmen (SingAlong, FX) landen nicht im **Project-Bus** → Remix/Mashup sehen sie nicht.
+8. Remix/Mashup-Output kann zwar auf "Deck A" geschickt werden — geht aber an die globale `useEngine`-Pipeline, nicht in `useTwinDeck`. Cockpit zeigt es nie.
+9. Library-Tracks werden im Cockpit geladen, aber **nicht in den Project-Bus** gespiegelt → Studio-Bench-Module finden sie nicht ohne Re-Import.
+10. Keine geteilte "now playing"-Quelle: SingAlong-Monitor, FX-Quantize, Coach-HUD wissen nichts vom Cockpit-Beat.
 
-### 2. Echte A↔B Transitions im Cockpit
-- Mixer-Spalte erweitern um:
-  - **Transition-Mode-Select** mit den vorhandenen Optionen (`TRANSITION_LABELS`: Auto/Random/Crossfade/Cut/FadeGap/FilterSweep/EchoTail/Stinger/LoopRoll/DoubleDrop/BassSwap/ReverbWash).
-  - Button **"Transition A→B"** (und **"B→A"**), führt eine echte choreografierte Transition zwischen den beiden Decks aus — gleicher Code-Pfad wie Engine-Auto-DJ, aber lokal in `TwinDeck`:
-    - Beide Decks bekommen einen `BiquadFilter` + `GainNode` über `AudioContext` (Web-Audio-Graph wird in `TwinDeck` erstmalig aufgebaut, statt nur `audio.volume`).
-    - Trigger-/Cut-Punkt aus `mixPlanner.planMix` mit beiden `EngineTrack`-Objekten ableiten (nutzt Cues, BeatGrid, Camelot, VocalMap).
-    - Crossfade-Länge passt sich an BPM und Energie an; "Random" wählt jedes Mal eine andere virtuose Variante.
-  - Anzeige: "Letzte Transition: FilterSweep · 8.2s · phrase-aligned".
-- Crossfader bleibt manuelles Override; während programmatischer Transition wird er per `requestAnimationFrame` mitgeführt.
+### Mobile / UX
+11. Turntable 220px sprengt mobile Viewports < 360px. Auto-Timer-Slider hat Mini-Hitbox. Keine animierte Crossfader-Visualisierung. FAB-Dock-State unklar.
+12. Kein "Onboarding-Pfad": Neuer User landet im Cockpit ohne Tracks und sieht nur leere Decks.
 
-### 3. Timer-Auto-DJ ("alle XX Sekunden")
-- Neue Mixer-Sektion **Auto-Transition**:
-  - Toggle `Auto-Loop on/off`.
-  - Slider **Intervall** 20–300 s (Default 90 s).
-  - Quelle: gemeinsame Track-Liste (Library-Tracks aus Cockpit-Props). Bei `≥2` Tracks aktivierbar; sonst disabled mit Hint "mindestens 2 Tracks nötig".
-  - Reihenfolge: shuffle oder linear (Toggle).
-  - Bei jedem Tick: nächsten Track ins **gerade leise** Deck laden (wechselseitig A↔B), Transition starten, Crossfader animiert rüberziehen.
-  - Transition-Mode = aktueller Select (Auto/Random respektiert).
+---
 
-### 4. Sing-along Layer
-- Neuer Panel-Tab im Cockpit unter den Decks: **"Mit-singen"**.
-  - Mic-Picker (nutzt `src/lib/audio/devices.ts`), Live-Pegel, Push-to-Talk + Latch.
-  - Effekt-Chain (Reverb/Delay/Doubler) via vorhandene `vocalChain.ts` mit Auto-Gain.
-  - Aufnahme-Button → schreibt Take in Project-Bus (`useProject`-Artefakt) für späteren Export.
-  - Vocal-Bus läuft parallel zu Decks A+B in den Master-Out.
+## Plan (in einem Rutsch, keine Phasen-Rückfragen)
 
-### 5. Sound-FX-Pads
-- Neuer Panel-Tab **"FX-Pads"** mit 8 Pads (Air-Horn, Riser, Crash, Drop, Laser, Sweep, Vocal-Chop, eigene Uploads).
-  - Standard-Sounds aus `fxPlayer.ts` / Soundpool.
-  - One-Shot mit Choke-Gruppe; optional "Beat-quantisiert" (snappt auf nächste BeatGrid-Position des laufenden Decks).
-  - Latch-Modus für Loops.
-  - "+" Pad lädt Datei aus Library/Soundpool.
+### A. Auto-DJ-Kern reparieren (`src/lib/audio/twinDeckBus.ts`)
+- **Kalt-Start**: Bei `setAutoTimerOn(true)` prüfen, ob mind. ein Deck spielt; sonst nächsten Track in Deck A laden, `ensureAnalysis` abwarten, `play()` direkt im User-Klick-Kontext starten.
+- **Dedup**: `pickNextTrack` schließt aktuell geladene IDs in beiden Decks aus; Cursor merkt sich Verlauf (letzte 4).
+- **Saubere `from`-Erkennung**: `from = A.isPlaying && (crossfader < 0.5 || !B.isPlaying) ? "A" : "B"`.
+- **Garantierter Inkoming-Play**: Vor `runTransition` Deck-`to` analysieren, `play()` aufrufen, bei `NotAllowedError` Flag `needsUserGesture` setzen und Toast "Tippe Play, um Auto-DJ zu starten".
+- **Countdown-Korrektheit**: Während `transitionInFlight` Countdown auf "Mixing…" setzen, danach exakt auf `autoTimerSec` zurück.
+- **Plan-Aufruf**: `planMix` mit echten Cues, sonst zuerst `ensureAnalysis(to, force:true)`.
+- **Auto-DJ-Recorder**: `MediaStreamDestination` am masterGain → optional als Artefakt "Auto-DJ Set" in den Project-Bus.
 
-### 6. UI-Polish
-- Cockpit-Header zeigt zusätzlich: `BPM A ↔ BPM B`, `Key-Compat`-Badge (camelotCompatible), nächster geplanter Transition-Typ.
-- "Re-Analyze"-Knopf pro Deck (klein, neben BPM-Anzeige).
-- Loading-Spinner während Analyse, Fortschritts-Prozent.
+### B. Project-Bus-Symbiose
+- `src/lib/project/store.ts`: neue Helfer `addEngineTrack(t)` und Selector `useLibraryTracks()` (Project-Tracks + Cockpit-Tracks vereint).
+- `cockpit.tsx`: nach Library-Load alle Tracks via `addArtifact({kind:"track", url, analysis})` registrieren (mit Dedup über id).
+- `SingAlongPanel`: Aufnahme-Buffer beim Stop → `addArtifact({kind:"recording"})`.
+- `FxPadGrid`: One-Shots, die der User hochlädt → `addArtifact({kind:"fx"})`; "An Deck" und "An Remix" Mini-Buttons.
+- `RemixPanel`/`MashupPanel`: neuer `→ Deck B` Button (zusätzlich zu Deck A) ruft `useTwinDeck.loadDeck("B", …)` statt `useEngine.loadQueue`.
+- Globaler **Now-Playing-Bus** (`src/lib/audio/nowPlaying.ts`): einzige Wahrheit über aktuell hörbaren Track + BPM + Beat-Phase, abgeleitet aus dem dominierenden TwinDeck-Side. Wird genutzt von Coach, FxPad-Quantize und SingAlong-Monitor.
 
-## Geänderte / neue Dateien
-- **Neu**: `src/components/cockpit/MixerTransition.tsx` (Mode-Select, Trigger-Buttons, Timer-Auto-DJ Steuerung).
-- **Neu**: `src/components/cockpit/SingAlongPanel.tsx` (Mic + VocalChain).
-- **Neu**: `src/components/cockpit/FxPadGrid.tsx` (8 Pads, Choke, Beat-Quantize).
-- **Neu**: `src/lib/audio/twinDeckBus.ts` (Web-Audio-Graph mit zwei Deck-Lanes, gemeinsamer Master/Recorder, Transition-Choreografie — wiederverwendet die Mode-Schalter aus `engine.ts`).
-- **Edit**: `src/components/cockpit/TwinDeck.tsx` (über `twinDeckBus`, Auto-Analyse-Hook, neue Sub-Panels).
-- **Edit**: `src/routes/_authenticated/cockpit.tsx` (Tabs für SingAlong/FX, BPM-Compat-Header).
-- **Edit**: `src/lib/audio/mixPlanner.ts` (kleine Helper-Funktion `planBetween(trackA, trackB, mode, posSecA)` damit die Cockpit-Transition denselben Planner nutzt).
-- **Migration**: `tracks.analyzed_at timestamptz` (optional, idempotent).
+### C. Cockpit-Erweiterungen
+- **Header-Toolbar**: "Auto-DJ", "Set aufnehmen", "Add Track aus Library", "Mix → Projekt-Bus".
+- **Deck-Picker**: bei leerer Library Empty-State mit CTA "Tracks importieren" (→ `/library`).
+- **Visualisierter Crossfader** mit animiertem Laser-Sweep während Transition.
+- **BPM-Sync-Badge** zeigt Live-Drift; pulsiert grün wenn locked.
 
-## Technische Hinweise
-- Web-Audio: in `TwinDeckBus` werden beide `<audio>`-Elemente einmalig per `createMediaElementSource` in den geteilten `AudioContext` gehängt. **Ein Element kann nur einmal verknüpft werden** → Cockpit darf Deck A nicht parallel zur Engine `audio`-Pipe nutzen. Lösung: Cockpit benutzt **zwei eigene** Deck-Audios (A & B) im eigenen Bus; die globale Engine wird im Cockpit pausiert.
-- Analyse läuft im UI-Thread mit `setTimeout(0)`-Yields (bereits implementiert). Persistenz schreibt nur Metadaten (~5 KB), kein Audio.
-- Sing-along & Mic: braucht Mic-Permission; Fehlerzustand mit Toast.
+### D. Mobile-First-Politur
+- Turntable: dynamische Größe `min(46vw, 220px)`.
+- Cockpit-Layout: 1-Spalte mobil mit Sticky-Mixer-Bar unten (Crossfader + Play A/B + Auto-DJ-Toggle).
+- Tap-Targets ≥ 44px; Slider-Tracks 8px hoch.
+- Mikro-Animationen: `animate-fade-in`, Transition-LED pulsiert, Auto-DJ-Knopf glüht, Pad-Press scale-95.
 
-## Risiken & Trade-offs
-- True Stem-Separation für virtuose Übergänge im Browser nicht möglich → Übergänge bleiben "Vocal-Map-aware" (z. B. Crossfade nur über non-voiced Regions), keine echte Acapella-Isolation.
-- Re-Analyse großer Bibliotheken kostet einmalig CPU; daher streng on-demand pro Deck-Load.
+### E. Studio-Bench-Symbiose
+- Module-Dock-FAB sichtbar auf allen Auth-Routen, mit aktivem Badge wenn Modul offen.
+- "Open everywhere": Module als Overlays (bereits vorhanden) — sicherstellen, dass `RemixPanel`/`MashupPanel` ihre Quellen aus **Project-Bus + Library** lesen.
+- `studio-bench.tsx`: zusätzliche "Recent Artifacts"-Lane oberhalb der Modul-Picker.
+
+### F. Bugfix-Liste während des Refactors
+- `engine.ts`: `transitionMode: "crossfade"` → Default `"auto"` (sonst ignoriert die UI-Auswahl).
+- `RemixPanel`: `previewRef` per `useRef` statt `useState({a:null})`-Anti-Pattern → verhindert verlorene Refs nach Re-Render.
+- `MashupPanel`: gleiche Korrektur.
+- `cockpit.tsx`: `vocalMap`-JSON-Parse-Crash bei Strings absichern.
+
+### Technische Details (für Devs)
+- Datei-Touches: `twinDeckBus.ts`, `cockpit.tsx`, `TwinDeck.tsx`, `SingAlongPanel.tsx`, `FxPadGrid.tsx`, `RemixPanel.tsx`, `MashupPanel.tsx`, `studio-bench.tsx`, `project/store.ts`, `engine.ts`, neu: `nowPlaying.ts`, `CrossfaderViz.tsx`, `StickyMixerBar.tsx`, `RecorderTap.ts`.
+- Keine DB-Migration notwendig (Spalten `bpm/music_key/beat_grid/cues/vocal_map/analyzed_at` existieren bereits).
+- Recorder nutzt `MediaRecorder` auf `MediaStreamDestination` von `masterGain` (TwinDeck-Bus), Audio/webm-opus → Blob → AudioBuffer → Artefakt.
+
+### Akzeptanzkriterien
+1. Frischer Cockpit-Aufruf, ≥2 Tracks vorhanden: ein Klick auf "Auto-DJ" startet Deck A, analysiert beide Tracks, mixt nach XX Sekunden in Deck B mit gewähltem Stil — ohne weitere User-Klicks.
+2. Aufnahmen aus SingAlong/FX erscheinen sofort als Quelle in Remix-/Mashup-Panel.
+3. Remix-Output kann mit einem Klick in Deck B des Cockpit landen und in der nächsten Auto-Transition gespielt werden.
+4. Mobile (375×812): kein horizontales Scrollen, alle Steuerungen erreichbar.
+5. Auto-DJ-Recorder produziert ein Artefakt im Project-Bus, das wieder als Quelle für Remix/Mashup dient.

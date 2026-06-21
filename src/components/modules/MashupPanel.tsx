@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Combine, Play, Pause } from "lucide-react";
+import { Combine, Play, Pause, Disc3 } from "lucide-react";
 import { AutoMagicButton } from "@/components/ui/AutoMagicButton";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useProject, useArtifactsByKind, type ProjectArtifact } from "@/lib/project/store";
 import { useEngine } from "@/lib/audio/engine";
+import { useTwinDeck } from "@/lib/audio/twinDeckBus";
 import { autoMashup } from "@/lib/audio/mashup";
 import { decodeToBuffer } from "@/lib/audio/analyze";
 
@@ -20,13 +21,14 @@ export function MashupPanel() {
   const addArtifact = useProject((s) => s.addArtifact);
   const toEngineTrack = useProject((s) => s.toEngineTrack);
   const loadQueue = useEngine((s) => s.loadQueue);
+  const loadDeck = useTwinDeck((s) => s.loadDeck);
   const [a, setA] = useState<string>("");
   const [b, setB] = useState<string>("");
   const [xf, setXf] = useState(4);
   const [busy, setBusy] = useState(false);
   const [lastId, setLastId] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
-  const pv = useState<{ a: HTMLAudioElement | null }>({ a: null })[0];
+  const pv = useRef<HTMLAudioElement | null>(null);
 
   const A = useMemo(() => sources.find((s) => s.id === a) ?? sources[0] ?? null, [sources, a]);
   const B = useMemo(() => sources.find((s) => s.id === b) ?? sources[1] ?? null, [sources, b]);
@@ -53,16 +55,24 @@ export function MashupPanel() {
 
   function preview() {
     if (!lastId) return;
-    if (pv.a) { pv.a.pause(); pv.a = null; setPreviewing(false); return; }
+    if (pv.current) { pv.current.pause(); pv.current = null; setPreviewing(false); return; }
     const t = toEngineTrack(lastId); if (!t?.url) return;
-    const audio = new Audio(t.url); audio.onended = () => { setPreviewing(false); pv.a = null; };
-    audio.play().catch(() => {}); pv.a = audio; setPreviewing(true);
+    const audio = new Audio(t.url); audio.onended = () => { setPreviewing(false); pv.current = null; };
+    audio.play().catch(() => {}); pv.current = audio; setPreviewing(true);
   }
 
   function sendToDeck() {
     if (!lastId) return;
     const t = toEngineTrack(lastId);
     if (t) { loadQueue([t], { autoplay: false }); toast.success("Auf Deck A"); }
+  }
+
+  async function sendToTwinDeck(side: "A" | "B") {
+    if (!lastId) return;
+    const t = toEngineTrack(lastId);
+    if (!t) return;
+    await loadDeck(side, t);
+    toast.success(`Cockpit-Deck ${side} bereit`);
   }
 
   return (
@@ -102,6 +112,9 @@ export function MashupPanel() {
             {previewing ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
           </Button>
           <Button size="sm" variant="ghost" className="rounded-full text-stage-foreground" onClick={sendToDeck}>→ Deck</Button>
+          <Button size="sm" variant="ghost" className="rounded-full text-stage-foreground" onClick={() => sendToTwinDeck("B")} title="Cockpit Deck B">
+            <Disc3 className="h-3 w-3" /> B
+          </Button>
         </div>
       )}
     </div>
