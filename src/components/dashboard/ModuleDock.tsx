@@ -1,5 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from "react";
-import { Disc3, Grid3X3, Mic2, Music2, Layers, Sparkles, Lightbulb, X } from "lucide-react";
+import { Disc3, Grid3X3, Mic2, Layers, Sparkles, Lightbulb, X, Wand2, Combine, FolderOpen } from "lucide-react";
 import { useEngine, type EngineTrack } from "@/lib/audio/engine";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -12,10 +12,18 @@ const StepSequencer = lazy(() => import("@/components/cockpit/StepSequencer").th
 const CoachHud = lazy(() => import("@/components/cockpit/CoachHud").then((m) => ({ default: m.CoachHud })));
 const LoopPadOverlay = lazy(() => import("@/components/player/LoopPadOverlay").then((m) => ({ default: m.LoopPadOverlay })));
 const VocalOverlay = lazy(() => import("@/components/player/VocalOverlay").then((m) => ({ default: m.VocalOverlay })));
+const RemixPanel = lazy(() => import("@/components/modules/RemixPanel").then((m) => ({ default: m.RemixPanel })));
+const AutotunePanel = lazy(() => import("@/components/modules/AutotunePanel").then((m) => ({ default: m.AutotunePanel })));
+const MashupPanel = lazy(() => import("@/components/modules/MashupPanel").then((m) => ({ default: m.MashupPanel })));
+const ProjectTrayPanel = lazy(() => import("@/components/modules/ProjectTrayPanel").then((m) => ({ default: m.ProjectTrayPanel })));
 
 const MODULES: { id: ModuleId; label: string; icon: typeof Disc3; size: { w: number; h: number } }[] = [
+  { id: "project-tray", label: "Projekt-Bus", icon: FolderOpen, size: { w: 360, h: 520 } },
   { id: "twin-deck", label: "Twin Decks", icon: Disc3, size: { w: 820, h: 460 } },
   { id: "sequencer", label: "Sequencer", icon: Grid3X3, size: { w: 720, h: 320 } },
+  { id: "remix",     label: "Remix",      icon: Wand2, size: { w: 420, h: 520 } },
+  { id: "autotune",  label: "Autotune",   icon: Mic2,  size: { w: 380, h: 460 } },
+  { id: "mashup",    label: "Mashup",     icon: Combine, size: { w: 420, h: 440 } },
   { id: "loop-pads", label: "Loop-Pads", icon: Layers, size: { w: 420, h: 460 } },
   { id: "vocal",     label: "Vocal-Layer", icon: Mic2, size: { w: 380, h: 320 } },
   { id: "coach",     label: "Coach", icon: Lightbulb, size: { w: 340, h: 220 } },
@@ -130,6 +138,10 @@ export function ModuleDock() {
               {id === "vocal" && !current && (
                 <p className="p-4 text-xs text-stage-foreground/60">Erst einen Track laden, dann Vocal-Layer öffnen.</p>
               )}
+              {id === "remix" && <RemixPanel />}
+              {id === "autotune" && <AutotunePanel />}
+              {id === "mashup" && <MashupPanel />}
+              {id === "project-tray" && <ProjectTrayPanel />}
             </FloatingPanel>
           );
         })}
