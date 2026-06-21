@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
 import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/loops'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
@@ -58,6 +59,11 @@ const AuthenticatedSoundpoolRoute = AuthenticatedSoundpoolRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPartyHostRoute = AuthenticatedPartyHostRouteImport.update({
+  id: '/party-host',
+  path: '/party-host',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedLoopsRoute = AuthenticatedLoopsRouteImport.update({
@@ -149,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
+  '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
@@ -171,6 +178,7 @@ export interface FileRoutesByTo {
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
+  '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/loops': typeof AuthenticatedLoopsRoute
+  '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
     | '/karaoke'
     | '/library'
     | '/loops'
+    | '/party-host'
     | '/settings'
     | '/soundpool'
     | '/admin/fx-review'
@@ -241,6 +251,7 @@ export interface FileRouteTypes {
     | '/karaoke'
     | '/library'
     | '/loops'
+    | '/party-host'
     | '/settings'
     | '/soundpool'
     | '/admin/fx-review'
@@ -264,6 +275,7 @@ export interface FileRouteTypes {
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
     | '/_authenticated/loops'
+    | '/_authenticated/party-host'
     | '/_authenticated/settings'
     | '/_authenticated/soundpool'
     | '/_authenticated/admin/fx-review'
@@ -330,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/party-host': {
+      id: '/_authenticated/party-host'
+      path: '/party-host'
+      fullPath: '/party-host'
+      preLoaderRoute: typeof AuthenticatedPartyHostRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/loops': {
@@ -446,6 +465,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedLoopsRoute: typeof AuthenticatedLoopsRoute
+  AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
@@ -463,6 +483,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedLoopsRoute: AuthenticatedLoopsRoute,
+  AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
