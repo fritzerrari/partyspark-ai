@@ -514,7 +514,15 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     const mode = plan.mode;
 
     // -------- GENRE-BRIDGE: a separate flow (uses pre-rendered snippet) --------
-    if (mode === "genreBridge" && bridgeBuffers[to] && bridgeFilter && bridgeGain) {
+    // pitchLock reuses the bridge pipeline (pre-rendered, tempo + key locked).
+    if ((mode === "genreBridge" || mode === "pitchLock") && bridgeFilter && bridgeGain) {
+      // Ensure bridge is ready (build on demand if needed).
+      if (!bridgeBuffers[to]) {
+        try { await useTwinDeck.getState().buildBridgeFor(to); } catch { /* noop */ }
+      }
+      if (!bridgeBuffers[to]) {
+        // No bridge possible → fall through to a crossfade.
+      } else {
       const bridge = bridgeBuffers[to]!;
       // Reset the standard pre-prime EQ — bridge handles its own taper.
       rampEqGain(toDeck.eqLow, -24, 0.05);
@@ -566,12 +574,56 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         transitionInFlight: false,
       });
       return;
+      }
     }
     // ------------------------------------------------------------------
 
     // Pre-prime EQ for incoming (bass-cut to slide in cleanly).
     rampEqGain(toDeck.eqLow, -24, 0.05);
     switch (mode) {
+      case "meetMiddle": {
+        // Mutual tempo ramp — both decks bend toward the geometric-mean BPM,
+        // incoming finishes back at its native tempo. EQ-crossfade in parallel.
+        const fBpm = fromTrack.bpm ?? 120;
+        const tBpm = toTrack.bpm ?? fBpm;
+        // kick off mutual ramp (don't await yet — it runs alongside EQ work)
+        const ramp = mutualTempoRamp(fromDeck.el, toDeck.el, fBpm, tBpm, xf * 1000);
+        rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
+        rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.5);
+        rampGain(toDeck.gain, toUserVol, xf);
+        const r = await ramp;
+        // restore outgoing rate (it's about to pause anyway)
+        try { if (fromDeck.el) fromDeck.el.playbackRate = 1; } catch { /* noop */ }
+        useTwinDeck.setState((s) => ({
+          [to]: { ...s[to], pitch: 1 },
+        } as Partial<BusState>));
+        recomputeEffective(to);
+        // Note enriched with midpoint info for the UI.
+        plan.note = `${plan.note} · mid ≈ ${r.midBpm.toFixed(1)} BPM`;
+        break;
+      }
+      case "pedalDrone": {
+        // Sustain a common-tone pad to mask the key jump, with a slow xfade.
+        if (ctx && masterGain) {
+          const root = commonTonePivot(fromTrack.musicalKey ?? null, toTrack.musicalKey ?? null);
+          const minor = (fromTrack.musicalKey ?? "").endsWith("m") || (toTrack.musicalKey ?? "").endsWith("m");
+          try { activeDroneStop?.(); } catch { /* noop */ }
+          activeDroneStop = playPedalDrone(ctx, masterGain, root, {
+            peakGain: 0.16,
+            attackSec: Math.min(2.5, xf * 0.25),
+            sustainSec: Math.max(2, xf * 0.6),
+            releaseSec: Math.min(3, xf * 0.4),
+            minor,
+          });
+        }
+        // Gentle EQ-swap underneath; high-end fades, lows swap on the beat.
+        rampEqGain(fromDeck.eqHigh, -6, xf * 0.5);
+        rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.6);
+        rampGain(toDeck.gain, toUserVol, xf);
+        break;
+      }
       case "filterSweep":
         rampFreq(fromDeck.filter, 180, xf);
         rampEqGain(fromDeck.eqHigh, -12, xf * 0.7);
