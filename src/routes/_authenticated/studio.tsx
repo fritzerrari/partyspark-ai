@@ -366,7 +366,7 @@ function Studio() {
 
         {tracks.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center text-sm text-muted-foreground">
-            <Disc3 className="h-12 w-12 animate-spin-slow text-muted-foreground/50" />
+            <Disc3 className="h-12 w-12 text-muted-foreground/50" />
             <p>Noch keine Spuren. Klicke <strong>Aufnehmen</strong> für deine erste Tonspur.</p>
             <p className="text-xs">Mit aktivem <em>Overdub</em> kannst du weitere Layer dazumischen.</p>
           </div>
