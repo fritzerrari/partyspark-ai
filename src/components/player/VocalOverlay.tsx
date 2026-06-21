@@ -182,7 +182,7 @@ export function VocalOverlay({ open, onClose }: { open: boolean; onClose: () => 
       const { error } = await supabase.storage.from("recordings").upload(path, wav, { contentType: "audio/wav" });
       if (error) throw error;
       await supabase.from("recordings").insert({
-        user_id: user!.id,
+        owner_id: user!.id,
         title: `${current.title} (Vocal Mix)`,
         storage_path: path,
         kind: "karaoke",
