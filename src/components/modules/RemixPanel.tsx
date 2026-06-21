@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Wand2, Play, Pause, Plus } from "lucide-react";
+import { Wand2, Play, Pause, Plus, Disc3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { AutoMagicButton } from "@/components/ui/AutoMagicButton";
 import { Led } from "@/components/ui/LedIndicator";
 import { useProject, useArtifactsByKind, type ProjectArtifact } from "@/lib/project/store";
 import { useEngine } from "@/lib/audio/engine";
+import { useTwinDeck } from "@/lib/audio/twinDeckBus";
 import { buildRemix, type RemixStyle } from "@/lib/audio/remix";
 import { decodeToBuffer } from "@/lib/audio/analyze";
 
@@ -24,6 +25,7 @@ export function RemixPanel() {
   const addArtifact = useProject((s) => s.addArtifact);
   const toEngineTrack = useProject((s) => s.toEngineTrack);
   const loadQueue = useEngine((s) => s.loadQueue);
+  const loadDeck = useTwinDeck((s) => s.loadDeck);
   const [sel, setSel] = useState<string>("");
   const [bpm, setBpm] = useState(124);
   const [length, setLength] = useState<60 | 90 | 120 | 150>(90);
@@ -32,7 +34,7 @@ export function RemixPanel() {
   const [progress, setProgress] = useState<{ label: string; pct: number } | null>(null);
   const [lastId, setLastId] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
-  const previewRef = useState<{ a: HTMLAudioElement | null }>({ a: null })[0];
+  const previewRef = useRef<HTMLAudioElement | null>(null);
 
   const selected = useMemo(() => sources.find((s) => s.id === sel) ?? sources[0] ?? null, [sources, sel]);
 
@@ -89,13 +91,13 @@ export function RemixPanel() {
 
   function preview() {
     if (!lastId) return;
-    if (previewRef.a) { previewRef.a.pause(); previewRef.a = null; setPreviewing(false); return; }
+    if (previewRef.current) { previewRef.current.pause(); previewRef.current = null; setPreviewing(false); return; }
     const engineTrack = toEngineTrack(lastId);
     if (!engineTrack?.url) return;
     const a = new Audio(engineTrack.url);
-    a.onended = () => { setPreviewing(false); previewRef.a = null; };
+    a.onended = () => { setPreviewing(false); previewRef.current = null; };
     a.play().catch(() => {});
-    previewRef.a = a;
+    previewRef.current = a;
     setPreviewing(true);
   }
 
@@ -105,6 +107,14 @@ export function RemixPanel() {
     if (!t) { toast.error("Konnte nicht laden"); return; }
     loadQueue([t], { autoplay: false });
     toast.success("Auf Deck A geladen");
+  }
+
+  async function sendToTwinDeck(side: "A" | "B") {
+    if (!lastId) return;
+    const t = toEngineTrack(lastId);
+    if (!t) { toast.error("Konnte nicht laden"); return; }
+    await loadDeck(side, t);
+    toast.success(`Cockpit-Deck ${side} bereit`);
   }
 
   return (
@@ -183,6 +193,9 @@ export function RemixPanel() {
           </Button>
           <Button size="sm" variant="ghost" className="rounded-full text-stage-foreground" onClick={sendToDeck} title="Auf Deck A">
             <Plus className="h-3 w-3" /> Deck
+          </Button>
+          <Button size="sm" variant="ghost" className="rounded-full text-stage-foreground" onClick={() => sendToTwinDeck("B")} title="Cockpit Deck B">
+            <Disc3 className="h-3 w-3" /> B
           </Button>
         </div>
       )}
