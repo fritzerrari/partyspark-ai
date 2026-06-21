@@ -128,13 +128,22 @@ function wireDeck(side: DeckSide) {
   if (!d.src && d.el) {
     try {
       d.src = ctx.createMediaElementSource(d.el);
+      d.eqLow = ctx.createBiquadFilter();
+      d.eqLow.type = "lowshelf"; d.eqLow.frequency.value = 120; d.eqLow.gain.value = 0;
+      d.eqMid = ctx.createBiquadFilter();
+      d.eqMid.type = "peaking"; d.eqMid.frequency.value = 1000; d.eqMid.Q.value = 1; d.eqMid.gain.value = 0;
+      d.eqHigh = ctx.createBiquadFilter();
+      d.eqHigh.type = "highshelf"; d.eqHigh.frequency.value = 6000; d.eqHigh.gain.value = 0;
       d.filter = ctx.createBiquadFilter();
       d.filter.type = "lowpass";
       d.filter.frequency.value = 22000;
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
-      d.src.connect(d.filter);
+      d.src.connect(d.eqLow);
+      d.eqLow.connect(d.eqMid);
+      d.eqMid.connect(d.eqHigh);
+      d.eqHigh.connect(d.filter);
       d.filter.connect(d.gain);
       d.gain.connect(masterGain);
     } catch {
@@ -163,6 +172,88 @@ function resetFilter(side: DeckSide) {
   f.type = "lowpass";
   f.frequency.cancelScheduledValues(ctx.currentTime);
   f.frequency.setValueAtTime(22000, ctx.currentTime);
+}
+function rampEqGain(node: BiquadFilterNode | null, dB: number, sec: number) {
+  if (!node || !ctx) return;
+  const now = ctx.currentTime;
+  node.gain.cancelScheduledValues(now);
+  node.gain.setValueAtTime(node.gain.value, now);
+  node.gain.linearRampToValueAtTime(dB, now + Math.max(0.05, sec));
+}
+function resetEq(side: DeckSide) {
+  const d = deck[side];
+  if (!ctx) return;
+  for (const n of [d.eqLow, d.eqMid, d.eqHigh]) {
+    if (!n) continue;
+    n.gain.cancelScheduledValues(ctx.currentTime);
+    n.gain.setValueAtTime(0, ctx.currentTime);
+  }
+}
+
+/** Choose effective BPM ratio considering half/double-time matches. */
+function tempoRatio(fromBpm: number, toBpm: number): number {
+  const candidates = [toBpm, toBpm * 2, toBpm / 2];
+  let best = toBpm;
+  let bestDiff = Infinity;
+  for (const c of candidates) {
+    const d = Math.abs(c - fromBpm) / fromBpm;
+    if (d < bestDiff) { bestDiff = d; best = c; }
+  }
+  // ratio applied to incoming playbackRate to match outgoing
+  return fromBpm / best;
+}
+
+/** Sync incoming deck's playbackRate so its perceived BPM matches outgoing. */
+function syncTempo(from: DeckSide, to: DeckSide): number {
+  const st = useTwinDeck.getState();
+  const fb = st[from].track?.bpm;
+  const tb = st[to].track?.bpm;
+  const fromRate = deck[from].el?.playbackRate ?? 1;
+  if (!fb || !tb) return 1;
+  const ratio = tempoRatio(fb * fromRate, tb);
+  const clamped = Math.max(0.88, Math.min(1.12, ratio));
+  if (deck[to].el) deck[to].el.playbackRate = clamped;
+  useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: clamped } } as Partial<BusState>));
+  return clamped;
+}
+
+/** Align incoming deck so its next downbeat falls on outgoing's next downbeat. */
+function beatAlign(from: DeckSide, to: DeckSide) {
+  const st = useTwinDeck.getState();
+  const fGrid = st[from].track?.beatGrid;
+  const tGrid = st[to].track?.beatGrid;
+  const fEl = deck[from].el;
+  const tEl = deck[to].el;
+  if (!fEl || !tEl) return;
+  const fNow = fEl.currentTime;
+  // next from-beat at least 80ms ahead so we don't miss it
+  const fNext = (fGrid && fGrid.length)
+    ? (fGrid.find((b) => b > fNow + 0.08) ?? fNow + 0.5)
+    : fNow + 0.5;
+  const dt = fNext - fNow; // seconds until alignment in wall-clock (rates are now ~equal)
+  // find a downbeat-ish beat in `to` (every 4th) near startAtSec
+  const tStart = tEl.currentTime;
+  let tBeat = tStart;
+  if (tGrid && tGrid.length) {
+    // prefer downbeats (every 4 beats) closest to current position
+    const downs = tGrid.filter((_, i) => i % 4 === 0);
+    tBeat = downs.find((b) => b >= tStart) ?? tGrid.find((b) => b >= tStart) ?? tStart;
+  }
+  // we want tBeat to play `dt` seconds from now → set currentTime = tBeat - dt
+  const adjusted = Math.max(0, tBeat - dt);
+  try { tEl.currentTime = adjusted; } catch { /* noop */ }
+}
+
+async function waitForNextBeat(side: DeckSide, maxMs = 2000): Promise<void> {
+  const st = useTwinDeck.getState();
+  const grid = st[side].track?.beatGrid;
+  const el = deck[side].el;
+  if (!el || !grid || !grid.length) return;
+  const now = el.currentTime;
+  const next = grid.find((b) => b > now + 0.04);
+  if (!next) return;
+  const waitMs = Math.min(maxMs, Math.max(0, (next - now) * 1000 / (el.playbackRate || 1)));
+  await new Promise((r) => setTimeout(r, waitMs));
 }
 
 function applyCrossfader(state: BusState) {
