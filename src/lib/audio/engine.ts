@@ -556,7 +556,10 @@ export const useEngine = create<State & Actions>((set, get) => ({
   bumpEnergy: (delta) => set({ energy: Math.max(0, Math.min(100, get().energy + delta)) }),
   setMood: (m) => set({ mood: m }),
   getAnalyser: () => analyser,
-  setTransitionMode: (m) => set({ transitionMode: m }),
+  setTransitionMode: (m) => {
+    set({ transitionMode: m });
+    setTimeout(() => useEngine.getState().rebuildPlan(), 50);
+  },
   setStingerUrl: (url) => set({ stingerUrl: url }),
   setAutoDj: (on) => {
     set({ autoDj: on });
