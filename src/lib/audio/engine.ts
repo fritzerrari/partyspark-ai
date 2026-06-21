@@ -13,6 +13,11 @@ export type EngineTrack = {
   durationSec?: number | null;
   bpm?: number | null;
   energy?: number | null;
+  camelot?: string | null;
+  musicalKey?: string | null;
+  beatGrid?: number[] | null;
+  cues?: { introEnd: number; firstDrop: number; outroStart: number } | null;
+  vocalMap?: { t: number; voiced: number }[] | null;
 };
 
 export type TransitionMode = "crossfade" | "cut" | "fadeGap" | "filterSweep" | "echoTail" | "stinger";
@@ -38,6 +43,7 @@ type State = {
   mood: string;
   transitionMode: TransitionMode;
   stingerUrl: string | null;
+  autoDj: boolean;
 };
 
 type Actions = {
@@ -56,6 +62,11 @@ type Actions = {
   getAnalyser: () => AnalyserNode | null;
   setTransitionMode: (m: TransitionMode) => void;
   setStingerUrl: (url: string | null) => void;
+  setAutoDj: (on: boolean) => void;
+  getAudioElement: () => HTMLAudioElement | null;
+  getAudioContext: () => AudioContext | null;
+  getMasterNode: () => AudioNode | null;
+  nextBeatTime: (fromSec?: number) => number;
 };
 
 let audioEl: HTMLAudioElement | null = null;
