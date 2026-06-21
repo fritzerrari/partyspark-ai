@@ -8,8 +8,17 @@ import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/layout/AppShell";
 import { Loader2 } from "lucide-react";
 
+function PendingScreen() {
+  return (
+    <div className="grid min-h-screen place-items-center brand-gradient">
+      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+    </div>
+  );
+}
+
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
+  pendingComponent: PendingScreen,
   component: AuthedLayout,
 });
 
@@ -21,13 +30,7 @@ function AuthedLayout() {
     if (!loading && !user) navigate({ to: "/auth", replace: true });
   }, [loading, user, navigate]);
 
-  if (loading || !user) {
-    return (
-      <div className="grid min-h-screen place-items-center brand-gradient">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (loading || !user) return <PendingScreen />;
 
   return (
     <AppShell>
