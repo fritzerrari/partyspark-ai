@@ -161,6 +161,8 @@ function Cockpit() {
         <FxPadGrid />
       </div>
 
+      <MicRecorder title="Vocal Drop Studio (Live FX)" />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <StepSequencer />
         <CoachHud />
