@@ -861,6 +861,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         vocalMap: a.vocalMap,
       };
       set((s) => ({ [side]: { ...s[side], track: enriched, analyzing: false, analyzeProgress: 100 } } as Partial<BusState>));
+      recomputeEffective(side);
+      // (Re)build bridge for this side now that analysis is fresh.
+      const other: DeckSide = side === "A" ? "B" : "A";
+      if (get()[other].track?.bpm) {
+        void get().buildBridgeFor(side).catch(() => {});
+      }
       // Persist to DB (best-effort)
       void persistAnalysis(t.id, a);
     } catch (e) {
