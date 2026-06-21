@@ -12,7 +12,7 @@ const Input = z.object({
 /** Generate a square cover image via Gemini Flash Image. Returns a data URL. */
 export const generateCoverArt = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const key = requireKey();
     const vibe = data.vibe?.trim() || "party karaoke vibrant neon";

@@ -20,6 +20,7 @@ import {
   AudioWaveform,
   Users,
   Wand2,
+  Compass,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
@@ -39,6 +40,7 @@ const NAV = [
 
 // Secondary nav (More menu on mobile, sidebar on desktop).
 const SECONDARY = [
+  { to: "/wizard", label: "Studio-Wizard", icon: Compass },
   { to: "/soundpool", label: "Soundpool", icon: Layers },
   { to: "/loops", label: "Loop Creator", icon: Repeat },
   { to: "/karaoke", label: "Karaoke", icon: Mic },

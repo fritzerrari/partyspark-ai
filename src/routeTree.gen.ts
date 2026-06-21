@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
+import { Route as AuthenticatedWizardRouteImport } from './routes/_authenticated/wizard'
 import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
 import { Route as AuthenticatedSoundDesignerRouteImport } from './routes/_authenticated/sound-designer'
@@ -71,6 +72,11 @@ const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
   id: '/api/transcribe',
   path: '/api/transcribe',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedWizardRoute = AuthenticatedWizardRouteImport.update({
+  id: '/wizard',
+  path: '/wizard',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
   id: '/studio',
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/wizard': typeof AuthenticatedWizardRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/studio': typeof AuthenticatedStudioRoute
+  '/wizard': typeof AuthenticatedWizardRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
@@ -306,6 +314,7 @@ export interface FileRoutesById {
   '/_authenticated/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/studio': typeof AuthenticatedStudioRoute
+  '/_authenticated/wizard': typeof AuthenticatedWizardRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/_authenticated/fx/$fxId': typeof AuthenticatedFxFxIdRoute
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | '/sound-designer'
     | '/soundpool'
     | '/studio'
+    | '/wizard'
     | '/api/transcribe'
     | '/admin/fx-review'
     | '/fx/$fxId'
@@ -376,6 +386,7 @@ export interface FileRouteTypes {
     | '/sound-designer'
     | '/soundpool'
     | '/studio'
+    | '/wizard'
     | '/api/transcribe'
     | '/admin/fx-review'
     | '/fx/$fxId'
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | '/_authenticated/sound-designer'
     | '/_authenticated/soundpool'
     | '/_authenticated/studio'
+    | '/_authenticated/wizard'
     | '/api/transcribe'
     | '/_authenticated/admin/fx-review'
     | '/_authenticated/fx/$fxId'
@@ -479,6 +491,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/transcribe'
       preLoaderRoute: typeof ApiTranscribeRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/wizard': {
+      id: '/_authenticated/wizard'
+      path: '/wizard'
+      fullPath: '/wizard'
+      preLoaderRoute: typeof AuthenticatedWizardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/studio': {
       id: '/_authenticated/studio'
@@ -690,6 +709,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSoundDesignerRoute: typeof AuthenticatedSoundDesignerRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
+  AuthenticatedWizardRoute: typeof AuthenticatedWizardRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
   AuthenticatedFxFxIdRoute: typeof AuthenticatedFxFxIdRoute
   AuthenticatedFxUploadRoute: typeof AuthenticatedFxUploadRoute
@@ -717,6 +737,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSoundDesignerRoute: AuthenticatedSoundDesignerRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedStudioRoute: AuthenticatedStudioRoute,
+  AuthenticatedWizardRoute: AuthenticatedWizardRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
   AuthenticatedFxFxIdRoute: AuthenticatedFxFxIdRoute,
   AuthenticatedFxUploadRoute: AuthenticatedFxUploadRoute,
