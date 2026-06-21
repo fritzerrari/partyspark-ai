@@ -20,9 +20,14 @@ import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
+import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
 import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
+import { Route as AuthenticatedFxUploadRouteImport } from './routes/_authenticated/fx/upload'
+import { Route as AuthenticatedFxFxIdRouteImport } from './routes/_authenticated/fx/$fxId'
+import { Route as AuthenticatedAdminFxReviewRouteImport } from './routes/_authenticated/admin/fx-review'
+import { Route as ApiPublicHooksStorageCleanupRouteImport } from './routes/api/public/hooks/storage-cleanup'
 
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
@@ -78,6 +83,11 @@ const AuthenticatedAiLabRoute = AuthenticatedAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedFxIndexRoute = AuthenticatedFxIndexRouteImport.update({
+  id: '/fx/',
+  path: '/fx/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const PPartyIdGuestRoute = PPartyIdGuestRouteImport.update({
   id: '/p/$partyId/guest',
   path: '/p/$partyId/guest',
@@ -94,6 +104,28 @@ const AuthenticatedPartiesPartyIdRoute =
     path: '/parties/$partyId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedFxUploadRoute = AuthenticatedFxUploadRouteImport.update({
+  id: '/fx/upload',
+  path: '/fx/upload',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFxFxIdRoute = AuthenticatedFxFxIdRouteImport.update({
+  id: '/fx/$fxId',
+  path: '/fx/$fxId',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAdminFxReviewRoute =
+  AuthenticatedAdminFxReviewRouteImport.update({
+    id: '/admin/fx-review',
+    path: '/admin/fx-review',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const ApiPublicHooksStorageCleanupRoute =
+  ApiPublicHooksStorageCleanupRouteImport.update({
+    id: '/api/public/hooks/storage-cleanup',
+    path: '/api/public/hooks/storage-cleanup',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -106,9 +138,14 @@ export interface FileRoutesByFullPath {
   '/loops': typeof AuthenticatedLoopsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
+  '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
+  '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
+  '/fx/upload': typeof AuthenticatedFxUploadRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
+  '/fx/': typeof AuthenticatedFxIndexRoute
+  '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -121,9 +158,14 @@ export interface FileRoutesByTo {
   '/loops': typeof AuthenticatedLoopsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
+  '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
+  '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
+  '/fx/upload': typeof AuthenticatedFxUploadRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
+  '/fx': typeof AuthenticatedFxIndexRoute
+  '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -138,9 +180,14 @@ export interface FileRoutesById {
   '/_authenticated/loops': typeof AuthenticatedLoopsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
+  '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
+  '/_authenticated/fx/$fxId': typeof AuthenticatedFxFxIdRoute
+  '/_authenticated/fx/upload': typeof AuthenticatedFxUploadRoute
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
+  '/_authenticated/fx/': typeof AuthenticatedFxIndexRoute
+  '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -155,9 +202,14 @@ export interface FileRouteTypes {
     | '/loops'
     | '/settings'
     | '/soundpool'
+    | '/admin/fx-review'
+    | '/fx/$fxId'
+    | '/fx/upload'
     | '/parties/$partyId'
     | '/parties/new'
     | '/p/$partyId/guest'
+    | '/fx/'
+    | '/api/public/hooks/storage-cleanup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -170,9 +222,14 @@ export interface FileRouteTypes {
     | '/loops'
     | '/settings'
     | '/soundpool'
+    | '/admin/fx-review'
+    | '/fx/$fxId'
+    | '/fx/upload'
     | '/parties/$partyId'
     | '/parties/new'
     | '/p/$partyId/guest'
+    | '/fx'
+    | '/api/public/hooks/storage-cleanup'
   id:
     | '__root__'
     | '/'
@@ -186,9 +243,14 @@ export interface FileRouteTypes {
     | '/_authenticated/loops'
     | '/_authenticated/settings'
     | '/_authenticated/soundpool'
+    | '/_authenticated/admin/fx-review'
+    | '/_authenticated/fx/$fxId'
+    | '/_authenticated/fx/upload'
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
     | '/p/$partyId/guest'
+    | '/_authenticated/fx/'
+    | '/api/public/hooks/storage-cleanup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -197,6 +259,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
   PPartyIdGuestRoute: typeof PPartyIdGuestRoute
+  ApiPublicHooksStorageCleanupRoute: typeof ApiPublicHooksStorageCleanupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -278,6 +341,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAiLabRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/fx/': {
+      id: '/_authenticated/fx/'
+      path: '/fx'
+      fullPath: '/fx/'
+      preLoaderRoute: typeof AuthenticatedFxIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/p/$partyId/guest': {
       id: '/p/$partyId/guest'
       path: '/p/$partyId/guest'
@@ -299,6 +369,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPartiesPartyIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/fx/upload': {
+      id: '/_authenticated/fx/upload'
+      path: '/fx/upload'
+      fullPath: '/fx/upload'
+      preLoaderRoute: typeof AuthenticatedFxUploadRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/fx/$fxId': {
+      id: '/_authenticated/fx/$fxId'
+      path: '/fx/$fxId'
+      fullPath: '/fx/$fxId'
+      preLoaderRoute: typeof AuthenticatedFxFxIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/fx-review': {
+      id: '/_authenticated/admin/fx-review'
+      path: '/admin/fx-review'
+      fullPath: '/admin/fx-review'
+      preLoaderRoute: typeof AuthenticatedAdminFxReviewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/hooks/storage-cleanup': {
+      id: '/api/public/hooks/storage-cleanup'
+      path: '/api/public/hooks/storage-cleanup'
+      fullPath: '/api/public/hooks/storage-cleanup'
+      preLoaderRoute: typeof ApiPublicHooksStorageCleanupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -310,8 +408,12 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLoopsRoute: typeof AuthenticatedLoopsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
+  AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
+  AuthenticatedFxFxIdRoute: typeof AuthenticatedFxFxIdRoute
+  AuthenticatedFxUploadRoute: typeof AuthenticatedFxUploadRoute
   AuthenticatedPartiesPartyIdRoute: typeof AuthenticatedPartiesPartyIdRoute
   AuthenticatedPartiesNewRoute: typeof AuthenticatedPartiesNewRoute
+  AuthenticatedFxIndexRoute: typeof AuthenticatedFxIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -322,8 +424,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLoopsRoute: AuthenticatedLoopsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
+  AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
+  AuthenticatedFxFxIdRoute: AuthenticatedFxFxIdRoute,
+  AuthenticatedFxUploadRoute: AuthenticatedFxUploadRoute,
   AuthenticatedPartiesPartyIdRoute: AuthenticatedPartiesPartyIdRoute,
   AuthenticatedPartiesNewRoute: AuthenticatedPartiesNewRoute,
+  AuthenticatedFxIndexRoute: AuthenticatedFxIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -335,6 +441,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
   PPartyIdGuestRoute: PPartyIdGuestRoute,
+  ApiPublicHooksStorageCleanupRoute: ApiPublicHooksStorageCleanupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

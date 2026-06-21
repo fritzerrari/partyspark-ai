@@ -1,87 +1,83 @@
-## PartyPilot AI — Phase 1 build
+## Community Sound-FX Marketplace + Storage Management
 
-A consumer AI-DJ SaaS for normal people. Phase 1 ships the entire UI, real auth, real database, real MP3 upload + playback. AI/audio-DSP features (beatmatch, autotune, harmonies, real-time loops) ship as polished placeholder UIs wired to the same data model — ready to be filled in Phase 2/3.
+### Konzept
+User können kurze Sound-FX (Airhorns, Drops, Risers, Sirens, Sweeper, Voice-Tags) für die gesamte PartyPilot-Community veröffentlichen. Andere User entdecken, bewerten und verwenden sie in ihren Parties. Ein Admin-Approval sichert Qualität & Rechte. Speicherplatz wird durch harte Quotas, Auto-Cleanup und Komprimierung im Griff gehalten.
 
-### Design direction
-Single committed direction (the directions tool needs an existing UI to compare against, which we don't have yet — easy to iterate after).
+### Funktionsumfang
 
-- **Palette**: primary `#00A4D1`, accent `#FECC17` (reserved for the single primary action per surface), dark surface `#0F172A`, app background `#F8FAFC`, success `#22C55E`.
-- **Type**: Outfit (display) + Figtree (body) via `@fontsource`.
-- **Surfaces**: soft brand gradients on light bg; the Player + Control Center sit on a dark glassy surface for contrast. Glassmorphism used with restraint (no frosted-everything).
-- **Controls**: large, rounded, thumb-zone bottom bar on mobile; promotes to a command-deck layout ≥ md.
-- **Motion**: pulsing energy meter, shimmering waveform, mood pill that morphs color, press-and-hold "Party Boost".
-- Mobile-first, responsive (grid + `min-w-0` + `shrink-0` pattern for header rows).
+**Für alle User (Browse & Use)**
+- Neue Route `/fx` — Community FX Library mit Tabs: *Trending · Top Rated · Neu · Meine FX*
+- Filter nach Kategorie (Drop, Riser, Airhorn, Sweep, Voice, Impact, FX), Tag, Dauer, BPM
+- 1-Click Preview (Waveform + Play), 5-Sterne-Bewertung, "Use in Party" Button
+- Detailseite mit Bewertungen, Kommentaren (optional Phase 2), Uploader-Profil
+- Report-Button (Spam, Copyright, NSFW)
 
-### Pages & routes
-TanStack file-based routing under `src/routes/`.
+**Für Creator (Upload)**
+- Upload-Formular: Titel, Beschreibung, Kategorie, Tags, Datei (max **30 Sek**, max 2 MB)
+- Server-seitige Validierung: Dauer, Bitrate, Hash-Dedup
+- Status: `pending → approved | rejected` — sichtbar im "Meine FX"-Tab
+- Auto-Transcoding auf 128 kbps OGG (kleiner als MP3, lizenzfrei)
 
-Public:
-- `/` Landing — hero, "Create a party in 2 minutes" promise, feature strip, social proof, pricing teaser, CTA.
-- `/pricing` — Free / Host / Pro tiers (UI only).
-- `/auth` — email + password sign-in/sign-up.
+**Für Admins (Moderation)**
+- Neue Route `/admin/fx-review` (nur Rolle `admin`)
+- Queue mit Pending Uploads, Approve/Reject + Reject-Grund
+- Übersicht: Reports, Storage-Usage pro User, Top FX
 
-Authenticated (`/_authenticated/*`, integration-managed gate):
-- `/dashboard` — upcoming + past parties, quick "Start a party", recent activity.
-- `/parties/new` — 4-step Create Party Wizard (event type → guest age range → music prefs → duration). Generates a party + initial AI-suggested timeline (mock generator).
-- `/parties/$partyId` — **Party Control Center** (the heart): NOW PLAYING card (artwork, title, artist, waveform/progress), UP NEXT card, Energy meter (0–100), Mood pill (Warm-up / Build / Peak / Sing-along / Wind-down), horizontal Party Timeline with phases + playhead, transport (Play/Pause/Skip) + Party Boost / Energy Up / Energy Down / Create Moment.
-- `/parties/$partyId/guest` — public-feeling Guest Interaction Screen (song requests, reactions, karaoke entry).
-- `/library` — Music Library: upload MP3, search, favorite, organize playlists, beautiful artwork placeholders.
-- `/loops` — Loop Creator: mic record, layered loop pads, mute/delete, volume.
-- `/karaoke` — Guest Karaoke Mode: giant mic button, recordings as cards, AI vocal effects "coming soon".
-- `/soundpool` — Sound Pool: category grid (Hip Hop, Country, Rock, Dance, Worship, Pop, Party FX, Drums, Bass, Piano, Vocals), sound pack cards (purchase-ready UI).
-- `/ai-lab` — Future AI Features: Coming Soon cards (Autotune, Remix, Mashups, Party Host, Choir, Vocal Producer, Sound Designer, Crowd Reactions, Party Moments).
-- `/settings` — profile, audio engine settings (BPM/key/beatmatch/crossfade/mood/energy toggles — UI placeholders), notifications.
+**Ranking (Wilson Score)**
+- Sterne 1–5 + Anzahl Ratings → Wilson Lower Bound für faires Trending
+- Trending-Score = `wilson * recency_decay(7d half-life)` + Play-Boost
+- Materialized View `fx_rankings`, alle 15 Min via pg_cron refreshed
 
-### What actually works in Phase 1
-- Email + password auth (HIBP enabled).
-- Create/edit parties, playlists, tracks, recordings, loops in the DB.
-- Upload MP3 → Supabase Storage `tracks` bucket (private, signed URLs).
-- Global audio engine (single `<audio>` via Zustand store + React context) powering: play/pause/skip, queue from a playlist, simple linear-volume crossfade between tracks, progress bar, waveform visualizer (Web Audio `AnalyserNode`), favorite, energy/mood as user-adjustable values persisted to the party row.
-- Mic recording for karaoke + loops via `MediaRecorder` → stored in `recordings` bucket; playback in-app.
-- Guest screen reads party state in realtime (Supabase Realtime subscription to `parties` + `track_queue`).
+**Storage-Management**
+- **Per-User-Quota** (gespeichert in `settings`):
+  - Free: 50 MB FX + 200 MB Tracks
+  - Pro (Platzhalter): 500 MB FX + 5 GB Tracks
+- Upload prüft Quota vor Storage-PUT, klare UI-Anzeige (Progress Bar in Settings)
+- **Auto-Cleanup** (täglicher pg_cron Job → `/api/public/hooks/storage-cleanup`):
+  - Eigene Tracks ohne Plays seit 90 Tagen → User-Warnung per Flag, Löschung nach 14 Tagen Grace
+  - Abgelehnte FX → sofort Storage-Delete, DB-Row 30 Tage zur Nachvollziehbarkeit
+  - Verwaiste Storage-Objekte (DB-Row fehlt) → wöchentlich gepurged
+- **Komprimierung & Dedup** beim Upload:
+  - SHA-256 Hash → existiert Datei bereits, neue DB-Row zeigt auf gleiches Storage-Objekt (Reference Counting)
+  - Transcode FX zu 128 kbps OGG (Server-Fn, ffmpeg-wasm im Worker)
+- Globales Storage-Dashboard für Admin (gesamt, pro User, Top-Verbraucher)
 
-### What's placeholder UI (Phase 2/3)
-- Real BPM/key detection, beatmatching, harmonic mixing, AI autotune/harmonies/choir, AI party host, AI moments.
-- Sound pack purchases (Stripe wiring later).
-- These have full settings screens, Coming Soon cards, and feature flags in `settings`.
+### Technische Umsetzung
 
-### Database (Supabase via Lovable Cloud)
-Tables, all with RLS scoped to `auth.uid()` and `GRANT`s for `authenticated` + `service_role`:
+**Neue DB-Schema (Migration)**
+- `community_fx` — title, description, category, tags[], duration_s, bpm?, storage_path, file_hash, file_size, uploader_id, status (pending/approved/rejected), reject_reason, play_count, created_at, approved_at
+- `community_fx_ratings` — fx_id, user_id, stars (1–5), unique(fx_id, user_id)
+- `community_fx_plays` — fx_id, user_id, party_id?, played_at (für Trending + Cleanup-Signale)
+- `community_fx_reports` — fx_id, reporter_id, reason, status, created_at
+- Materialized View `community_fx_rankings` — fx_id, avg_stars, rating_count, wilson_score, trending_score
+- `storage_quotas` (oder Felder in `settings`) — fx_bytes_used, tracks_bytes_used, fx_quota_bytes, tracks_quota_bytes
+- `tracks` erweitern: `last_played_at`, `cleanup_warned_at`
+- RLS: FX lesbar wenn `status='approved'` (TO anon + authenticated); Insert nur authenticated mit eigenem uploader_id; Update/Delete nur Owner oder Admin; Ratings nur authenticated, ein Stern pro User
+- GRANTs auf allen public-Tables, `has_role('admin')` für Moderationsrechte
+- Neue Storage Buckets: `community-fx` (public read für approved), private staging-Pfad für pending
 
-- `profiles` (id → auth.users, display_name, avatar_url, created_at) + signup trigger.
-- `parties` (id, host_id, name, event_type, guest_age_range, duration_min, vibe_prefs jsonb, status, current_energy int, current_mood text, current_track_id, started_at, ends_at).
-- `playlists` (id, owner_id, party_id nullable, name, cover_url).
-- `tracks` (id, owner_id, title, artist, duration_sec, bpm nullable, music_key nullable, energy int, mood text, storage_path, artwork_url).
-- `playlist_tracks` (playlist_id, track_id, position) — join.
-- `track_queue` (id, party_id, track_id, position, played_at nullable) — live queue powering the Control Center.
-- `recordings` (id, owner_id, party_id nullable, kind enum: karaoke|wish|fx, storage_path, duration_sec).
-- `loops` (id, owner_id, party_id nullable, name, storage_path, bpm, is_muted, volume).
-- `soundpacks` (id, name, category, cover_url, price_cents, is_published) — public read, admin write.
-- `user_soundpacks` (user_id, soundpack_id) — ownership.
-- `settings` (user_id PK, autodj_enabled, crossfade_sec, energy_management, beat_match, harmonic_mix, notifications jsonb).
-- `user_roles` + `app_role` enum + `has_role()` SECURITY DEFINER (admin gate for soundpack management).
+**Server Functions (`createServerFn` + `requireSupabaseAuth`)**
+- `uploadFx` — Hash-Check, Quota-Check, Transcode, Storage-PUT, DB-Insert (status=pending)
+- `rateFx` — Upsert Rating, Trigger Re-Score
+- `playFx` — Insert Play-Event (für Trending + last_used)
+- `reportFx` — Insert Report
+- `adminApproveFx` / `adminRejectFx` — guard via `has_role('admin')`
+- `getMyStorageUsage` — Quota-Status für Settings-Page
 
-Storage buckets: `tracks` (private), `recordings` (private), `artwork` (public), `soundpack-covers` (public).
+**Public Routes (Worker)**
+- `/api/public/hooks/storage-cleanup` — pg_cron daily, signiert via apikey
+- `/api/public/hooks/refresh-rankings` — pg_cron alle 15 Min
 
-Seed migration inserts a starter library: 8 demo tracks (metadata only, no audio), 12 soundpacks across the categories, 3 demo playlists, sample party.
+**Frontend (mobile-first wie bestehend)**
+- `src/routes/_authenticated/fx/index.tsx` — Library mit Tabs, Card-Grid, Bottom-Sheet Filter
+- `src/routes/_authenticated/fx/upload.tsx` — Wizard (File → Metadata → Preview → Submit)
+- `src/routes/_authenticated/fx/$fxId.tsx` — Detail (Waveform, Rating, Use-in-Party)
+- `src/routes/_authenticated/admin/fx-review.tsx` — Admin-Only Queue
+- AppShell: neuer Tab "FX" (ersetzt "Sounds" oder als 6. Eintrag im More-Sheet), in Bottom-Nav mobile
+- Settings-Page: Storage-Quota-Widget mit Progress-Bars + Cleanup-Button
 
-### Technical notes
-- TanStack Start + Query: loader uses `ensureQueryData` + component uses `useSuspenseQuery`. Public routes call public server fns; authed routes call `requireSupabaseAuth` fns.
-- Global audio engine lives in `src/lib/audio/engine.ts` (browser-only, Zustand store, one `HTMLAudioElement` + `AudioContext` + `AnalyserNode`). Mounted once in `_authenticated/route.tsx` via a `<PlayerProvider>`.
-- Realtime: Control Center + Guest screen subscribe to `parties:id=eq.$partyId` and `track_queue:party_id=eq.$partyId`.
-- Auth attacher already wired by integration; we just consume `requireSupabaseAuth`.
-- All colors via semantic tokens in `src/styles.css` `@theme`; no hardcoded `bg-[#...]` in components.
-- Server fns live in `src/lib/*.functions.ts` (never under `src/server/`); admin client imported only inside handlers via `await import(...)`.
+**Admin-Bootstrapping**
+- `fritz.geiling@googlemail.com` bekommt `admin` Rolle via `user_roles` (Migration oder Insert)
 
-### Out of scope (explicit)
-Real BPM/key detection, real beatmatching, real autotune/harmonies, payments, mobile native apps, SMS invites. All have UI hooks ready.
-
-### Build order
-1. Enable Lovable Cloud, run schema migration + seed, configure email auth + HIBP.
-2. Design tokens, fonts, layout shell, landing + pricing + auth pages.
-3. Dashboard + Create Party Wizard.
-4. Audio engine + Music Library (upload, list, play).
-5. Party Control Center (player, timeline, energy/mood, transport + AI buttons) + realtime.
-6. Guest Interaction Screen + Karaoke.
-7. Loop Creator, Sound Pool, AI Lab, Settings.
-8. Polish pass: animations, empty states, mobile thumb-zone, SEO `head()` per route.
+### Nicht enthalten (für spätere Phase)
+- Kommentar-Threads, Bezahl-FX/Tip-Jar, AI-generierte FX, Pro-Tier-Billing, externer R2/S3 Storage-Provider (Hooks bleiben austauschbar)

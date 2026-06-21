@@ -14,6 +14,205 @@ export type Database = {
   }
   public: {
     Tables: {
+      community_fx: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          bpm: number | null
+          category: Database["public"]["Enums"]["fx_category"]
+          created_at: string
+          description: string | null
+          duration_s: number
+          file_hash: string
+          file_size: number
+          id: string
+          mime_type: string
+          play_count: number
+          reject_reason: string | null
+          status: Database["public"]["Enums"]["fx_status"]
+          storage_path: string
+          tags: string[]
+          title: string
+          updated_at: string
+          uploader_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bpm?: number | null
+          category?: Database["public"]["Enums"]["fx_category"]
+          created_at?: string
+          description?: string | null
+          duration_s: number
+          file_hash: string
+          file_size: number
+          id?: string
+          mime_type?: string
+          play_count?: number
+          reject_reason?: string | null
+          status?: Database["public"]["Enums"]["fx_status"]
+          storage_path: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          uploader_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bpm?: number | null
+          category?: Database["public"]["Enums"]["fx_category"]
+          created_at?: string
+          description?: string | null
+          duration_s?: number
+          file_hash?: string
+          file_size?: number
+          id?: string
+          mime_type?: string
+          play_count?: number
+          reject_reason?: string | null
+          status?: Database["public"]["Enums"]["fx_status"]
+          storage_path?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          uploader_id?: string
+        }
+        Relationships: []
+      }
+      community_fx_plays: {
+        Row: {
+          fx_id: string
+          id: string
+          party_id: string | null
+          played_at: string
+          user_id: string
+        }
+        Insert: {
+          fx_id: string
+          id?: string
+          party_id?: string | null
+          played_at?: string
+          user_id: string
+        }
+        Update: {
+          fx_id?: string
+          id?: string
+          party_id?: string | null
+          played_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_fx_plays_fx_id_fkey"
+            columns: ["fx_id"]
+            isOneToOne: false
+            referencedRelation: "community_fx"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_fx_plays_fx_id_fkey"
+            columns: ["fx_id"]
+            isOneToOne: false
+            referencedRelation: "community_fx_rankings"
+            referencedColumns: ["fx_id"]
+          },
+          {
+            foreignKeyName: "community_fx_plays_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "parties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_fx_ratings: {
+        Row: {
+          created_at: string
+          fx_id: string
+          id: string
+          stars: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fx_id: string
+          id?: string
+          stars: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fx_id?: string
+          id?: string
+          stars?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_fx_ratings_fx_id_fkey"
+            columns: ["fx_id"]
+            isOneToOne: false
+            referencedRelation: "community_fx"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_fx_ratings_fx_id_fkey"
+            columns: ["fx_id"]
+            isOneToOne: false
+            referencedRelation: "community_fx_rankings"
+            referencedColumns: ["fx_id"]
+          },
+        ]
+      }
+      community_fx_reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          fx_id: string
+          id: string
+          reason: string
+          reporter_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          fx_id: string
+          id?: string
+          reason: string
+          reporter_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          fx_id?: string
+          id?: string
+          reason?: string
+          reporter_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_fx_reports_fx_id_fkey"
+            columns: ["fx_id"]
+            isOneToOne: false
+            referencedRelation: "community_fx"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_fx_reports_fx_id_fkey"
+            columns: ["fx_id"]
+            isOneToOne: false
+            referencedRelation: "community_fx_rankings"
+            referencedColumns: ["fx_id"]
+          },
+        ]
+      }
       loops: {
         Row: {
           bpm: number | null
@@ -317,6 +516,42 @@ export type Database = {
         }
         Relationships: []
       }
+      storage_quotas: {
+        Row: {
+          fx_bytes_used: number
+          fx_quota_bytes: number
+          recordings_bytes_used: number
+          recordings_quota_bytes: number
+          tier: string
+          tracks_bytes_used: number
+          tracks_quota_bytes: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          fx_bytes_used?: number
+          fx_quota_bytes?: number
+          recordings_bytes_used?: number
+          recordings_quota_bytes?: number
+          tier?: string
+          tracks_bytes_used?: number
+          tracks_quota_bytes?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          fx_bytes_used?: number
+          fx_quota_bytes?: number
+          recordings_bytes_used?: number
+          recordings_quota_bytes?: number
+          tier?: string
+          tracks_bytes_used?: number
+          tracks_quota_bytes?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       track_queue: {
         Row: {
           created_at: string
@@ -364,11 +599,13 @@ export type Database = {
           artist: string | null
           artwork_url: string | null
           bpm: number | null
+          cleanup_warned_at: string | null
           created_at: string
           duration_sec: number | null
           energy: number
           id: string
           is_favorite: boolean
+          last_played_at: string | null
           mood: string | null
           music_key: string | null
           owner_id: string
@@ -379,11 +616,13 @@ export type Database = {
           artist?: string | null
           artwork_url?: string | null
           bpm?: number | null
+          cleanup_warned_at?: string | null
           created_at?: string
           duration_sec?: number | null
           energy?: number
           id?: string
           is_favorite?: boolean
+          last_played_at?: string | null
           mood?: string | null
           music_key?: string | null
           owner_id: string
@@ -394,11 +633,13 @@ export type Database = {
           artist?: string | null
           artwork_url?: string | null
           bpm?: number | null
+          cleanup_warned_at?: string | null
           created_at?: string
           duration_sec?: number | null
           energy?: number
           id?: string
           is_favorite?: boolean
+          last_played_at?: string | null
           mood?: string | null
           music_key?: string | null
           owner_id?: string
@@ -453,7 +694,17 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      community_fx_rankings: {
+        Row: {
+          avg_stars: number | null
+          fx_id: string | null
+          plays_7d: number | null
+          rating_count: number | null
+          trending_score: number | null
+          wilson_score: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
@@ -463,9 +714,21 @@ export type Database = {
         }
         Returns: boolean
       }
+      mark_track_played: { Args: { _track_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"
+      fx_category:
+        | "drop"
+        | "riser"
+        | "airhorn"
+        | "sweep"
+        | "voice"
+        | "impact"
+        | "transition"
+        | "loop"
+        | "other"
+      fx_status: "pending" | "approved" | "rejected"
       party_status: "draft" | "live" | "ended"
       recording_kind: "karaoke" | "wish" | "fx"
     }
@@ -596,6 +859,18 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      fx_category: [
+        "drop",
+        "riser",
+        "airhorn",
+        "sweep",
+        "voice",
+        "impact",
+        "transition",
+        "loop",
+        "other",
+      ],
+      fx_status: ["pending", "approved", "rejected"],
       party_status: ["draft", "live", "ended"],
       recording_kind: ["karaoke", "wish", "fx"],
     },

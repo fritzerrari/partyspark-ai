@@ -10,10 +10,14 @@ import {
   Layers,
   LogOut,
   MoreHorizontal,
+  Volume2,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
+import { useQuery } from "@tanstack/react-query";
+import { isAdminOptions } from "@/lib/db/queries";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -22,11 +26,12 @@ const NAV = [
   { to: "/dashboard", label: "Home", icon: Home },
   { to: "/library", label: "Library", icon: Music2 },
   { to: "/parties/new", label: "Party", icon: PartyPopper, accent: true },
-  { to: "/soundpool", label: "Sounds", icon: Layers },
+  { to: "/fx", label: "FX", icon: Volume2 },
 ] as const;
 
 // Secondary nav (More menu on mobile, sidebar on desktop).
 const SECONDARY = [
+  { to: "/soundpool", label: "Soundpool", icon: Layers },
   { to: "/loops", label: "Loop Creator", icon: Repeat },
   { to: "/karaoke", label: "Karaoke", icon: Mic },
   { to: "/ai-lab", label: "AI Lab", icon: Sparkles },
@@ -38,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
+  const { data: isAdmin } = useQuery({ ...isAdminOptions(user?.id ?? ""), enabled: !!user?.id });
 
   async function handleSignOut() {
     await signOut();
@@ -79,7 +85,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
 
           <nav className="flex flex-col gap-1">
-            {[...NAV.filter((n) => !("accent" in n && n.accent)), ...SECONDARY].map(
+            {[
+              ...NAV.filter((n) => !("accent" in n && n.accent)),
+              ...SECONDARY,
+              ...(isAdmin
+                ? [{ to: "/admin/fx-review", label: "FX Review", icon: ShieldCheck } as const]
+                : []),
+            ].map(
               ({ to, label, icon: Icon }) => (
                 <Link
                   key={to}
