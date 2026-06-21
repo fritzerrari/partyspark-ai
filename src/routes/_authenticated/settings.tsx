@@ -19,7 +19,14 @@ function Settings() {
   const qc = useQueryClient();
   const { data: s } = useQuery(settingsOptions(user!.id));
 
-  async function update(patch: Record<string, unknown>) {
+  async function update(patch: Partial<{
+    autodj_enabled: boolean;
+    beat_match: boolean;
+    harmonic_mix: boolean;
+    energy_management: boolean;
+    crossfade_sec: number;
+    notifications: Record<string, unknown>;
+  }>) {
     const { error } = await supabase.from("settings").update(patch).eq("user_id", user!.id);
     if (error) toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["settings", user!.id] });

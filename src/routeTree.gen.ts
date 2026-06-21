@@ -13,7 +13,13 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/loops'
+import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
+import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
 
@@ -36,9 +42,39 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSoundpoolRoute = AuthenticatedSoundpoolRouteImport.update({
+  id: '/soundpool',
+  path: '/soundpool',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLoopsRoute = AuthenticatedLoopsRouteImport.update({
+  id: '/loops',
+  path: '/loops',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedLibraryRoute = AuthenticatedLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKaraokeRoute = AuthenticatedKaraokeRouteImport.update({
+  id: '/karaoke',
+  path: '/karaoke',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAiLabRoute = AuthenticatedAiLabRouteImport.update({
+  id: '/ai-lab',
+  path: '/ai-lab',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedPartiesNewRoute = AuthenticatedPartiesNewRouteImport.update({
@@ -57,7 +93,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/ai-lab': typeof AuthenticatedAiLabRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/karaoke': typeof AuthenticatedKaraokeRoute
+  '/library': typeof AuthenticatedLibraryRoute
+  '/loops': typeof AuthenticatedLoopsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
 }
@@ -65,7 +107,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/ai-lab': typeof AuthenticatedAiLabRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/karaoke': typeof AuthenticatedKaraokeRoute
+  '/library': typeof AuthenticatedLibraryRoute
+  '/loops': typeof AuthenticatedLoopsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
+  '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
 }
@@ -75,7 +123,13 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
+  '/_authenticated/library': typeof AuthenticatedLibraryRoute
+  '/_authenticated/loops': typeof AuthenticatedLoopsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
 }
@@ -85,7 +139,13 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pricing'
+    | '/ai-lab'
     | '/dashboard'
+    | '/karaoke'
+    | '/library'
+    | '/loops'
+    | '/settings'
+    | '/soundpool'
     | '/parties/$partyId'
     | '/parties/new'
   fileRoutesByTo: FileRoutesByTo
@@ -93,7 +153,13 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pricing'
+    | '/ai-lab'
     | '/dashboard'
+    | '/karaoke'
+    | '/library'
+    | '/loops'
+    | '/settings'
+    | '/soundpool'
     | '/parties/$partyId'
     | '/parties/new'
   id:
@@ -102,7 +168,13 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/pricing'
+    | '/_authenticated/ai-lab'
     | '/_authenticated/dashboard'
+    | '/_authenticated/karaoke'
+    | '/_authenticated/library'
+    | '/_authenticated/loops'
+    | '/_authenticated/settings'
+    | '/_authenticated/soundpool'
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
   fileRoutesById: FileRoutesById
@@ -144,11 +216,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/soundpool': {
+      id: '/_authenticated/soundpool'
+      path: '/soundpool'
+      fullPath: '/soundpool'
+      preLoaderRoute: typeof AuthenticatedSoundpoolRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/loops': {
+      id: '/_authenticated/loops'
+      path: '/loops'
+      fullPath: '/loops'
+      preLoaderRoute: typeof AuthenticatedLoopsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/library': {
+      id: '/_authenticated/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof AuthenticatedLibraryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/karaoke': {
+      id: '/_authenticated/karaoke'
+      path: '/karaoke'
+      fullPath: '/karaoke'
+      preLoaderRoute: typeof AuthenticatedKaraokeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/ai-lab': {
+      id: '/_authenticated/ai-lab'
+      path: '/ai-lab'
+      fullPath: '/ai-lab'
+      preLoaderRoute: typeof AuthenticatedAiLabRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/parties/new': {
@@ -169,13 +283,25 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAiLabRoute: typeof AuthenticatedAiLabRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
+  AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
+  AuthenticatedLoopsRoute: typeof AuthenticatedLoopsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedPartiesPartyIdRoute: typeof AuthenticatedPartiesPartyIdRoute
   AuthenticatedPartiesNewRoute: typeof AuthenticatedPartiesNewRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAiLabRoute: AuthenticatedAiLabRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
+  AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
+  AuthenticatedLoopsRoute: AuthenticatedLoopsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedPartiesPartyIdRoute: AuthenticatedPartiesPartyIdRoute,
   AuthenticatedPartiesNewRoute: AuthenticatedPartiesNewRoute,
 }
