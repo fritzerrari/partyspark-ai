@@ -15,6 +15,17 @@ export type EngineTrack = {
   energy?: number | null;
 };
 
+export type TransitionMode = "crossfade" | "cut" | "fadeGap" | "filterSweep" | "echoTail" | "stinger";
+
+export const TRANSITION_LABELS: Record<TransitionMode, string> = {
+  crossfade:   "Crossfade",
+  cut:         "Cut (hart)",
+  fadeGap:     "Fade + Gap",
+  filterSweep: "Filter Sweep",
+  echoTail:    "Echo Tail",
+  stinger:     "Stinger",
+};
+
 type State = {
   current: EngineTrack | null;
   queue: EngineTrack[];
@@ -25,6 +36,8 @@ type State = {
   crossfadeSec: number;
   energy: number;
   mood: string;
+  transitionMode: TransitionMode;
+  stingerUrl: string | null;
 };
 
 type Actions = {
@@ -41,12 +54,19 @@ type Actions = {
   bumpEnergy: (delta: number) => void;
   setMood: (m: string) => void;
   getAnalyser: () => AnalyserNode | null;
+  setTransitionMode: (m: TransitionMode) => void;
+  setStingerUrl: (url: string | null) => void;
 };
 
 let audioEl: HTMLAudioElement | null = null;
 let audioCtx: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
 let sourceNode: MediaElementAudioSourceNode | null = null;
+let filterNode: BiquadFilterNode | null = null;
+let delayNode: DelayNode | null = null;
+let delayFb: GainNode | null = null;
+let delayReturn: GainNode | null = null;
+let postGain: GainNode | null = null;
 let rafId: number | null = null;
 
 function ensureAudio() {
@@ -85,8 +105,28 @@ function ensureGraph() {
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-      sourceNode.connect(analyser);
-      analyser.connect(audioCtx.destination);
+      filterNode = audioCtx.createBiquadFilter();
+      filterNode.type = "lowpass";
+      filterNode.frequency.value = 22000;
+      filterNode.Q.value = 0.7;
+      delayNode = audioCtx.createDelay(1.5);
+      delayNode.delayTime.value = 0.32;
+      delayFb = audioCtx.createGain();
+      delayFb.gain.value = 0;
+      delayReturn = audioCtx.createGain();
+      delayReturn.gain.value = 0;
+      postGain = audioCtx.createGain();
+      // source → filter → analyser → postGain → destination
+      sourceNode.connect(filterNode);
+      filterNode.connect(analyser);
+      analyser.connect(postGain);
+      postGain.connect(audioCtx.destination);
+      // delay tap (feedback loop), normally muted via delayReturn
+      filterNode.connect(delayNode);
+      delayNode.connect(delayFb);
+      delayFb.connect(delayNode);
+      delayNode.connect(delayReturn);
+      delayReturn.connect(postGain);
     } catch {
       /* may throw on second source — ignore */
     }
@@ -107,23 +147,84 @@ function tickFade(target: number, durationMs: number) {
   rafId = requestAnimationFrame(step);
 }
 
+async function rampFilter(targetHz: number, durationMs: number) {
+  if (!filterNode || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  filterNode.frequency.cancelScheduledValues(now);
+  filterNode.frequency.setValueAtTime(filterNode.frequency.value, now);
+  filterNode.frequency.exponentialRampToValueAtTime(Math.max(40, targetHz), now + durationMs / 1000);
+  await new Promise((r) => setTimeout(r, durationMs));
+}
+
+async function setFeedback(value: number) {
+  if (delayFb && delayReturn && audioCtx) {
+    delayFb.gain.setTargetAtTime(value, audioCtx.currentTime, 0.05);
+    delayReturn.gain.setTargetAtTime(value > 0 ? 1 : 0, audioCtx.currentTime, 0.05);
+  }
+}
+
+function playStinger(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    const a = new Audio(url);
+    a.onended = () => resolve();
+    a.onerror = () => resolve();
+    a.play().catch(() => resolve());
+    // safety timeout
+    setTimeout(resolve, 5000);
+  });
+}
+
 async function playTrack(track: EngineTrack, crossfade: boolean) {
   ensureAudio();
   if (!audioEl) return;
-  if (crossfade && !audioEl.paused) {
-    const fadeMs = useEngine.getState().crossfadeSec * 1000;
-    tickFade(0, fadeMs);
-    await new Promise((r) => setTimeout(r, fadeMs));
+  const state = useEngine.getState();
+  const targetVol = state.volume;
+  const fadeMs = state.crossfadeSec * 1000;
+  const mode: TransitionMode = crossfade ? state.transitionMode : "cut";
+  const wasPlaying = crossfade && !audioEl.paused;
+
+  if (wasPlaying) {
+    ensureGraph();
+    if (mode === "cut") {
+      // no fade
+    } else if (mode === "fadeGap") {
+      tickFade(0, Math.max(400, fadeMs * 0.5));
+      await new Promise((r) => setTimeout(r, Math.max(400, fadeMs * 0.5)));
+      await new Promise((r) => setTimeout(r, 800));
+    } else if (mode === "filterSweep") {
+      void rampFilter(150, Math.max(800, fadeMs));
+      tickFade(0, Math.max(800, fadeMs));
+      await new Promise((r) => setTimeout(r, Math.max(800, fadeMs)));
+    } else if (mode === "echoTail") {
+      await setFeedback(0.55);
+      tickFade(0, Math.max(800, fadeMs));
+      await new Promise((r) => setTimeout(r, Math.max(800, fadeMs)));
+      await setFeedback(0);
+    } else if (mode === "stinger") {
+      tickFade(0, 400);
+      await new Promise((r) => setTimeout(r, 400));
+      if (state.stingerUrl) await playStinger(state.stingerUrl);
+    } else {
+      // crossfade (default)
+      tickFade(0, fadeMs);
+      await new Promise((r) => setTimeout(r, fadeMs));
+    }
   }
+
+  // reset filter for incoming track
+  if (filterNode && audioCtx) {
+    filterNode.frequency.cancelScheduledValues(audioCtx.currentTime);
+    filterNode.frequency.setValueAtTime(22000, audioCtx.currentTime);
+  }
+
   audioEl.src = track.url;
-  audioEl.volume = crossfade ? 0 : useEngine.getState().volume;
+  const startSilent = wasPlaying && mode !== "cut";
+  audioEl.volume = startSilent ? 0 : targetVol;
   await audioEl.play().catch(() => {});
   ensureGraph();
-  if (audioCtx?.state === "suspended") {
-    void audioCtx.resume();
-  }
-  if (crossfade) {
-    tickFade(useEngine.getState().volume, useEngine.getState().crossfadeSec * 1000);
+  if (audioCtx?.state === "suspended") void audioCtx.resume();
+  if (startSilent) {
+    tickFade(targetVol, Math.max(400, fadeMs));
   }
   useEngine.setState({ current: track, isPlaying: true, positionSec: 0 });
 }
@@ -138,6 +239,8 @@ export const useEngine = create<State & Actions>((set, get) => ({
   crossfadeSec: 6,
   energy: 50,
   mood: "Warm-up",
+  transitionMode: "crossfade",
+  stingerUrl: null,
 
   loadQueue: (tracks, opts) => {
     if (!tracks.length) return;
@@ -190,4 +293,6 @@ export const useEngine = create<State & Actions>((set, get) => ({
   bumpEnergy: (delta) => set({ energy: Math.max(0, Math.min(100, get().energy + delta)) }),
   setMood: (m) => set({ mood: m }),
   getAnalyser: () => analyser,
+  setTransitionMode: (m) => set({ transitionMode: m }),
+  setStingerUrl: (url) => set({ stingerUrl: url }),
 }));
