@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Mic2, Volume2, VolumeX, Trash2, Headphones } from "lucide-react";
+import { Volume2, VolumeX, Trash2, Headphones } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import type { Track } from "@/lib/audio/multitrack";
