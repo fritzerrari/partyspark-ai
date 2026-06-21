@@ -118,7 +118,7 @@ export function ModuleDock() {
 
       {/* Panels */}
       <Suspense fallback={null}>
-        {[...open].map((id, i) => {
+        {[...open].filter((id) => id === "twin-deck" || id === "sequencer" || id === "coach").map((id, i) => {
           const m = MODULES.find((x) => x.id === id)!;
           return (
             <FloatingPanel
@@ -130,15 +130,12 @@ export function ModuleDock() {
             >
               {id === "twin-deck" && <TwinDeck tracks={tracks} />}
               {id === "sequencer" && <StepSequencer />}
-              {id === "loop-pads" && <LoopPadOverlay open onClose={() => close("loop-pads")} />}
-              {id === "vocal" && (current
-                ? <VocalOverlay open onClose={() => close("vocal")} />
-                : <div className="text-sm text-stage-foreground/60">Starte zuerst einen Track auf Deck A.</div>
-              )}
               {id === "coach" && <CoachHud />}
             </FloatingPanel>
           );
         })}
+        <LoopPadOverlay open={open.has("loop-pads")} onClose={() => close("loop-pads")} />
+        {current && <VocalOverlay open={open.has("vocal")} onClose={() => close("vocal")} />}
       </Suspense>
     </>
   );
