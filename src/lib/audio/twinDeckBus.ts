@@ -10,6 +10,7 @@ import { analyzeAudio, decodeToBuffer, camelotCompatible } from "./analyze";
 import { keyToCamelot } from "./keyToCamelot";
 import { shiftKey, semitoneShiftToKey } from "./keyDelta";
 import { buildBridge, type BridgePlan } from "./bridgeBuilder";
+import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -92,12 +93,14 @@ const deck: Record<DeckSide, {
   eqLow: BiquadFilterNode | null;
   eqMid: BiquadFilterNode | null;
   eqHigh: BiquadFilterNode | null;
+  analyser: AnalyserNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
+let activeDroneStop: (() => void) | null = null;
 // Bridge playback graph: a one-shot BufferSource → filter → gain → master.
 let bridgeGain: GainNode | null = null;
 let bridgeFilter: BiquadFilterNode | null = null;
@@ -173,12 +176,16 @@ function wireDeck(side: DeckSide) {
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
+      d.analyser = ctx.createAnalyser();
+      d.analyser.fftSize = 512;
+      d.analyser.smoothingTimeConstant = 0.6;
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
       d.filter.connect(d.gain);
-      d.gain.connect(masterGain);
+      d.gain.connect(d.analyser);
+      d.analyser.connect(masterGain);
     } catch {
       /* already wired */
     }
@@ -421,6 +428,56 @@ function pickActualMode(hint: TransitionModeHint, from: EngineTrack | null, to: 
   return { mode: plan.mode, crossfadeSec: plan.crossfadeSec, note: plan.notes, startAtSecOfNext: plan.startAtSecOfNext, bpmRatio: plan.bpmRatio };
 }
 
+/** Public: peek what the next transition would do, for UI preview. */
+export function peekNextPlan(): null | {
+  mode: TransitionMode;
+  crossfadeSec: number;
+  note: string;
+  midBpm: number | null;
+  keyShiftSemis: number;
+  from: DeckSide;
+  to: DeckSide;
+  triggerInSec: number | null;
+} {
+  const st = useTwinDeck.getState();
+  const aLoud = st.A.isPlaying && (st.crossfader < 0.5 || !st.B.isPlaying);
+  const from: DeckSide = aLoud ? "A" : st.B.isPlaying ? "B" : "A";
+  const to: DeckSide = from === "A" ? "B" : "A";
+  const fromTrack = st[from].track;
+  const toTrack = st[to].track;
+  if (!fromTrack || !toTrack) return null;
+  const plan = pickActualMode(st.transitionMode, fromTrack, toTrack, st[from].position);
+  const midBpm = fromTrack.bpm && toTrack.bpm ? +(Math.sqrt(fromTrack.bpm * toTrack.bpm)).toFixed(1) : null;
+  // semitones outgoing → incoming using existing helper math (inverse)
+  const semi = (() => {
+    const a = fromTrack.musicalKey ?? null;
+    const b = toTrack.musicalKey ?? null;
+    if (!a || !b) return 0;
+    // Reuse helper imported in this file via keyDelta.
+    return semitoneShiftToKey(a, b);
+  })();
+  const triggerInSec = st.autoTimerOn ? st.autoTimerCountdown : null;
+  return { mode: plan.mode, crossfadeSec: plan.crossfadeSec, note: plan.note, midBpm, keyShiftSemis: semi, from, to, triggerInSec };
+}
+
+/** Public: access deck signals for scorers + visualizers. */
+export function getDeckSignal(side: DeckSide) {
+  const d = deck[side];
+  const st = useTwinDeck.getState();
+  const ds = st[side];
+  return {
+    analyser: d.analyser,
+    bpm: ds.track?.bpm ?? null,
+    effectiveBpm: ds.effectiveBpm,
+    effectiveKey: ds.effectiveKey,
+    camelot: ds.track?.camelot ?? null,
+    beatGrid: ds.track?.beatGrid ?? null,
+    currentTime: d.el?.currentTime ?? 0,
+    playing: ds.isPlaying,
+    volume: (d.gain?.gain.value ?? 0),
+  };
+}
+
 async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeHint) {
   ensureCtx(); wireDeck("A"); wireDeck("B");
   if (!ctx) return;
@@ -457,7 +514,15 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     const mode = plan.mode;
 
     // -------- GENRE-BRIDGE: a separate flow (uses pre-rendered snippet) --------
-    if (mode === "genreBridge" && bridgeBuffers[to] && bridgeFilter && bridgeGain) {
+    // pitchLock reuses the bridge pipeline (pre-rendered, tempo + key locked).
+    if ((mode === "genreBridge" || mode === "pitchLock") && bridgeFilter && bridgeGain) {
+      // Ensure bridge is ready (build on demand if needed).
+      if (!bridgeBuffers[to]) {
+        try { await useTwinDeck.getState().buildBridgeFor(to); } catch { /* noop */ }
+      }
+      if (!bridgeBuffers[to]) {
+        // No bridge possible → fall through to a crossfade.
+      } else {
       const bridge = bridgeBuffers[to]!;
       // Reset the standard pre-prime EQ — bridge handles its own taper.
       rampEqGain(toDeck.eqLow, -24, 0.05);
@@ -509,12 +574,56 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         transitionInFlight: false,
       });
       return;
+      }
     }
     // ------------------------------------------------------------------
 
     // Pre-prime EQ for incoming (bass-cut to slide in cleanly).
     rampEqGain(toDeck.eqLow, -24, 0.05);
     switch (mode) {
+      case "meetMiddle": {
+        // Mutual tempo ramp — both decks bend toward the geometric-mean BPM,
+        // incoming finishes back at its native tempo. EQ-crossfade in parallel.
+        const fBpm = fromTrack.bpm ?? 120;
+        const tBpm = toTrack.bpm ?? fBpm;
+        // kick off mutual ramp (don't await yet — it runs alongside EQ work)
+        const ramp = mutualTempoRamp(fromDeck.el, toDeck.el, fBpm, tBpm, xf * 1000);
+        rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
+        rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.5);
+        rampGain(toDeck.gain, toUserVol, xf);
+        const r = await ramp;
+        // restore outgoing rate (it's about to pause anyway)
+        try { if (fromDeck.el) fromDeck.el.playbackRate = 1; } catch { /* noop */ }
+        useTwinDeck.setState((s) => ({
+          [to]: { ...s[to], pitch: 1 },
+        } as Partial<BusState>));
+        recomputeEffective(to);
+        // Note enriched with midpoint info for the UI.
+        plan.note = `${plan.note} · mid ≈ ${r.midBpm.toFixed(1)} BPM`;
+        break;
+      }
+      case "pedalDrone": {
+        // Sustain a common-tone pad to mask the key jump, with a slow xfade.
+        if (ctx && masterGain) {
+          const root = commonTonePivot(fromTrack.musicalKey ?? null, toTrack.musicalKey ?? null);
+          const minor = (fromTrack.musicalKey ?? "").endsWith("m") || (toTrack.musicalKey ?? "").endsWith("m");
+          try { activeDroneStop?.(); } catch { /* noop */ }
+          activeDroneStop = playPedalDrone(ctx, masterGain, root, {
+            peakGain: 0.16,
+            attackSec: Math.min(2.5, xf * 0.25),
+            sustainSec: Math.max(2, xf * 0.6),
+            releaseSec: Math.min(3, xf * 0.4),
+            minor,
+          });
+        }
+        // Gentle EQ-swap underneath; high-end fades, lows swap on the beat.
+        rampEqGain(fromDeck.eqHigh, -6, xf * 0.5);
+        rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.6);
+        rampGain(toDeck.gain, toUserVol, xf);
+        break;
+      }
       case "filterSweep":
         rampFreq(fromDeck.filter, 180, xf);
         rampEqGain(fromDeck.eqHigh, -12, xf * 0.7);
@@ -590,6 +699,7 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
 
     // Clean up: stop the now-silent from-deck, reset filter.
     try { fromDeck.el?.pause(); } catch { /* noop */ }
+    try { activeDroneStop?.(); activeDroneStop = null; } catch { /* noop */ }
     resetFilter(from);
     resetEq(from);
     resetEq(to);

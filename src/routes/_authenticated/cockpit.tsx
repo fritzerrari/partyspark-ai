@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import type { EngineTrack } from "@/lib/audio/engine";
 import { TwinDeck } from "@/components/cockpit/TwinDeck";
+import { MicRecorder } from "@/components/recording/MicRecorder";
 import { StepSequencer } from "@/components/cockpit/StepSequencer";
 import { CoachHud } from "@/components/cockpit/CoachHud";
 import { SingAlongPanel } from "@/components/cockpit/SingAlongPanel";
@@ -160,6 +161,8 @@ function Cockpit() {
         <SingAlongPanel />
         <FxPadGrid />
       </div>
+
+      <MicRecorder title="Vocal Drop Studio (Live FX)" />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
         <StepSequencer />
