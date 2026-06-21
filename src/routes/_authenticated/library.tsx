@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Upload, Music2, Heart, Play, Loader2, Search, Wand2 } from "lucide-react";
+import { Upload, Music2, Heart, Play, Loader2, Search, Wand2, CheckSquare, Square as SquareIcon } from "lucide-react";
 import { tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
@@ -11,6 +11,9 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { analyzeAudio, decodeToBuffer } from "@/lib/audio/analyze";
+import { findTransitionPoints } from "@/lib/audio/transitionScore";
+import { SmartOrderPanel } from "@/components/playlist/SmartOrderPanel";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/library")({
   head: () => ({ meta: [{ title: "Music Library — PartyPilot AI" }] }),
@@ -24,6 +27,8 @@ function Library() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [analyzingSet, setAnalyzingSet] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const engine = useEngine();
 
