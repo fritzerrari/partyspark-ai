@@ -75,9 +75,12 @@ const deck: Record<DeckSide, {
   src: MediaElementAudioSourceNode | null;
   filter: BiquadFilterNode | null;
   gain: GainNode | null;
+  eqLow: BiquadFilterNode | null;
+  eqMid: BiquadFilterNode | null;
+  eqHigh: BiquadFilterNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null },
-  B: { el: null, src: null, filter: null, gain: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
@@ -125,13 +128,22 @@ function wireDeck(side: DeckSide) {
   if (!d.src && d.el) {
     try {
       d.src = ctx.createMediaElementSource(d.el);
+      d.eqLow = ctx.createBiquadFilter();
+      d.eqLow.type = "lowshelf"; d.eqLow.frequency.value = 120; d.eqLow.gain.value = 0;
+      d.eqMid = ctx.createBiquadFilter();
+      d.eqMid.type = "peaking"; d.eqMid.frequency.value = 1000; d.eqMid.Q.value = 1; d.eqMid.gain.value = 0;
+      d.eqHigh = ctx.createBiquadFilter();
+      d.eqHigh.type = "highshelf"; d.eqHigh.frequency.value = 6000; d.eqHigh.gain.value = 0;
       d.filter = ctx.createBiquadFilter();
       d.filter.type = "lowpass";
       d.filter.frequency.value = 22000;
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
-      d.src.connect(d.filter);
+      d.src.connect(d.eqLow);
+      d.eqLow.connect(d.eqMid);
+      d.eqMid.connect(d.eqHigh);
+      d.eqHigh.connect(d.filter);
       d.filter.connect(d.gain);
       d.gain.connect(masterGain);
     } catch {
@@ -160,6 +172,88 @@ function resetFilter(side: DeckSide) {
   f.type = "lowpass";
   f.frequency.cancelScheduledValues(ctx.currentTime);
   f.frequency.setValueAtTime(22000, ctx.currentTime);
+}
+function rampEqGain(node: BiquadFilterNode | null, dB: number, sec: number) {
+  if (!node || !ctx) return;
+  const now = ctx.currentTime;
+  node.gain.cancelScheduledValues(now);
+  node.gain.setValueAtTime(node.gain.value, now);
+  node.gain.linearRampToValueAtTime(dB, now + Math.max(0.05, sec));
+}
+function resetEq(side: DeckSide) {
+  const d = deck[side];
+  if (!ctx) return;
+  for (const n of [d.eqLow, d.eqMid, d.eqHigh]) {
+    if (!n) continue;
+    n.gain.cancelScheduledValues(ctx.currentTime);
+    n.gain.setValueAtTime(0, ctx.currentTime);
+  }
+}
+
+/** Choose effective BPM ratio considering half/double-time matches. */
+function tempoRatio(fromBpm: number, toBpm: number): number {
+  const candidates = [toBpm, toBpm * 2, toBpm / 2];
+  let best = toBpm;
+  let bestDiff = Infinity;
+  for (const c of candidates) {
+    const d = Math.abs(c - fromBpm) / fromBpm;
+    if (d < bestDiff) { bestDiff = d; best = c; }
+  }
+  // ratio applied to incoming playbackRate to match outgoing
+  return fromBpm / best;
+}
+
+/** Sync incoming deck's playbackRate so its perceived BPM matches outgoing. */
+function syncTempo(from: DeckSide, to: DeckSide): number {
+  const st = useTwinDeck.getState();
+  const fb = st[from].track?.bpm;
+  const tb = st[to].track?.bpm;
+  const fromRate = deck[from].el?.playbackRate ?? 1;
+  if (!fb || !tb) return 1;
+  const ratio = tempoRatio(fb * fromRate, tb);
+  const clamped = Math.max(0.88, Math.min(1.12, ratio));
+  if (deck[to].el) deck[to].el.playbackRate = clamped;
+  useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: clamped } } as Partial<BusState>));
+  return clamped;
+}
+
+/** Align incoming deck so its next downbeat falls on outgoing's next downbeat. */
+function beatAlign(from: DeckSide, to: DeckSide) {
+  const st = useTwinDeck.getState();
+  const fGrid = st[from].track?.beatGrid;
+  const tGrid = st[to].track?.beatGrid;
+  const fEl = deck[from].el;
+  const tEl = deck[to].el;
+  if (!fEl || !tEl) return;
+  const fNow = fEl.currentTime;
+  // next from-beat at least 80ms ahead so we don't miss it
+  const fNext = (fGrid && fGrid.length)
+    ? (fGrid.find((b) => b > fNow + 0.08) ?? fNow + 0.5)
+    : fNow + 0.5;
+  const dt = fNext - fNow; // seconds until alignment in wall-clock (rates are now ~equal)
+  // find a downbeat-ish beat in `to` (every 4th) near startAtSec
+  const tStart = tEl.currentTime;
+  let tBeat = tStart;
+  if (tGrid && tGrid.length) {
+    // prefer downbeats (every 4 beats) closest to current position
+    const downs = tGrid.filter((_, i) => i % 4 === 0);
+    tBeat = downs.find((b) => b >= tStart) ?? tGrid.find((b) => b >= tStart) ?? tStart;
+  }
+  // we want tBeat to play `dt` seconds from now → set currentTime = tBeat - dt
+  const adjusted = Math.max(0, tBeat - dt);
+  try { tEl.currentTime = adjusted; } catch { /* noop */ }
+}
+
+async function waitForNextBeat(side: DeckSide, maxMs = 2000): Promise<void> {
+  const st = useTwinDeck.getState();
+  const grid = st[side].track?.beatGrid;
+  const el = deck[side].el;
+  if (!el || !grid || !grid.length) return;
+  const now = el.currentTime;
+  const next = grid.find((b) => b > now + 0.04);
+  if (!next) return;
+  const waitMs = Math.min(maxMs, Math.max(0, (next - now) * 1000 / (el.playbackRate || 1)));
+  await new Promise((r) => setTimeout(r, waitMs));
 }
 
 function applyCrossfader(state: BusState) {
@@ -291,58 +385,92 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     const fromUserVol = state[from].volume;
     const toUserVol = state[to].volume;
 
-    // Position incoming deck near its intro-end if available, then start it.
+    // 1) Position incoming near its intro-end (drop point) if available.
     try { if (toDeck.el && plan.startAtSecOfNext > 0.5) toDeck.el.currentTime = Math.max(0, plan.startAtSecOfNext); } catch { /* noop */ }
+    // 2) BPM-SYNC: match incoming playbackRate to outgoing perceived tempo (with half/double detection).
+    const appliedRatio = syncTempo(from, to);
+    // 3) Beat-align: snap incoming so its next downbeat hits outgoing's next downbeat.
+    beatAlign(from, to);
+    // 4) Start incoming silently before crossfade so EQ ramps have audio to act on.
+    if (toDeck.gain) toDeck.gain.gain.value = 0;
     if (toDeck.el && toDeck.el.paused) {
       try { await toDeck.el.play(); } catch { /* user gesture needed */ }
     }
     if (ctx.state === "suspended") void ctx.resume();
+    // 5) Wait until the aligned beat actually hits, then start the choreography.
+    await waitForNextBeat(from);
 
-    // Effect choreography per mode, modulating filter + gain per deck.
+    // Effect choreography per mode — uses 3-band EQ + filter + gain.
     const mode = plan.mode;
+    // Pre-prime EQ for incoming (bass-cut to slide in cleanly).
+    rampEqGain(toDeck.eqLow, -24, 0.05);
     switch (mode) {
       case "filterSweep":
         rampFreq(fromDeck.filter, 180, xf);
+        rampEqGain(fromDeck.eqHigh, -12, xf * 0.7);
         rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.5);
         rampGain(toDeck.gain, toUserVol, xf);
         break;
       case "reverbWash":
       case "echoTail":
         rampFreq(fromDeck.filter, 280, xf);
+        rampEqGain(fromDeck.eqHigh, -8, xf * 0.6);
         rampGain(fromDeck.gain, 0, xf * 0.85);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.5);
         rampGain(toDeck.gain, toUserVol, xf);
         break;
       case "loopRoll":
         if (fromDeck.filter) fromDeck.filter.type = "highpass";
         rampFreq(fromDeck.filter, 1200, xf);
+        rampEqGain(fromDeck.eqLow, -24, xf * 0.4);
         rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.4);
         rampGain(toDeck.gain, toUserVol, Math.min(2, xf * 0.5));
         break;
       case "doubleDrop":
+        // Both decks at full level on the drop, then bass-swap.
         rampGain(toDeck.gain, toUserVol, 0.25);
+        rampEqGain(toDeck.eqLow, 0, 0.2);
         await new Promise((r) => setTimeout(r, Math.max(800, xf * 500)));
+        rampEqGain(fromDeck.eqLow, -24, xf * 0.3);
         rampGain(fromDeck.gain, 0, xf * 0.5);
         break;
-      case "bassSwap":
-        if (fromDeck.filter) fromDeck.filter.type = "highpass";
-        rampFreq(fromDeck.filter, 220, xf * 0.5);
-        rampGain(toDeck.gain, toUserVol, xf * 0.5);
-        await new Promise((r) => setTimeout(r, xf * 500));
-        rampGain(fromDeck.gain, 0, xf * 0.5);
+      case "bassSwap": {
+        // Pro-style bass swap: lift incoming highs first, swap lows on the beat, then bleed lows out.
+        const half = xf * 0.5;
+        // Bring incoming up — highs/mids first, lows still cut.
+        rampGain(toDeck.gain, toUserVol, half);
+        rampEqGain(toDeck.eqHigh, 2, half);
+        // Outgoing keeps lows for now.
+        await new Promise((r) => setTimeout(r, half * 1000));
+        // SWAP the basses on the beat.
+        await waitForNextBeat(from);
+        rampEqGain(fromDeck.eqLow, -28, 0.25);
+        rampEqGain(toDeck.eqLow, 0, 0.25);
+        // Now fade the outgoing out entirely.
+        rampEqGain(fromDeck.eqHigh, -10, half);
+        rampGain(fromDeck.gain, 0, half);
         break;
+      }
       case "cut":
         rampGain(fromDeck.gain, 0, 0.05);
+        rampEqGain(toDeck.eqLow, 0, 0.05);
         rampGain(toDeck.gain, toUserVol, 0.05);
         break;
       case "fadeGap":
         rampGain(fromDeck.gain, 0, xf * 0.5);
         await new Promise((r) => setTimeout(r, xf * 500 + 400));
+        rampEqGain(toDeck.eqLow, 0, xf * 0.4);
         rampGain(toDeck.gain, toUserVol, xf * 0.5);
         break;
       case "stinger":
       case "crossfade":
       default:
+        // Harmonic crossfade with subtle low-end isolation to avoid bass clash.
+        rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
         rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.6);
         rampGain(toDeck.gain, toUserVol, xf);
         break;
     }
@@ -353,10 +481,13 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     // Clean up: stop the now-silent from-deck, reset filter.
     try { fromDeck.el?.pause(); } catch { /* noop */ }
     resetFilter(from);
+    resetEq(from);
+    resetEq(to);
     if (fromDeck.gain) fromDeck.gain.gain.value = fromUserVol * (to === "B" ? Math.cos((1 * Math.PI) / 2) : Math.cos(0));
 
+    const ratioNote = appliedRatio !== 1 ? ` · sync ×${appliedRatio.toFixed(3)}` : "";
     useTwinDeck.setState({
-      lastTransitionNote: `${plan.note} · ${xf.toFixed(1)}s`,
+      lastTransitionNote: `${plan.note} · ${xf.toFixed(1)}s${ratioNote}`,
       transitionInFlight: false,
     });
   } catch (e) {
@@ -402,7 +533,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     applyCrossfader(get());
     // Lazy analysis if metadata missing
     if (!enriched.beatGrid || !enriched.bpm || !enriched.cues) {
-      void get().ensureAnalysis(side);
+      await get().ensureAnalysis(side).catch(() => {});
+    }
+    // If the other deck is playing, pre-sync this deck's tempo so it's already beat-matched.
+    const other: DeckSide = side === "A" ? "B" : "A";
+    if (get()[other].isPlaying && get()[other].track?.bpm && get()[side].track?.bpm) {
+      syncTempo(other, side);
     }
   },
 
