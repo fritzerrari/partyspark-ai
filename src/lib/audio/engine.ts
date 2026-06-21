@@ -290,6 +290,19 @@ export const useEngine = create<State & Actions>((set, get) => ({
     }
     const [next, ...rest] = q;
     set({ queue: rest });
+    // Auto-DJ: pick smarter transition based on track metadata
+    const state = get();
+    if (state.autoDj && state.current) {
+      try {
+        const { planMix } = await import("./mixPlanner");
+        const plan = planMix(
+          { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy },
+          { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
+          state.positionSec,
+        );
+        set({ transitionMode: plan.mode, crossfadeSec: plan.crossfadeSec });
+      } catch { /* fall back to current mode */ }
+    }
     await playTrack(next, true);
   },
   seek: (sec) => {
