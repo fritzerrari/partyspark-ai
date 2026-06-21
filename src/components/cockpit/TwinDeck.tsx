@@ -4,6 +4,10 @@ import { TRANSITION_LABELS } from "@/lib/audio/engine";
 import { useTwinDeck, compatHint, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { Turntable } from "./Turntable";
 import { DeckLiveHud } from "./DeckLiveHud";
+import { NextMoveCard } from "./NextMoveCard";
+import { MixScoreDial } from "./MixScoreDial";
+import { SkillBadge } from "./SkillBadge";
+import { DeckSpectrum } from "./DeckSpectrum";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { Led } from "@/components/ui/LedIndicator";
 import { RotaryKnob } from "@/components/ui/RotaryKnob";
@@ -52,6 +56,12 @@ export function TwinDeck({ tracks }: Props) {
   const compat = compatHint(A.track, B.track);
 
   return (
+    <>
+    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-stretch">
+      <div className="flex-1"><NextMoveCard /></div>
+      <div className="sm:w-[260px]"><MixScoreDial /></div>
+      <div className="flex items-center sm:items-stretch"><SkillBadge /></div>
+    </div>
     <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[1fr_280px_1fr]">
       <DeckColumn
         side="A" color="cyan"
@@ -213,6 +223,7 @@ export function TwinDeck({ tracks }: Props) {
         onReanalyze={() => ensureAnalysis("B", { force: true })}
       />
     </div>
+    </>
   );
 }
 
@@ -252,6 +263,7 @@ function DeckColumn({
       />
 
       <DeckLiveHud side={side} />
+      <DeckSpectrum side={side} color={color === "cyan" ? "var(--neon-cyan)" : "var(--neon-magenta)"} />
 
       <div className="line-clamp-1 text-sm font-semibold text-stage-foreground">{t?.title ?? "— kein Track —"}</div>
       <div className="flex items-center gap-1 text-[10px] text-stage-foreground/60">
