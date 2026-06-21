@@ -22,6 +22,7 @@ import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAutotuneRouteImport } from './routes/_authenticated/autotune'
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
 import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
@@ -98,6 +99,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAutotuneRoute = AuthenticatedAutotuneRouteImport.update({
+  id: '/autotune',
+  path: '/autotune',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAiLabRoute = AuthenticatedAiLabRouteImport.update({
   id: '/ai-lab',
   path: '/ai-lab',
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
+  '/autotune': typeof AuthenticatedAutotuneRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
+  '/autotune': typeof AuthenticatedAutotuneRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
@@ -216,6 +224,7 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
+  '/_authenticated/autotune': typeof AuthenticatedAutotuneRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
@@ -243,6 +252,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/ai-lab'
+    | '/autotune'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -268,6 +278,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/ai-lab'
+    | '/autotune'
     | '/dashboard'
     | '/karaoke'
     | '/library'
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/reset-password'
     | '/_authenticated/ai-lab'
+    | '/_authenticated/autotune'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
@@ -418,6 +430,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/autotune': {
+      id: '/_authenticated/autotune'
+      path: '/autotune'
+      fullPath: '/autotune'
+      preLoaderRoute: typeof AuthenticatedAutotuneRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/ai-lab': {
       id: '/_authenticated/ai-lab'
       path: '/ai-lab'
@@ -500,6 +519,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAiLabRoute: typeof AuthenticatedAiLabRoute
+  AuthenticatedAutotuneRoute: typeof AuthenticatedAutotuneRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
@@ -519,6 +539,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAiLabRoute: AuthenticatedAiLabRoute,
+  AuthenticatedAutotuneRoute: AuthenticatedAutotuneRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
