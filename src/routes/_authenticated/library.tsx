@@ -207,6 +207,15 @@ function Library() {
                 <div className="min-w-0">
                   <p className="truncate font-display text-base font-semibold">{t.title}</p>
                   <p className="truncate text-xs text-muted-foreground">{t.artist ?? "Unknown"}</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {t.bpm ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">{Math.round(t.bpm)} BPM</span> : null}
+                    {(t as { music_key?: string | null }).music_key ? (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">{(t as { music_key?: string | null }).music_key}</span>
+                    ) : null}
+                    {!(t as { analyzed_at?: string | null }).analyzed_at ? (
+                      <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">unanalysiert</span>
+                    ) : null}
+                  </div>
                 </div>
                 <button
                   onClick={() => favorite(t)}
@@ -216,13 +225,25 @@ function Library() {
                   <Heart className={"h-4 w-4 " + (t.is_favorite ? "fill-current" : "")} />
                 </button>
               </div>
-              <Button
-                size="sm"
-                onClick={() => play(t)}
-                className="mt-3 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Play className="mr-2 h-4 w-4" /> Play
-              </Button>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => play(t)}
+                  className="flex-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  <Play className="mr-2 h-4 w-4" /> Play
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => reanalyze(t)}
+                  disabled={analyzingId === t.id}
+                  className="rounded-full"
+                  title="BPM/Tonart neu analysieren"
+                >
+                  {analyzingId === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
