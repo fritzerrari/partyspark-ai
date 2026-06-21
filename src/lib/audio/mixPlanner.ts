@@ -8,7 +8,13 @@ export type TrackMeta = {
   bpm?: number | null;
   camelot?: string | null;
   beatGrid?: number[] | null;
-  cues?: { introEnd: number; firstDrop: number; outroStart: number } | null;
+  cues?: {
+    introEnd: number;
+    firstDrop: number;
+    outroStart: number;
+    introPoints?: number[];
+    outroPoints?: number[];
+  } | null;
   durationSec?: number | null;
   energy?: number | null;
 };
@@ -76,11 +82,14 @@ export function planMix(
   const keyCompat = camelotCompatible(current.camelot ?? "", next.camelot ?? "");
   const beatSec = 60 / curBpm;
 
-  // Trigger near outro of current track (or "now + 16 beats" if no outro known)
-  const outro = current.cues?.outroStart ?? Math.max(positionSec, (current.durationSec ?? 0) - 30);
+  // Trigger near outro of current track. Prefer smart vocal-free out-point
+  // if findTransitionPoints supplied any; otherwise fall back to outroStart.
+  const smartOut = current.cues?.outroPoints?.find((t) => t >= positionSec + 2);
+  const outro = smartOut ?? current.cues?.outroStart ?? Math.max(positionSec, (current.durationSec ?? 0) - 30);
   const triggerAtSecOfCurrent = Math.max(positionSec + 2, outro);
-  // Mix into next track at its intro-end if available, else 0
-  const startAtSecOfNext = next.cues?.introEnd ?? 0;
+  // Mix into next track at its smart intro-point (vocal-free, rising energy)
+  // if available, else cue introEnd, else 0.
+  const startAtSecOfNext = next.cues?.introPoints?.[0] ?? next.cues?.introEnd ?? 0;
 
   // Choose mode + length
   let mode: TransitionMode = "crossfade";
