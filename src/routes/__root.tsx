@@ -11,6 +11,14 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { AuthProvider } from "@/lib/auth-context";
+import { Toaster } from "@/components/ui/sonner";
+import "@fontsource/outfit/400.css";
+import "@fontsource/outfit/600.css";
+import "@fontsource/outfit/700.css";
+import "@fontsource/figtree/400.css";
+import "@fontsource/figtree/500.css";
+import "@fontsource/figtree/600.css";
 
 function NotFoundComponent() {
   return (
@@ -77,14 +85,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "PartyPilot AI — Throw the best party of your life" },
+      {
+        name: "description",
+        content:
+          "PartyPilot AI is your AI party DJ. Birthdays, weddings, BBQs — unforgettable music in under two minutes. No DJ skills required.",
+      },
+      { name: "author", content: "PartyPilot AI" },
+      { property: "og:title", content: "PartyPilot AI" },
+      {
+        property: "og:description",
+        content: "Your AI Party DJ. Unforgettable music in under two minutes.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "PartyPilot AI" },
     ],
     links: [
       {
@@ -118,8 +133,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <Outlet />
+        <Toaster richColors closeButton position="top-center" />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
