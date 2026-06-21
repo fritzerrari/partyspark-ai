@@ -314,6 +314,36 @@ export type Database = {
         }
         Relationships: []
       }
+      party_host_lines: {
+        Row: {
+          created_at: string
+          id: string
+          language: string
+          text: string
+          user_id: string
+          vibe: string
+          voice: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string
+          text: string
+          user_id: string
+          vibe?: string
+          voice?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string
+          text?: string
+          user_id?: string
+          vibe?: string
+          voice?: string
+        }
+        Relationships: []
+      }
       playlist_tracks: {
         Row: {
           playlist_id: string
@@ -405,6 +435,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      recording_moments: {
+        Row: {
+          caption: string | null
+          created_at: string
+          end_sec: number
+          id: string
+          kind: string
+          owner_id: string
+          recording_id: string
+          score: number | null
+          start_sec: number
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          end_sec: number
+          id?: string
+          kind: string
+          owner_id: string
+          recording_id: string
+          score?: number | null
+          start_sec: number
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          end_sec?: number
+          id?: string
+          kind?: string
+          owner_id?: string
+          recording_id?: string
+          score?: number | null
+          start_sec?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recording_moments_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recordings: {
         Row: {

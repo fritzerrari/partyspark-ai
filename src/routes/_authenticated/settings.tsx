@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { bytesToHuman } from "@/lib/fx/utils";
 import { Button } from "@/components/ui/button";
 import { Headphones } from "lucide-react";
+import { ChangePasswordCard } from "@/components/auth/ChangePasswordCard";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — PartyPilot AI" }] }),
@@ -142,6 +143,11 @@ function Settings() {
             <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
         </Row>
+        <div className="py-4">
+          <Label className="text-sm">Passwort ändern</Label>
+          <p className="text-xs text-muted-foreground mb-2">Setze ein neues Passwort. Du bleibst eingeloggt.</p>
+          <ChangePasswordCard />
+        </div>
       </Card>
     </div>
   );

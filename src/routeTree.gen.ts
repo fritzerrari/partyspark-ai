@@ -9,12 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
+import { Route as AuthenticatedMomentsRouteImport } from './routes/_authenticated/moments'
 import { Route as AuthenticatedLoopsRouteImport } from './routes/_authenticated/loops'
 import { Route as AuthenticatedLibraryRouteImport } from './routes/_authenticated/library'
 import { Route as AuthenticatedKaraokeRouteImport } from './routes/_authenticated/karaoke'
@@ -22,6 +25,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
 import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
+import { Route as ApiAiPartyHostSpeakRouteImport } from './routes/api/ai/party-host-speak'
 import { Route as AuthenticatedSettingsAudioRouteImport } from './routes/_authenticated/settings_.audio'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
@@ -30,6 +34,11 @@ import { Route as AuthenticatedFxFxIdRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedAdminFxReviewRouteImport } from './routes/_authenticated/admin/fx-review'
 import { Route as ApiPublicHooksStorageCleanupRouteImport } from './routes/api/public/hooks/storage-cleanup'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
@@ -57,6 +66,16 @@ const AuthenticatedSoundpoolRoute = AuthenticatedSoundpoolRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPartyHostRoute = AuthenticatedPartyHostRouteImport.update({
+  id: '/party-host',
+  path: '/party-host',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMomentsRoute = AuthenticatedMomentsRouteImport.update({
+  id: '/moments',
+  path: '/moments',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedLoopsRoute = AuthenticatedLoopsRouteImport.update({
@@ -92,6 +111,11 @@ const AuthenticatedFxIndexRoute = AuthenticatedFxIndexRouteImport.update({
 const PPartyIdGuestRoute = PPartyIdGuestRouteImport.update({
   id: '/p/$partyId/guest',
   path: '/p/$partyId/guest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAiPartyHostSpeakRoute = ApiAiPartyHostSpeakRouteImport.update({
+  id: '/api/ai/party-host-speak',
+  path: '/api/ai/party-host-speak',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedSettingsAudioRoute =
@@ -138,11 +162,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
+  '/moments': typeof AuthenticatedMomentsRoute
+  '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
@@ -151,6 +178,7 @@ export interface FileRoutesByFullPath {
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/settings/audio': typeof AuthenticatedSettingsAudioRoute
+  '/api/ai/party-host-speak': typeof ApiAiPartyHostSpeakRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -159,11 +187,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/ai-lab': typeof AuthenticatedAiLabRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
+  '/moments': typeof AuthenticatedMomentsRoute
+  '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
@@ -172,6 +203,7 @@ export interface FileRoutesByTo {
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/settings/audio': typeof AuthenticatedSettingsAudioRoute
+  '/api/ai/party-host-speak': typeof ApiAiPartyHostSpeakRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -182,11 +214,14 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/ai-lab': typeof AuthenticatedAiLabRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/loops': typeof AuthenticatedLoopsRoute
+  '/_authenticated/moments': typeof AuthenticatedMomentsRoute
+  '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
@@ -195,6 +230,7 @@ export interface FileRoutesById {
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
   '/_authenticated/settings_/audio': typeof AuthenticatedSettingsAudioRoute
+  '/api/ai/party-host-speak': typeof ApiAiPartyHostSpeakRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/_authenticated/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -205,11 +241,14 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pricing'
+    | '/reset-password'
     | '/ai-lab'
     | '/dashboard'
     | '/karaoke'
     | '/library'
     | '/loops'
+    | '/moments'
+    | '/party-host'
     | '/settings'
     | '/soundpool'
     | '/admin/fx-review'
@@ -218,6 +257,7 @@ export interface FileRouteTypes {
     | '/parties/$partyId'
     | '/parties/new'
     | '/settings/audio'
+    | '/api/ai/party-host-speak'
     | '/p/$partyId/guest'
     | '/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -226,11 +266,14 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/pricing'
+    | '/reset-password'
     | '/ai-lab'
     | '/dashboard'
     | '/karaoke'
     | '/library'
     | '/loops'
+    | '/moments'
+    | '/party-host'
     | '/settings'
     | '/soundpool'
     | '/admin/fx-review'
@@ -239,6 +282,7 @@ export interface FileRouteTypes {
     | '/parties/$partyId'
     | '/parties/new'
     | '/settings/audio'
+    | '/api/ai/party-host-speak'
     | '/p/$partyId/guest'
     | '/fx'
     | '/api/public/hooks/storage-cleanup'
@@ -248,11 +292,14 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/pricing'
+    | '/reset-password'
     | '/_authenticated/ai-lab'
     | '/_authenticated/dashboard'
     | '/_authenticated/karaoke'
     | '/_authenticated/library'
     | '/_authenticated/loops'
+    | '/_authenticated/moments'
+    | '/_authenticated/party-host'
     | '/_authenticated/settings'
     | '/_authenticated/soundpool'
     | '/_authenticated/admin/fx-review'
@@ -261,6 +308,7 @@ export interface FileRouteTypes {
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
     | '/_authenticated/settings_/audio'
+    | '/api/ai/party-host-speak'
     | '/p/$partyId/guest'
     | '/_authenticated/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -271,12 +319,21 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiAiPartyHostSpeakRoute: typeof ApiAiPartyHostSpeakRoute
   PPartyIdGuestRoute: typeof PPartyIdGuestRoute
   ApiPublicHooksStorageCleanupRoute: typeof ApiPublicHooksStorageCleanupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing': {
       id: '/pricing'
       path: '/pricing'
@@ -317,6 +374,20 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/party-host': {
+      id: '/_authenticated/party-host'
+      path: '/party-host'
+      fullPath: '/party-host'
+      preLoaderRoute: typeof AuthenticatedPartyHostRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/moments': {
+      id: '/_authenticated/moments'
+      path: '/moments'
+      fullPath: '/moments'
+      preLoaderRoute: typeof AuthenticatedMomentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/loops': {
@@ -366,6 +437,13 @@ declare module '@tanstack/react-router' {
       path: '/p/$partyId/guest'
       fullPath: '/p/$partyId/guest'
       preLoaderRoute: typeof PPartyIdGuestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ai/party-host-speak': {
+      id: '/api/ai/party-host-speak'
+      path: '/api/ai/party-host-speak'
+      fullPath: '/api/ai/party-host-speak'
+      preLoaderRoute: typeof ApiAiPartyHostSpeakRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/settings_/audio': {
@@ -426,6 +504,8 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedLoopsRoute: typeof AuthenticatedLoopsRoute
+  AuthenticatedMomentsRoute: typeof AuthenticatedMomentsRoute
+  AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
@@ -443,6 +523,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedLoopsRoute: AuthenticatedLoopsRoute,
+  AuthenticatedMomentsRoute: AuthenticatedMomentsRoute,
+  AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
@@ -462,6 +544,8 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  ApiAiPartyHostSpeakRoute: ApiAiPartyHostSpeakRoute,
   PPartyIdGuestRoute: PPartyIdGuestRoute,
   ApiPublicHooksStorageCleanupRoute: ApiPublicHooksStorageCleanupRoute,
 }

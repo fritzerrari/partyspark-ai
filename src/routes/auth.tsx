@@ -27,6 +27,26 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+
+  async function sendReset() {
+    if (!forgotEmail) return toast.error("Email eingeben");
+    setForgotBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: window.location.origin + "/reset-password",
+      });
+      if (error) throw error;
+      toast.success("Reset-Link gesendet — schau in dein Postfach.");
+      setForgotOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Fehler");
+    } finally {
+      setForgotBusy(false);
+    }
+  }
 
   // Only redirect AFTER the initial session restore has completed — otherwise
   // a transient `user=null` during loading can race with `_authenticated`'s
@@ -134,6 +154,40 @@ function AuthPage() {
               )}
             </Button>
           </form>
+
+          {mode === "signin" && (
+            <div className="mt-3 text-right">
+              <button
+                type="button"
+                onClick={() => { setForgotEmail(email); setForgotOpen((o) => !o); }}
+                className="text-xs text-muted-foreground hover:text-primary underline"
+              >
+                Passwort vergessen?
+              </button>
+            </div>
+          )}
+
+          {forgotOpen && (
+            <div className="mt-4 rounded-2xl border border-dashed border-border p-4 space-y-3">
+              <Label htmlFor="forgot-email" className="text-sm">Email für Reset-Link</Label>
+              <Input
+                id="forgot-email"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                className="h-10"
+              />
+              <Button
+                type="button"
+                onClick={sendReset}
+                disabled={forgotBusy}
+                className="w-full rounded-full"
+                variant="outline"
+              >
+                {forgotBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Reset-Link senden"}
+              </Button>
+            </div>
+          )}
 
           <p className="mt-5 text-center text-sm text-muted-foreground">
             {mode === "signup" ? "Already have an account?" : "New here?"}{" "}

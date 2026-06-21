@@ -1,117 +1,85 @@
 
-# Plan: Pro Studio & Live Setup
+# Plan: AI Party Host + AI Party Moments + Passwort-Wechsel
 
-Ausbau der App zu einem vollwertigen DJ/Studio-Tool mit externer Hardware-Unterstützung, Cloud-Track-Quellen, erweitertem Mixer, Aufnahme-Vorhören und visuellen Outputs.
-
-Umsetzung in 4 Phasen — jede Phase ist eigenständig lauffähig.
+Drei Features in einem Wurf. Audio-DSP-Features (Autotune/Remix/Mashup/Choir/Vocal Producer) bleiben "Coming Soon" — die brauchen spezialisierte Audio-AI, die Lovable AI nicht bietet.
 
 ---
 
-## Phase 1 — Externe Audio-Geräte (Hardware I/O)
+## 1. AI Party Host (kostenlos via Lovable AI)
 
-**Ziel:** User kann externes Mikro, Lautsprecher, Cue-Kopfhörer auswählen und nutzen.
+**Was es macht:** Zwischen Songs spricht eine KI-Stimme Hype-Ansagen, Übergänge, Geburtstags-Shoutouts. Komplett serverseitig — Gemini schreibt den Text, gpt-4o-mini-tts spricht ihn.
 
-- Neuer `AudioDeviceManager` (`src/lib/audio/devices.ts`)
-  - `navigator.mediaDevices.enumerateDevices()` → Input/Output Listen
-  - Persistiert Auswahl in `settings` Tabelle (neue Spalten: `input_device_id`, `master_output_id`, `cue_output_id`, `mic_device_id`)
-  - Permission-Flow (getUserMedia) mit klarem UI-Hinweis
-- **Cue/Pre-Listen-Bus:** AudioContext mit `setSinkId()` für zweiten Output (Kopfhörer)
-  - Pro Mixer-Kanal `Cue`-Button → Signal nur an Cue-Bus
-- **Mikrofon-Kanal:** eigener Channel mit Gain, Mute, optional Ducking (auto-leiser bei Sprache)
-- UI: neue Route `/settings/audio` mit Geräte-Dropdowns + Live Level-Meter zum Testen
+- **Server-Function** `src/lib/ai/partyHost.functions.ts`:
+  - `generateHypeLine({ context, vibe, lastTrack, nextTrack })` → Gemini schreibt 1–2 Sätze auf Deutsch/Englisch
+  - `speakHypeLine({ text, voice })` → TTS-Stream zurück an Browser
+- **Route** `/_authenticated/party-host` (neu, eigenständig statt nur "Notify me"):
+  - Vibe-Auswahl (Hype / Smooth / Funny / Romantic / Crowd-Surf)
+  - Sprache (DE/EN), Stimme (alloy/verse/coral/...)
+  - "Generieren"-Button → zeigt Text + spielt Stimme über Master-Output ab
+  - History der letzten 10 Lines mit Re-Play
+  - Auto-Mode Toggle: alle N Minuten / bei Track-Wechsel automatisch eine Ansage
+- **Engine-Hook:** Wenn aktiv, vor Track-Wechsel kurz ducken (-12 dB für 4s), Ansage spielen, dann ramp up
 
-## Phase 2 — Externe Track-Quellen
+## 2. AI Party Moments (kostenlos via Lovable AI)
 
-**Ziel:** Tracks aus lokalen Ordnern und Cloud laden, nicht nur Upload.
+**Was es macht:** Aus den Aufnahmen (`recordings` Bucket) automatisch die besten 15-Sekunden-Highlights extrahieren — Lacher, Sing-alongs, Drops, lautstarke Crowd-Momente. Als teilbare Clips.
 
-- **Lokale Festplatte/USB:** File System Access API
-  - "Ordner verbinden" Button → `showDirectoryPicker()` → Handle in IndexedDB persistieren
-  - Browser-Komponente in `/library` zeigt Ordner-Tree, Tracks streamen direkt von Disk (kein Upload)
-- **Cloud-Quellen** via Lovable Connectors (alle vier OAuth-basiert):
-  - Google Drive, Dropbox, OneDrive — je ein Connector linken
-  - Eigene URL/WebDAV: einfaches URL-Input mit CORS-Hinweis
-  - Server-Functions (`src/lib/sources/*.functions.ts`) listen Dateien und liefern Stream-URLs
-- Neue Tabelle `track_sources` (source_type, credentials_ref, last_synced_at)
-- Einheitlicher `TrackResolver` der je nach Quelle (upload/local/gdrive/dropbox/onedrive/url) eine playable URL liefert
-- Tracks-Tabelle bekommt Spalte `source_type` + `external_ref`
+- **Detection:** Loudness-Spikes via WebAudio AnalyserNode beim Recording → Timestamps speichern
+- **Server-Function** `analyzeMoment({ recordingId, startSec, endSec })`:
+  - Audio-Slice → `openai/gpt-4o-mini-transcribe` für Transkription
+  - Gemini bekommt Transkript + Loudness-Curve → klassifiziert (sing-along/laugh/drop/cheer/quiet-talk) + schreibt Caption
+- **Neue Tabelle** `recording_moments` (id, recording_id, start_sec, end_sec, kind, caption, score, created_at)
+- **Route** `/_authenticated/moments`:
+  - Liste aller Recordings mit ihren Moments
+  - Inline-Player pro Moment (15s Slice), Caption, "Share"-Button → kopiert teilbaren Link, "Download"-Button → MP3-Slice
+  - "Analysieren"-Button pro Recording (triggert Detection + AI)
 
-## Phase 3 — Erweiterter 4-Kanal Mixer + Aufnahme-Preview
+## 3. Passwort-Wechsel (beides: Settings + Reset-Link)
 
-**Ziel:** Studio-Feeling mit 4 Decks, 3-Band EQ pro Kanal, Send-FX, plus Aufnahme die man vor dem Speichern anhört.
+### a) Direkt in Settings
+- In `settings.tsx` neue Card **Account → Passwort ändern**:
+  - Felder: neues Passwort + Bestätigung
+  - Button "Passwort aktualisieren" → `supabase.auth.updateUser({ password })`
+  - Validierung: min 8 Zeichen, Bestätigung matched
+  - Toast Success/Error
 
-- **Mixer-Engine** (`src/lib/audio/mixer.ts`)
-  - 4 Channel Strips: Gain, 3-Band EQ (Low/Mid/High BiquadFilter), Filter (HP/LP), Cue, Pan, Fader
-  - 2 Send-FX Busse: Reverb (ConvolverNode), Delay (DelayNode + Feedback)
-  - Crossfader (Channel-Assignment A/B)
-  - Master Out + separater Cue Out
-- **UI:** `/mix` Studio-View — 4 vertikale Channel-Strips, Send-Knobs, Master-Section
-  - Mobile: horizontaler Swipe zwischen Kanälen, kompakte Strip-Ansicht
-- **Aufnahme + Vorhören:**
-  - `MediaRecorder` am Master-Bus → WebM/Opus Blob
-  - Nach Stop: Waveform-Preview (`wavesurfer.js` oder Canvas), Play/Pause, Trim Start/Ende
-  - Buttons: "Verwerfen" / "Neu aufnehmen" / "Speichern" (erst dann Upload zu `recordings` Bucket)
-  - Während Aufnahme: roter REC-Indikator + Live-Timer + Live-VU
+### b) Reset-per-Mail
+- Auth-Seite (`/auth`) bekommt "Passwort vergessen?" Link → öffnet kleines Sheet
+  - Email-Input → `supabase.auth.resetPasswordForEmail(email, { redirectTo: origin + "/reset-password" })`
+- **Neue öffentliche Route** `/reset-password`:
+  - Erkennt `type=recovery` im URL-Hash
+  - Formular: neues Passwort + Bestätigung → `supabase.auth.updateUser({ password })`
+  - Nach Erfolg → Redirect zu `/dashboard`
 
-## Phase 4 — Visuelle Outputs
+---
 
-**Ziel:** Pro Kanal VU+Spectrum, Master-Waveform, Fullscreen-Visuals für Beamer, BPM-Lichtsteuerung.
+## AI Lab Aufräumen
 
-- **Pro Kanal:** `AnalyserNode` → kleines VU-Meter + Mini-Spectrum (Canvas, 60fps via rAF)
-- **Master:** großer Stereo-Waveform-Visualizer im Mix-View
-- **Fullscreen Visuals** Route `/visuals`
-  - Mehrere Modi: Spectrum-Bars, Particle-Field, Kaleidoskop, Waveform-Tunnel
-  - Reagiert auf Master-Audio via AnalyserNode (FFT)
-  - "Pop-out" Button → `window.open()` für zweiten Monitor/Beamer
-  - BroadcastChannel sync zwischen Haupt-Tab und Visual-Tab
-- **Beat/BPM-Lichtsteuerung** (browser-only, kein DMX)
-  - BPM-Detection vorhanden? → falls nicht: einfache Tap-Tempo + optional Auto-Detect via `web-audio-beat-detector`
-  - Visuelle "Lampen" (4–8 farbige Kacheln) blitzen auf Beat
-  - Farb-Presets, Sync-Strength Slider
+- `ai-lab.tsx`: "AI Party Host" und "AI Party Moments" verlieren den "Coming Soon"-Badge, bekommen "Öffnen"-Button statt "Notify me"
+- Die restlichen 7 Features bleiben "Coming Soon" mit klarem Hinweis in der Card-Description, dass sie spezielle Audio-AI brauchen
 
 ---
 
 ## Technische Details
 
-**Neue Dependencies:** `wavesurfer.js` (Waveform), `web-audio-beat-detector` (BPM)
+**Neue Dateien:**
+- `src/lib/ai/partyHost.functions.ts` (Gemini + TTS Stream Route via `/api/ai/party-host`)
+- `src/lib/ai/gateway.server.ts` (Lovable AI Gateway Helper)
+- `src/lib/ai/moments.functions.ts` (Transkription + Klassifikation)
+- `src/routes/api/ai/party-host-speak.ts` (TTS-Streaming HTTP-Route)
+- `src/routes/_authenticated/party-host.tsx`
+- `src/routes/_authenticated/moments.tsx`
+- `src/routes/reset-password.tsx`
+- `src/components/auth/ChangePasswordCard.tsx`
+- `src/components/auth/ForgotPasswordSheet.tsx`
 
-**Datenbank-Migration:**
-- `settings`: + `input_device_id`, `master_output_id`, `cue_output_id`, `mic_device_id`, `mic_gain`, `mic_ducking`
-- `tracks`: + `source_type` (enum: upload/local/gdrive/dropbox/onedrive/url), `external_ref`
-- neue Tabelle `track_sources` (id, user_id, source_type, label, config jsonb, created_at)
-- RLS: alles user-scoped via `auth.uid()`, plus GRANTs
+**DB-Migration:** Tabelle `recording_moments` mit RLS (user-scoped via `recordings.user_id`)
 
-**Connectors zu linken:** Google Drive, Dropbox, OneDrive (über `standard_connectors--connect` zum jeweiligen Zeitpunkt)
+**Nav:** "Party Host" + "Moments" in Sidebar/More-Menu
 
-**Browser-Kompatibilität:**
-- File System Access API: Chrome/Edge ✓, Safari/Firefox ✗ → Fallback auf File-Input (Multi-Select)
-- `setSinkId()`: Chrome/Edge ✓, Safari/Firefox eingeschränkt → Fallback: Cue-Bus auf Master mit Warnung
-- Klarer "Browser-Support"-Hinweis pro Feature
+**Lovable AI Models:**
+- Text: `google/gemini-3-flash-preview` (default)
+- TTS: `openai/gpt-4o-mini-tts` mit SSE-Streaming + PCM für Echtzeit-Playback
+- STT: `openai/gpt-4o-mini-transcribe`
 
-**Mobile-Optimierung:**
-- Audio-Geräte-Seite & Mix-View responsive
-- Touch-optimierte Fader/Knobs (vertikales Drag)
-- Visualizer auf Mobile reduziert (Performance)
-
-**Ordnerstruktur:**
-```
-src/lib/audio/
-  devices.ts          (Phase 1)
-  mixer.ts            (Phase 3)
-  recorder.ts         (Phase 3)
-  visualizer.ts       (Phase 4)
-  beatDetect.ts       (Phase 4)
-src/lib/sources/
-  resolver.ts
-  gdrive.functions.ts
-  dropbox.functions.ts
-  onedrive.functions.ts
-src/routes/_authenticated/
-  settings.audio.tsx  (Phase 1)
-  library.tsx         (Phase 2 — Source Browser)
-  mix.tsx             (Phase 3 — Studio Mixer)
-  visuals.tsx         (Phase 4 — Fullscreen)
-```
-
-**Reihenfolge der Umsetzung:** Phase 1 → 2 → 3 → 4 (wie vom User priorisiert).
-
-Bei "Plan implementieren" starte ich mit **Phase 1 (Externe Audio-Geräte)** und frage nach Abschluss, ob Phase 2 direkt folgen soll.
+**Reihenfolge:** Passwort-Wechsel zuerst (klein, schnell), dann AI Party Host, dann AI Party Moments.
