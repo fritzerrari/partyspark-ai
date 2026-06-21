@@ -125,7 +125,7 @@ function Loops() {
             volume: r.volume ?? 80,
             muted: !!r.is_muted,
             soloed: false,
-            storagePath: r.storage_path,
+            storagePath: r.storage_path ?? undefined,
           }]);
         } catch (e) { console.warn("loop load fail", e); }
       }
