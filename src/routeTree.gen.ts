@@ -22,6 +22,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAiLabRouteImport } from './routes/_authenticated/ai-lab'
 import { Route as AuthenticatedFxIndexRouteImport } from './routes/_authenticated/fx/index'
 import { Route as PPartyIdGuestRouteImport } from './routes/p.$partyId.guest'
+import { Route as AuthenticatedSettingsAudioRouteImport } from './routes/_authenticated/settings.audio'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
 import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
 import { Route as AuthenticatedFxUploadRouteImport } from './routes/_authenticated/fx/upload'
@@ -93,6 +94,12 @@ const PPartyIdGuestRoute = PPartyIdGuestRouteImport.update({
   path: '/p/$partyId/guest',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSettingsAudioRoute =
+  AuthenticatedSettingsAudioRouteImport.update({
+    id: '/audio',
+    path: '/audio',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedPartiesNewRoute = AuthenticatedPartiesNewRouteImport.update({
   id: '/parties/new',
   path: '/parties/new',
@@ -136,13 +143,14 @@ export interface FileRoutesByFullPath {
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
-  '/settings': typeof AuthenticatedSettingsRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/fx/upload': typeof AuthenticatedFxUploadRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/settings/audio': typeof AuthenticatedSettingsAudioRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -156,13 +164,14 @@ export interface FileRoutesByTo {
   '/karaoke': typeof AuthenticatedKaraokeRoute
   '/library': typeof AuthenticatedLibraryRoute
   '/loops': typeof AuthenticatedLoopsRoute
-  '/settings': typeof AuthenticatedSettingsRoute
+  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/soundpool': typeof AuthenticatedSoundpoolRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/fx/upload': typeof AuthenticatedFxUploadRoute
   '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/settings/audio': typeof AuthenticatedSettingsAudioRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -178,13 +187,14 @@ export interface FileRoutesById {
   '/_authenticated/karaoke': typeof AuthenticatedKaraokeRoute
   '/_authenticated/library': typeof AuthenticatedLibraryRoute
   '/_authenticated/loops': typeof AuthenticatedLoopsRoute
-  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
   '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/_authenticated/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/_authenticated/fx/upload': typeof AuthenticatedFxUploadRoute
   '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
+  '/_authenticated/settings/audio': typeof AuthenticatedSettingsAudioRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/_authenticated/fx/': typeof AuthenticatedFxIndexRoute
   '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/fx/upload'
     | '/parties/$partyId'
     | '/parties/new'
+    | '/settings/audio'
     | '/p/$partyId/guest'
     | '/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/fx/upload'
     | '/parties/$partyId'
     | '/parties/new'
+    | '/settings/audio'
     | '/p/$partyId/guest'
     | '/fx'
     | '/api/public/hooks/storage-cleanup'
@@ -248,6 +260,7 @@ export interface FileRouteTypes {
     | '/_authenticated/fx/upload'
     | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
+    | '/_authenticated/settings/audio'
     | '/p/$partyId/guest'
     | '/_authenticated/fx/'
     | '/api/public/hooks/storage-cleanup'
@@ -355,6 +368,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PPartyIdGuestRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/settings/audio': {
+      id: '/_authenticated/settings/audio'
+      path: '/audio'
+      fullPath: '/settings/audio'
+      preLoaderRoute: typeof AuthenticatedSettingsAudioRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/parties/new': {
       id: '/_authenticated/parties/new'
       path: '/parties/new'
@@ -400,13 +420,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsAudioRoute: typeof AuthenticatedSettingsAudioRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsAudioRoute: AuthenticatedSettingsAudioRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAiLabRoute: typeof AuthenticatedAiLabRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedKaraokeRoute: typeof AuthenticatedKaraokeRoute
   AuthenticatedLibraryRoute: typeof AuthenticatedLibraryRoute
   AuthenticatedLoopsRoute: typeof AuthenticatedLoopsRoute
-  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
   AuthenticatedFxFxIdRoute: typeof AuthenticatedFxFxIdRoute
@@ -422,7 +455,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKaraokeRoute: AuthenticatedKaraokeRoute,
   AuthenticatedLibraryRoute: AuthenticatedLibraryRoute,
   AuthenticatedLoopsRoute: AuthenticatedLoopsRoute,
-  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
   AuthenticatedFxFxIdRoute: AuthenticatedFxFxIdRoute,
