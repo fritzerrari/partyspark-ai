@@ -27,6 +27,7 @@ import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authe
 import { Route as AuthenticatedFxUploadRouteImport } from './routes/_authenticated/fx/upload'
 import { Route as AuthenticatedFxFxIdRouteImport } from './routes/_authenticated/fx/$fxId'
 import { Route as AuthenticatedAdminFxReviewRouteImport } from './routes/_authenticated/admin/fx-review'
+import { Route as ApiPublicHooksStorageCleanupRouteImport } from './routes/api/public/hooks/storage-cleanup'
 
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
@@ -119,6 +120,12 @@ const AuthenticatedAdminFxReviewRoute =
     path: '/admin/fx-review',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicHooksStorageCleanupRoute =
+  ApiPublicHooksStorageCleanupRouteImport.update({
+    id: '/api/public/hooks/storage-cleanup',
+    path: '/api/public/hooks/storage-cleanup',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByFullPath {
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx/': typeof AuthenticatedFxIndexRoute
+  '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -157,6 +165,7 @@ export interface FileRoutesByTo {
   '/parties/new': typeof AuthenticatedPartiesNewRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/fx': typeof AuthenticatedFxIndexRoute
+  '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -178,6 +187,7 @@ export interface FileRoutesById {
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
   '/p/$partyId/guest': typeof PPartyIdGuestRoute
   '/_authenticated/fx/': typeof AuthenticatedFxIndexRoute
+  '/api/public/hooks/storage-cleanup': typeof ApiPublicHooksStorageCleanupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/parties/new'
     | '/p/$partyId/guest'
     | '/fx/'
+    | '/api/public/hooks/storage-cleanup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -218,6 +229,7 @@ export interface FileRouteTypes {
     | '/parties/new'
     | '/p/$partyId/guest'
     | '/fx'
+    | '/api/public/hooks/storage-cleanup'
   id:
     | '__root__'
     | '/'
@@ -238,6 +250,7 @@ export interface FileRouteTypes {
     | '/_authenticated/parties/new'
     | '/p/$partyId/guest'
     | '/_authenticated/fx/'
+    | '/api/public/hooks/storage-cleanup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -246,6 +259,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   PricingRoute: typeof PricingRoute
   PPartyIdGuestRoute: typeof PPartyIdGuestRoute
+  ApiPublicHooksStorageCleanupRoute: typeof ApiPublicHooksStorageCleanupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -376,6 +390,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminFxReviewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/hooks/storage-cleanup': {
+      id: '/api/public/hooks/storage-cleanup'
+      path: '/api/public/hooks/storage-cleanup'
+      fullPath: '/api/public/hooks/storage-cleanup'
+      preLoaderRoute: typeof ApiPublicHooksStorageCleanupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -420,6 +441,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   PricingRoute: PricingRoute,
   PPartyIdGuestRoute: PPartyIdGuestRoute,
+  ApiPublicHooksStorageCleanupRoute: ApiPublicHooksStorageCleanupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

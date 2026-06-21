@@ -72,25 +72,20 @@ export const Route = createFileRoute("/api/public/hooks/storage-cleanup")({
           report.fx_purged = oldRejected.length;
         }
 
-        // 4) Recompute storage_quotas (truth from actual rows)
+        // 4) Recompute fx_bytes_used per user (FX is the only table with a file_size column).
+        // Tracks/recordings size is sampled live via storage.list when shown in UI.
         const { data: quotas } = await supabaseAdmin.from("storage_quotas").select("user_id");
         if (quotas) {
           for (const q of quotas) {
-            const [fxAgg, trAgg, recAgg] = await Promise.all([
-              supabaseAdmin.from("community_fx").select("file_size").eq("uploader_id", q.user_id).neq("status", "rejected"),
-              supabaseAdmin.from("tracks").select("file_size_bytes").eq("user_id", q.user_id),
-              supabaseAdmin.from("recordings").select("file_size_bytes").eq("user_id", q.user_id),
-            ]);
-            const fxBytes = (fxAgg.data ?? []).reduce((s, r) => s + (r.file_size ?? 0), 0);
-            const trBytes = (trAgg.data ?? []).reduce((s, r) => s + ((r as { file_size_bytes?: number }).file_size_bytes ?? 0), 0);
-            const recBytes = (recAgg.data ?? []).reduce((s, r) => s + ((r as { file_size_bytes?: number }).file_size_bytes ?? 0), 0);
+            const { data: fxAgg } = await supabaseAdmin
+              .from("community_fx")
+              .select("file_size")
+              .eq("uploader_id", q.user_id)
+              .neq("status", "rejected");
+            const fxBytes = (fxAgg ?? []).reduce((s, r) => s + (r.file_size ?? 0), 0);
             await supabaseAdmin
               .from("storage_quotas")
-              .update({
-                fx_bytes_used: fxBytes,
-                tracks_bytes_used: trBytes,
-                recordings_bytes_used: recBytes,
-              })
+              .update({ fx_bytes_used: fxBytes })
               .eq("user_id", q.user_id);
             report.quotas_recomputed++;
           }
