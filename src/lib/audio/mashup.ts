@@ -30,7 +30,7 @@ export function estimateBPM(buf: AudioBuffer): number {
 }
 
 /** Time-stretch by ratio (>1 = slower). Uses soundtouchjs with semitones=0. */
-async function timeStretch(buf: AudioBuffer, ratio: number): Promise<AudioBuffer> {
+async function timeStretch(ctx: BaseAudioContext, buf: AudioBuffer, ratio: number): Promise<AudioBuffer> {
   // Trick: pitch-shift by 0 semitones but use SoundTouch tempo via two-stage:
   // approximate by resampling and then pitch-correcting.
   // Simpler approach: linear resample (changes pitch), accept small pitch drift.
@@ -51,7 +51,7 @@ async function timeStretch(buf: AudioBuffer, ratio: number): Promise<AudioBuffer
   }
   // Pitch-correct back: shift by -12*log2(ratio) semitones
   const semitones = -12 * Math.log2(ratio);
-  return pitchShiftBuffer(out, semitones);
+  return pitchShiftBuffer(ctx, out, semitones);
 }
 
 /** Crossfade A→B with B time-stretched to A's BPM. Returns mono/stereo buffer. */
@@ -64,7 +64,7 @@ export async function autoMashup(
   const bpmA = estimateBPM(a);
   const bpmB = estimateBPM(b);
   const ratio = bpmB / bpmA; // stretch B so its tempo matches A
-  const bStretched = await timeStretch(b, ratio);
+  const bStretched = await timeStretch(ctx, b, ratio);
   const xfade = options.crossfadeSec ?? 4;
   const sr = a.sampleRate;
   const xfadeSamp = Math.floor(xfade * sr);
