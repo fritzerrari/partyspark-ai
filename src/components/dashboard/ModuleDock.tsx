@@ -4,6 +4,7 @@ import { useEngine, type EngineTrack } from "@/lib/audio/engine";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { FloatingPanel } from "./FloatingPanel";
+import { useDock, type ModuleId } from "@/lib/dock";
 import { cn } from "@/lib/utils";
 
 const TwinDeck = lazy(() => import("@/components/cockpit/TwinDeck").then((m) => ({ default: m.TwinDeck })));
@@ -11,8 +12,6 @@ const StepSequencer = lazy(() => import("@/components/cockpit/StepSequencer").th
 const CoachHud = lazy(() => import("@/components/cockpit/CoachHud").then((m) => ({ default: m.CoachHud })));
 const LoopPadOverlay = lazy(() => import("@/components/player/LoopPadOverlay").then((m) => ({ default: m.LoopPadOverlay })));
 const VocalOverlay = lazy(() => import("@/components/player/VocalOverlay").then((m) => ({ default: m.VocalOverlay })));
-
-type ModuleId = "twin-deck" | "sequencer" | "loop-pads" | "vocal" | "coach";
 
 const MODULES: { id: ModuleId; label: string; icon: typeof Disc3; size: { w: number; h: number } }[] = [
   { id: "twin-deck", label: "Twin Decks", icon: Disc3, size: { w: 820, h: 460 } },
@@ -63,30 +62,25 @@ function useLibraryTracks(): EngineTrack[] {
 }
 
 export function ModuleDock() {
-  const [open, setOpen] = useState<Set<ModuleId>>(new Set());
+  const open = useDock((s) => s.open);
+  const toggle = useDock((s) => s.toggle);
+  const close = useDock((s) => s.close);
   const [dockOpen, setDockOpen] = useState(false);
   const tracks = useLibraryTracks();
   const current = useEngine((s) => s.current);
 
-  const toggle = (id: ModuleId) => {
-    setOpen((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-  const close = (id: ModuleId) => setOpen((s) => { const n = new Set(s); n.delete(id); return n; });
+  const openIds = (Object.keys(open) as ModuleId[]).filter((k) => open[k]);
 
   return (
     <>
       {/* FAB */}
-      <div className="fixed bottom-24 right-4 z-40 lg:bottom-28">
+      <div className="fixed bottom-24 right-4 z-50 lg:bottom-28">
         {dockOpen && (
           <div className="mb-3 grid w-56 grid-cols-1 gap-1 rounded-2xl border border-white/15 bg-[var(--deck-graphite)] p-2 shadow-2xl">
             <div className="px-2 py-1 text-[10px] uppercase tracking-widest text-stage-foreground/60">Module einblenden</div>
             {MODULES.map((m) => {
               const Icon = m.icon;
-              const isOpen = open.has(m.id);
+              const isOpen = !!open[m.id];
               return (
                 <button
                   key={m.id}
@@ -118,7 +112,7 @@ export function ModuleDock() {
 
       {/* Panels */}
       <Suspense fallback={null}>
-        {[...open].filter((id) => id === "twin-deck" || id === "sequencer" || id === "coach").map((id, i) => {
+        {openIds.map((id, i) => {
           const m = MODULES.find((x) => x.id === id)!;
           return (
             <FloatingPanel
@@ -131,11 +125,14 @@ export function ModuleDock() {
               {id === "twin-deck" && <TwinDeck tracks={tracks} />}
               {id === "sequencer" && <StepSequencer />}
               {id === "coach" && <CoachHud />}
+              {id === "loop-pads" && <LoopPadOverlay open onClose={() => close("loop-pads")} embedded />}
+              {id === "vocal" && current && <VocalOverlay open onClose={() => close("vocal")} embedded />}
+              {id === "vocal" && !current && (
+                <p className="p-4 text-xs text-stage-foreground/60">Erst einen Track laden, dann Vocal-Layer öffnen.</p>
+              )}
             </FloatingPanel>
           );
         })}
-        <LoopPadOverlay open={open.has("loop-pads")} onClose={() => close("loop-pads")} />
-        {current && <VocalOverlay open={open.has("vocal")} onClose={() => close("vocal")} />}
       </Suspense>
     </>
   );
