@@ -82,6 +82,14 @@ type Actions = {
   stopRecording: () => Promise<Blob | null>;
   /** Pre-render a bridge snippet for `side` locked to the OTHER deck's key+BPM. */
   buildBridgeFor: (side: DeckSide) => Promise<void>;
+  /** Manual stem ride: set a single pseudo-stem on a deck (0..1.5). */
+  setStem: (side: DeckSide, stem: StemId, value: number, sec?: number) => void;
+  /** Reset a deck's stem split to neutral (all = 1). */
+  resetStems: (side: DeckSide) => void;
+  /** Run a stem-based transition recipe between two decks. */
+  runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId) => Promise<void>;
+  /** Snapshot of current stem-gains for the UI. */
+  getStemGains: (side: DeckSide) => Record<StemId, number>;
   dispose: () => void;
 };
 
