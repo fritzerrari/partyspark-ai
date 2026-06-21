@@ -482,32 +482,41 @@ export type Database = {
       }
       recordings: {
         Row: {
+          cover_url: string | null
           created_at: string
           duration_sec: number | null
           id: string
           kind: Database["public"]["Enums"]["recording_kind"]
+          metadata: Json | null
           owner_id: string
           party_id: string | null
+          score: number | null
           storage_path: string
           title: string | null
         }
         Insert: {
+          cover_url?: string | null
           created_at?: string
           duration_sec?: number | null
           id?: string
           kind?: Database["public"]["Enums"]["recording_kind"]
+          metadata?: Json | null
           owner_id: string
           party_id?: string | null
+          score?: number | null
           storage_path: string
           title?: string | null
         }
         Update: {
+          cover_url?: string | null
           created_at?: string
           duration_sec?: number | null
           id?: string
           kind?: Database["public"]["Enums"]["recording_kind"]
+          metadata?: Json | null
           owner_id?: string
           party_id?: string | null
+          score?: number | null
           storage_path?: string
           title?: string | null
         }

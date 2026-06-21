@@ -1,98 +1,123 @@
 
-# Karaoke Upgrade — Vocal Chain, Intro & Transitions
+# Karaoke Studio — Gamechanger-Upgrade
 
-Alles läuft im Browser über Web Audio API — kostenlos, kein externer Service.
+Aktuell ist Karaoke ein **Single-Take Recorder**. Damit es einen Level höher kommt, mache ich daraus ein **Multitrack-Loop-Studio mit KI-Coach** — wie eine Ed-Sheeran-Loop-Station kombiniert mit einem Vocal-Trainer.
 
-## 1) Vocal Chain für Karaoke
+Alles, was hier steht, ist mit **Lovable AI (kostenlos in deinem Plan)** + Web Audio API umsetzbar. Keine externen Bezahl-APIs.
 
-Zwei Ebenen, weil **live** und **offline** technisch unterschiedlich sind:
+---
 
-### A) Live während der Aufnahme (Web Audio Realtime-Kette)
-Mic → Compressor → EQ (3-Band) → Reverb → Delay → Monitor-Out (Kopfhörer)
+## TEIL A — Das Multitrack-Studio (die Hauptsache)
 
-- **Vocal-FX live** (alles über native Web Audio Nodes):
-  - Compressor (Threshold, Ratio)
-  - 3-Band EQ (Lo/Mid/Hi)
-  - Reverb (ConvolverNode + 4 Presets: Room / Hall / Plate / Cathedral)
-  - Delay/Echo (Time, Feedback, Mix)
-  - Doubler (kurzer Delay 20–40ms für Fülle)
-- **Live-Pitch-Monitor** (wie schon in `/autotune`): zeigt während des Singens Note + Cents-Abweichung — kein Realtime-Pitch-Shift (das bräuchte einen handgeschriebenen AudioWorklet-PSOLA, Wochen-Aufwand)
-- **Bypass-Toggle** pro Effekt
+### A1. DAW-Style Multitrack-Recorder
+- **Mehrere Tonspuren parallel** auf einem Timeline-Grid
+- Jede Spur: eigene Wellenform, Mute/Solo/Volume/Pan, eigene FX-Bypass
+- **Overdub**: während die alten Spuren laufen, neue Spur dazu aufnehmen (Beatbox-Layer, Harmonies, Ad-libs)
+- **Loop-Station Mode**: Loop-Länge in Takten setzen (z. B. 4 Bars @ 100 BPM), jeder Durchgang fügt eine neue Layer hinzu — perfekt für spontane Songs auf der Party
+- **Punch-In / Punch-Out**: nur ein Abschnitt einer Spur neu aufnehmen
+- **Mixdown**: alle Spuren als eine WAV exportieren
+- **Sessions speichern**: Projekt mit allen Spuren in DB + Storage, später weiterbearbeiten
 
-### B) Nach der Aufnahme — KI-Vocal-Producer
-Auf die fertige Aufnahme angewandt, ein Klick im Recordings-Panel:
+### A2. Visueller Mixer
+- Channel-Strips wie bei einem echten Mischpult
+- Live-Pegel-Meter pro Spur
+- Stereo-Master-Output mit Limiter
 
-- **Autotune** (bereits gebaut, hier auf Karaoke-Aufnahme anwendbar machen)
-- **AI Harmonies**: per `soundtouchjs` Pitch-Shifts der Stimme erzeugen
-  - Terz oben (+4 HT) · Quinte oben (+7 HT) · Oktave (+12 / –12)
-  - User wählt Intervalle, jede Harmonie kommt als zusätzliche Spur (gemischt 30–40 %)
-- **AI Choir**: 6–10 leicht detunte Kopien (±10 cents) + Mikro-Delays (5–30 ms) + leichtes Stereo-Spread → klingt wie Chor
-- **Vocal FX-Presets** als One-Click:
-  - "Stadion" (Big Reverb + Slap Delay)
-  - "Whisper" (Compressor + High-Pass + close Reverb)
-  - "T-Pain" (Hard Autotune + Doubler)
-  - "Telephone" (Bandpass 300–3000 Hz)
-  - "Megafon" (Distortion + Bandpass)
+### A3. Sync-Click + Tempo-Map
+- Globaler Tempo + Taktart fürs Projekt
+- Optional metronom-synchrones Recording (jede Spur startet automatisch auf dem 1er)
 
-Output: gemischte WAV-Datei, wird zurück in Storage gespeichert als neue Recording-Variante.
+---
 
-## 2) Intro-Feature (vor jedem Karaoke-Take)
+## TEIL B — KI-Features (alle kostenlos via Lovable AI)
 
-Wählbar im Karaoke-Screen vor dem Aufnahme-Start:
+### B1. Live Vocal Coach (Pitch + Score) ⭐ Gamechanger
+- Während des Singens: **scrollende Pitch-Linie** + Ziel-Tonleiter overlay
+- Sofort sichtbar wo du daneben singst
+- Nach dem Take: **Score 0–100** (Pitch-Accuracy, Timing-Konsistenz, Energie)
+- Funktioniert per Web Audio (kein KI-Call nötig), zusätzlich Gemini-Feedback ("Refrain war 🔥, Strophe 2 leicht flach")
 
-- **Countdown** 3-2-1 (visuell + Beep)
-- **Beat-Count** 4-Bar Click bei einstellbarer BPM
-- **AI-Voice-Intro**: "Als Nächstes — [Name] singt [Titel]!" via Lovable AI TTS (nutzt bestehende Party-Host-Infra) — kostenlos via `openai/gpt-4o-mini-tts`
-- **Custom Audio**: eigene Intro-Datei (1–10 s Clip)
-- **Stille / Kein Intro** (Default)
+### B2. Live KI-Untertitel (Speech-to-Text)
+- Nimmt während des Singens mit, **transkribiert live** via `openai/gpt-4o-mini-transcribe`
+- Zeigt Lyrics karaoke-mäßig auf dem Bildschirm — auch ohne offizielle Lyric-Datei
+- Speichert Transkript zur Aufnahme
 
-Eingabefelder: Singer-Name + Song-Titel, werden in die TTS-Ansage eingesetzt. Auswahl pro Take, Standard merken in `settings`.
+### B3. KI-Lyric-Writer (Text Generation)
+- "Schreibe einen Song über [Thema] im Stil von [Künstler]" → Gemini liefert komplette Lyrics
+- Auto-Scrolling Teleprompter-View für die Performance
+- Optional: Reim-Schema, Strophenzahl, Sprache wählen
 
-## 3) Track-Transitions (Übergänge zwischen Songs)
+### B4. KI-Song-Identifier (Multimodal Audio→Text) ⭐
+- Sing oder summe 5–10 s — **Gemini 3 Flash kann Audio direkt verarbeiten** und rät den Song
+- "Klingt nach 'Bohemian Rhapsody' von Queen" — perfekt fürs Party-Quiz
 
-Aktuell macht die Engine nur Linear-Crossfade. Erweitert auf 6 Modi, wählbar im Player:
+### B5. KI-Cover-Art für jede Aufnahme
+- Jede gespeicherte Aufnahme bekommt automatisch ein generiertes **Cover-Bild** (Gemini Flash Image)
+- Basiert auf Song-Titel + Vibe — die "Tonight's moments"-Gallery wird zum Vinyl-Cover-Wand
 
-| Modus | Was passiert |
-|---|---|
-| **Crossfade** | Equal-power, Länge 0–12 s |
-| **Cut** | Harter Schnitt |
-| **Fade-Gap** | A faded out → Pause (0–3 s) → B faded in |
-| **Filter-Sweep** | Tiefpass-Filter schließt auf A während B startet |
-| **Echo-Tail** | A bekommt Delay-Feedback-Tail beim Verschwinden |
-| **Stinger** | Kurzer FX-Sound (DJ-Drop, Scratch) zwischen A und B |
+### B6. KI-Roast & Toast Generator (TTS)
+- Nach jedem Take: Gemini schreibt einen 2-Sätze-Roast oder Toast über den Sänger
+- TTS spricht ihn mit gewählter Stimme — instant Party-Moment
 
-UI: Modus-Dropdown im Player, Crossfade-Slider bleibt für die Modi, die Länge nutzen. Bei "Stinger" Auswahl aus FX-Library.
+### B7. KI-Duett-Partner
+- Du singst Strophe 1, KI-Stimme (TTS) singt Strophe 2 → Duett-Aufnahme
+- Lyrics liefert B3, Gesang B6-Voice
+- Begrenzung: TTS spricht, "singt" aber nicht melodisch — gut für Rap/Spoken-Word-Sektionen
 
-## Technische Details
+### B8. Karaoke-Battle-Modus + Leaderboard
+- Mehrere Sänger nacheinander, gleicher Song, B1-Scores zählen
+- Live-Leaderboard pro Party
+- Sieger-Stinger nach jeder Runde
+
+### B9. Auto-Mashup
+- Wähle 2 Tracks → BPM/Key-Detection → automatisches Time-Stretch + Crossfade → ein Mashup
+- Nutzt vorhandenes `soundtouchjs` + neue Beat-Erkennung
+
+---
+
+## Prioritäten / Reihenfolge
+
+1. **A1 + A2 Multitrack-Studio** — die zentrale Vision deiner Anfrage
+2. **B1 Live Vocal Coach** — visuelles Wow für jeden Sänger
+3. **B5 KI-Cover-Art** — sofortiger Hingucker in der Gallery
+4. **B2 Live-Untertitel** — gameplay-relevant
+5. **B6 Roast/Toast** — schnell gebaut, hohe Party-Wirkung
+6. **B4 Song-Identifier** — Quiz-Feature
+7. **B3 Lyric-Writer** + **B7 Duett**
+8. **B8 Battle-Modus** + **B9 Mashup**
+
+---
+
+## Technik (kurz)
 
 ### Neue Dateien
-- `src/lib/audio/vocalChain.ts` — Live Web Audio Kette (Compressor, EQ, Reverb, Delay)
-- `src/lib/audio/vocalPost.ts` — Offline Harmonies/Choir/Presets
-- `src/lib/audio/intro.ts` — Countdown/Click/TTS-Intro Generierung
-- `src/lib/audio/transitions.ts` — 6 Transition-Modi (Filter, Echo-Tail, Stinger)
-- `src/components/karaoke/VocalChainPanel.tsx`
-- `src/components/karaoke/IntroPicker.tsx`
-- `src/components/karaoke/PostProcessSheet.tsx`
+- `src/lib/audio/multitrack.ts` — Track-Klassen, Mixer, OfflineAudioContext-Bouncer
+- `src/lib/audio/loopStation.ts` — Loop-Sync-Engine
+- `src/lib/audio/beatDetect.ts` — BPM + Key Detection (autocorrelation + chromagram)
+- `src/lib/audio/scoring.ts` — Pitch-Accuracy + Timing-Score
+- `src/lib/ai/coach.functions.ts` — Score → Feedback via Gemini
+- `src/lib/ai/lyrics.functions.ts` — Lyric Generator
+- `src/lib/ai/songId.functions.ts` — Multimodal Audio → Song-Guess (Gemini 3 Flash)
+- `src/lib/ai/cover.functions.ts` — Cover-Art via Gemini Flash Image
+- `src/lib/ai/roast.functions.ts` — Roast/Toast generator
+- `src/routes/api/ai/transcribe-stream.ts` — Live STT-Stream-Endpoint
+- `src/routes/_authenticated/studio.tsx` — neuer Multitrack-Studio Screen
+- `src/components/studio/Timeline.tsx`, `TrackLane.tsx`, `Mixer.tsx`, `PitchCoach.tsx`, `Teleprompter.tsx`, `LoopPad.tsx`
+- Neue DB-Tabelle `karaoke_sessions` (Projekt mit JSON für Tracks-Metadata) + `karaoke_session_tracks`
 
 ### Geänderte Dateien
-- `src/routes/_authenticated/karaoke.tsx` — Vocal-Chain Panel, Intro-Picker, Post-Process-Button pro Recording
-- `src/lib/audio/engine.ts` — `transitionMode` Feld + Implementierungen
-- Player-UI: Transition-Mode-Selector
+- `src/routes/_authenticated/karaoke.tsx` — Link zum neuen Studio, Cover-Bilder in Gallery, Score-Badges
+- `src/components/layout/AppShell.tsx` — Studio-Navigation
+- `src/integrations/supabase/types.ts` — neue Tabellen
 
-### Reverb-Impulse
-4 kurze Impulse-Responses (WAV, je < 80 KB) generieren wir synthetisch im Browser (exponentieller Decay-Noise) — keine Asset-Downloads nötig.
+---
 
-### Speicherung
-Post-processed Vocal-Versionen als zusätzliche Spalte `processed_path` in `recordings`, plus `vocal_preset` als JSON.
+## Zeitlicher Aufwand
 
-### TTS für Intro
-Reuse von `/api/ai/party-host-speak` — kein neuer Endpoint, nur ein neues Frontend-Aufruf-Pattern.
+Das ist **viel** — realistisch in Etappen liefern. Mein Vorschlag:
 
-## Aufwand & Reihenfolge
+**Etappe 1 (jetzt):** A1, A2, B1, B5 — Multitrack-Studio + Live-Coach + Cover-Art
+**Etappe 2:** B2, B6, B4 — Untertitel, Roast, Song-Identifier
+**Etappe 3:** B3, B7, B8, B9 — Lyric-Writer, Duett, Battle, Mashup
 
-1. **Live Vocal-Chain + FX** (Reverb/Delay/EQ/Compressor) — Sofort spürbarer Effekt
-2. **Intro-Feature** (Countdown + TTS) — Klein, hoher Wow-Faktor
-3. **Harmonies + Choir + Presets** (offline) — Mehr DSP-Arbeit
-4. **6 Transitions** im Engine — Berührt zentrale Engine-Logik, am Ende
-
-Soll ich alles in dieser Reihenfolge bauen, oder nur Teile?
+**Soll ich mit Etappe 1 starten, oder willst du eine andere Auswahl?**
