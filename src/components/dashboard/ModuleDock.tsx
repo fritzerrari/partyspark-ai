@@ -30,9 +30,10 @@ function useLibraryTracks(): EngineTrack[] {
     let alive = true;
     (async () => {
       const { data } = await supabase
-        .from("tracks").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(60);
+        .from("tracks").select("*").eq("owner_id", user.id).order("created_at", { ascending: false }).limit(60);
       if (!alive || !data) return;
-      const mapped: EngineTrack[] = await Promise.all(data.map(async (t) => {
+      const mapped: EngineTrack[] = await Promise.all(data.map(async (raw) => {
+        const t = raw as unknown as Record<string, unknown>;
         const path = (t as { storage_path?: string }).storage_path;
         let url = "";
         if (path) {
@@ -40,15 +41,18 @@ function useLibraryTracks(): EngineTrack[] {
           url = signed?.signedUrl ?? "";
         }
         return {
-          id: t.id, title: t.title ?? "Untitled", artist: t.artist ?? null, url,
-          artwork: (t as { artwork_url?: string }).artwork_url ?? null,
-          bpm: (t as { bpm?: number }).bpm ?? null,
-          musicalKey: (t as { musical_key?: string }).musical_key ?? null,
-          camelot: (t as { camelot?: string }).camelot ?? null,
-          beatGrid: (t as { beat_grid?: number[] }).beat_grid ?? null,
-          cues: (t as { cues?: { introEnd: number; firstDrop: number; outroStart: number } }).cues ?? null,
-          vocalMap: (t as { vocal_map?: { t: number; voiced: number }[] }).vocal_map ?? null,
-          durationSec: (t as { duration_sec?: number }).duration_sec ?? null,
+          id: String(t.id),
+          title: (t.title as string) ?? "Untitled",
+          artist: (t.artist as string | null) ?? null,
+          url,
+          artwork: (t.artwork_url as string | null) ?? null,
+          bpm: (t.bpm as number | null) ?? null,
+          musicalKey: (t.musical_key as string | null) ?? null,
+          camelot: (t.camelot as string | null) ?? null,
+          beatGrid: (t.beat_grid as number[] | null) ?? null,
+          cues: (t.cues as { introEnd: number; firstDrop: number; outroStart: number } | null) ?? null,
+          vocalMap: (t.vocal_map as { t: number; voiced: number }[] | null) ?? null,
+          durationSec: (t.duration_sec as number | null) ?? null,
         };
       }));
       setTracks(mapped.filter((t) => t.url));
@@ -126,9 +130,9 @@ export function ModuleDock() {
             >
               {id === "twin-deck" && <TwinDeck tracks={tracks} />}
               {id === "sequencer" && <StepSequencer />}
-              {id === "loop-pads" && <LoopPadOverlay open onClose={() => close("loop-pads")} embed />}
+              {id === "loop-pads" && <LoopPadOverlay open onClose={() => close("loop-pads")} />}
               {id === "vocal" && (current
-                ? <VocalOverlay open onClose={() => close("vocal")} embed />
+                ? <VocalOverlay open onClose={() => close("vocal")} />
                 : <div className="text-sm text-stage-foreground/60">Starte zuerst einen Track auf Deck A.</div>
               )}
               {id === "coach" && <CoachHud />}
