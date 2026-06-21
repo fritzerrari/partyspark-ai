@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedPartiesNewRouteImport } from './routes/_authenticated/parties.new'
+import { Route as AuthenticatedPartiesPartyIdRouteImport } from './routes/_authenticated/parties.$partyId'
 
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
@@ -45,12 +46,19 @@ const AuthenticatedPartiesNewRoute = AuthenticatedPartiesNewRouteImport.update({
   path: '/parties/new',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPartiesPartyIdRoute =
+  AuthenticatedPartiesPartyIdRouteImport.update({
+    id: '/parties/$partyId',
+    path: '/parties/$partyId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
 }
 export interface FileRoutesByTo {
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/parties/new': typeof AuthenticatedPartiesNewRoute
 }
 export interface FileRoutesById {
@@ -67,13 +76,26 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/pricing': typeof PricingRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/parties/$partyId': typeof AuthenticatedPartiesPartyIdRoute
   '/_authenticated/parties/new': typeof AuthenticatedPartiesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/pricing' | '/dashboard' | '/parties/new'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/pricing'
+    | '/dashboard'
+    | '/parties/$partyId'
+    | '/parties/new'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/pricing' | '/dashboard' | '/parties/new'
+  to:
+    | '/'
+    | '/auth'
+    | '/pricing'
+    | '/dashboard'
+    | '/parties/$partyId'
+    | '/parties/new'
   id:
     | '__root__'
     | '/'
@@ -81,6 +103,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/pricing'
     | '/_authenticated/dashboard'
+    | '/_authenticated/parties/$partyId'
     | '/_authenticated/parties/new'
   fileRoutesById: FileRoutesById
 }
@@ -135,16 +158,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPartiesNewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/parties/$partyId': {
+      id: '/_authenticated/parties/$partyId'
+      path: '/parties/$partyId'
+      fullPath: '/parties/$partyId'
+      preLoaderRoute: typeof AuthenticatedPartiesPartyIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedPartiesPartyIdRoute: typeof AuthenticatedPartiesPartyIdRoute
   AuthenticatedPartiesNewRoute: typeof AuthenticatedPartiesNewRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedPartiesPartyIdRoute: AuthenticatedPartiesPartyIdRoute,
   AuthenticatedPartiesNewRoute: AuthenticatedPartiesNewRoute,
 }
 
