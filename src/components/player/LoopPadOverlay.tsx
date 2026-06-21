@@ -85,7 +85,7 @@ const PADS: Pad[] = [
   { id: "stop",   label: "Stop",   color: "from-zinc-700 to-slate-600",  build: (c) => buildHat(c, 0.01) },
 ];
 
-export function LoopPadOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function LoopPadOverlay({ open, onClose, embedded }: { open: boolean; onClose: () => void; embedded?: boolean }) {
   const current = useEngine((s) => s.current);
   const position = useEngine((s) => s.positionSec);
   const nextBeatTime = useEngine((s) => s.nextBeatTime);
@@ -146,43 +146,49 @@ export function LoopPadOverlay({ open, onClose }: { open: boolean; onClose: () =
   }
 
   if (!open) return null;
-  return (
-    <div className="fixed inset-x-0 bottom-[180px] z-30 mx-auto max-w-[1400px] px-2 lg:bottom-[112px] lg:px-6">
-      <div className="rounded-2xl border border-border bg-card/95 p-4 shadow-stage backdrop-blur">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="font-display text-lg font-semibold">Loop-Pads</p>
-            <p className="text-xs text-muted-foreground">
-              Beat-quantisiert zum laufenden Song
-              {current?.bpm ? ` (${Math.round(current.bpm)} BPM)` : ""}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {recordingPerf ? (
-              <Button size="sm" variant="destructive" onClick={stopPerfRec} className="rounded-full">
-                <Square className="mr-1 h-3 w-3" /> Stop Perf
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" onClick={startPerfRec} className="rounded-full">● Perf Rec</Button>
-            )}
-            <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
-          </div>
+  const body = (
+    <>
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <p className="font-display text-lg font-semibold">Loop-Pads</p>
+          <p className="text-xs text-muted-foreground">
+            Beat-quantisiert zum laufenden Song
+            {current?.bpm ? ` (${Math.round(current.bpm)} BPM)` : ""}
+          </p>
         </div>
-        <div className="grid grid-cols-4 gap-2">
-          {PADS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => trigger(p)}
-              className={cn(
-                "aspect-square rounded-xl bg-gradient-to-br text-xs font-semibold text-white shadow-stage active:scale-95 transition",
-                p.color,
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {recordingPerf ? (
+            <Button size="sm" variant="destructive" onClick={stopPerfRec} className="rounded-full">
+              <Square className="mr-1 h-3 w-3" /> Stop Perf
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={startPerfRec} className="rounded-full">● Perf Rec</Button>
+          )}
+          {!embedded && (
+            <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
+          )}
         </div>
       </div>
+      <div className="grid grid-cols-4 gap-2">
+        {PADS.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => trigger(p)}
+            className={cn(
+              "aspect-square rounded-xl bg-gradient-to-br text-xs font-semibold text-white shadow-stage active:scale-95 transition",
+              p.color,
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+  if (embedded) return body;
+  return (
+    <div className="fixed inset-x-0 bottom-[180px] z-30 mx-auto max-w-[1400px] px-2 lg:bottom-[112px] lg:px-6">
+      <div className="rounded-2xl border border-border bg-card/95 p-4 shadow-stage backdrop-blur">{body}</div>
     </div>
   );
 }
