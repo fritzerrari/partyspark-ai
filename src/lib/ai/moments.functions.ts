@@ -6,7 +6,7 @@ import { createLovableAi, requireKey } from "./gateway.server";
 
 export const listMoments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ recordingId: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ recordingId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("recording_moments")
@@ -19,7 +19,7 @@ export const listMoments = createServerFn({ method: "GET" })
 
 export const analyzeRecording = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ recordingId: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ recordingId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: rec, error: recErr } = await supabase
@@ -106,7 +106,7 @@ export const analyzeRecording = createServerFn({ method: "POST" })
 
 export const getRecordingUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ recordingId: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ recordingId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rec, error } = await context.supabase
       .from("recordings")

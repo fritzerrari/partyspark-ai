@@ -14,7 +14,7 @@ const GenInput = z.object({
 
 export const generateHypeLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => GenInput.parse(d))
+  .validator((d: unknown) => GenInput.parse(d))
   .handler(async ({ data, context }) => {
     const gw = createLovableAi(requireKey());
     const model = gw("google/gemini-3-flash-preview");
@@ -69,7 +69,7 @@ export const listHostLines = createServerFn({ method: "GET" })
 
 export const deleteHostLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     await context.supabase.from("party_host_lines").delete().eq("id", data.id);
     return { ok: true };

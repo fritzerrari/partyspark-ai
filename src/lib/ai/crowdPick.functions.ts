@@ -8,7 +8,7 @@ const Input = z.object({ scene: z.string().min(2).max(200) });
 
 export const pickCrowdPreset = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const gw = createLovableAi(requireKey());
     const model = gw("google/gemini-3-flash-preview");

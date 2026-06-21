@@ -14,7 +14,7 @@ const Input = z.object({
 
 export const generateRoastToast = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const key = requireKey();
     const gw = createLovableAi(key);

@@ -14,7 +14,7 @@ const Input = z.object({
 
 export const speakDuetLine = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const key = requireKey();
     const res = await fetch("https://ai.gateway.lovable.dev/v1/audio/speech", {

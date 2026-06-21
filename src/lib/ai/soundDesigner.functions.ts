@@ -30,7 +30,7 @@ const ParamsSchema = z.object({
 
 export const designSound = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => Input.parse(d))
+  .validator((d: unknown) => Input.parse(d))
   .handler(async ({ data }) => {
     const gw = createLovableAi(requireKey());
     const model = gw("google/gemini-3-flash-preview");
