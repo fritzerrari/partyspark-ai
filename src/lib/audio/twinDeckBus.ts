@@ -777,6 +777,25 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     stopAutoTimer();
   },
 
+  async buildBridgeFor(side) {
+    const other: DeckSide = side === "A" ? "B" : "A";
+    const st = get();
+    const t = st[side].track;
+    const o = st[other].track;
+    if (!ctx) { ensureCtx(); }
+    if (!ctx || !t || !o?.bpm) return;
+    if (st[side].bridgeBuilding) return;
+    set((s) => ({ [side]: { ...s[side], bridgeBuilding: true, bridgeReady: false } } as Partial<BusState>));
+    try {
+      const plan = await buildBridge(ctx, t, { bpm: o.bpm, musicalKey: o.musicalKey ?? null });
+      bridgeBuffers[side] = plan;
+      set((s) => ({ [side]: { ...s[side], bridgeBuilding: false, bridgeReady: !!plan, bridgeNotes: plan?.notes ?? null } } as Partial<BusState>));
+    } catch (e) {
+      console.warn("buildBridgeFor failed", e);
+      set((s) => ({ [side]: { ...s[side], bridgeBuilding: false, bridgeReady: false } } as Partial<BusState>));
+    }
+  },
+
   async startRecording() {
     ensureCtx();
     if (!ctx || !masterGain) return;
