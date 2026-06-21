@@ -385,58 +385,92 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     const fromUserVol = state[from].volume;
     const toUserVol = state[to].volume;
 
-    // Position incoming deck near its intro-end if available, then start it.
+    // 1) Position incoming near its intro-end (drop point) if available.
     try { if (toDeck.el && plan.startAtSecOfNext > 0.5) toDeck.el.currentTime = Math.max(0, plan.startAtSecOfNext); } catch { /* noop */ }
+    // 2) BPM-SYNC: match incoming playbackRate to outgoing perceived tempo (with half/double detection).
+    const appliedRatio = syncTempo(from, to);
+    // 3) Beat-align: snap incoming so its next downbeat hits outgoing's next downbeat.
+    beatAlign(from, to);
+    // 4) Start incoming silently before crossfade so EQ ramps have audio to act on.
+    if (toDeck.gain) toDeck.gain.gain.value = 0;
     if (toDeck.el && toDeck.el.paused) {
       try { await toDeck.el.play(); } catch { /* user gesture needed */ }
     }
     if (ctx.state === "suspended") void ctx.resume();
+    // 5) Wait until the aligned beat actually hits, then start the choreography.
+    await waitForNextBeat(from);
 
-    // Effect choreography per mode, modulating filter + gain per deck.
+    // Effect choreography per mode — uses 3-band EQ + filter + gain.
     const mode = plan.mode;
+    // Pre-prime EQ for incoming (bass-cut to slide in cleanly).
+    rampEqGain(toDeck.eqLow, -24, 0.05);
     switch (mode) {
       case "filterSweep":
         rampFreq(fromDeck.filter, 180, xf);
+        rampEqGain(fromDeck.eqHigh, -12, xf * 0.7);
         rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.5);
         rampGain(toDeck.gain, toUserVol, xf);
         break;
       case "reverbWash":
       case "echoTail":
         rampFreq(fromDeck.filter, 280, xf);
+        rampEqGain(fromDeck.eqHigh, -8, xf * 0.6);
         rampGain(fromDeck.gain, 0, xf * 0.85);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.5);
         rampGain(toDeck.gain, toUserVol, xf);
         break;
       case "loopRoll":
         if (fromDeck.filter) fromDeck.filter.type = "highpass";
         rampFreq(fromDeck.filter, 1200, xf);
+        rampEqGain(fromDeck.eqLow, -24, xf * 0.4);
         rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.4);
         rampGain(toDeck.gain, toUserVol, Math.min(2, xf * 0.5));
         break;
       case "doubleDrop":
+        // Both decks at full level on the drop, then bass-swap.
         rampGain(toDeck.gain, toUserVol, 0.25);
+        rampEqGain(toDeck.eqLow, 0, 0.2);
         await new Promise((r) => setTimeout(r, Math.max(800, xf * 500)));
+        rampEqGain(fromDeck.eqLow, -24, xf * 0.3);
         rampGain(fromDeck.gain, 0, xf * 0.5);
         break;
-      case "bassSwap":
-        if (fromDeck.filter) fromDeck.filter.type = "highpass";
-        rampFreq(fromDeck.filter, 220, xf * 0.5);
-        rampGain(toDeck.gain, toUserVol, xf * 0.5);
-        await new Promise((r) => setTimeout(r, xf * 500));
-        rampGain(fromDeck.gain, 0, xf * 0.5);
+      case "bassSwap": {
+        // Pro-style bass swap: lift incoming highs first, swap lows on the beat, then bleed lows out.
+        const half = xf * 0.5;
+        // Bring incoming up — highs/mids first, lows still cut.
+        rampGain(toDeck.gain, toUserVol, half);
+        rampEqGain(toDeck.eqHigh, 2, half);
+        // Outgoing keeps lows for now.
+        await new Promise((r) => setTimeout(r, half * 1000));
+        // SWAP the basses on the beat.
+        await waitForNextBeat(from);
+        rampEqGain(fromDeck.eqLow, -28, 0.25);
+        rampEqGain(toDeck.eqLow, 0, 0.25);
+        // Now fade the outgoing out entirely.
+        rampEqGain(fromDeck.eqHigh, -10, half);
+        rampGain(fromDeck.gain, 0, half);
         break;
+      }
       case "cut":
         rampGain(fromDeck.gain, 0, 0.05);
+        rampEqGain(toDeck.eqLow, 0, 0.05);
         rampGain(toDeck.gain, toUserVol, 0.05);
         break;
       case "fadeGap":
         rampGain(fromDeck.gain, 0, xf * 0.5);
         await new Promise((r) => setTimeout(r, xf * 500 + 400));
+        rampEqGain(toDeck.eqLow, 0, xf * 0.4);
         rampGain(toDeck.gain, toUserVol, xf * 0.5);
         break;
       case "stinger":
       case "crossfade":
       default:
+        // Harmonic crossfade with subtle low-end isolation to avoid bass clash.
+        rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
         rampGain(fromDeck.gain, 0, xf);
+        rampEqGain(toDeck.eqLow, 0, xf * 0.6);
         rampGain(toDeck.gain, toUserVol, xf);
         break;
     }
@@ -447,10 +481,13 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     // Clean up: stop the now-silent from-deck, reset filter.
     try { fromDeck.el?.pause(); } catch { /* noop */ }
     resetFilter(from);
+    resetEq(from);
+    resetEq(to);
     if (fromDeck.gain) fromDeck.gain.gain.value = fromUserVol * (to === "B" ? Math.cos((1 * Math.PI) / 2) : Math.cos(0));
 
+    const ratioNote = appliedRatio !== 1 ? ` · sync ×${appliedRatio.toFixed(3)}` : "";
     useTwinDeck.setState({
-      lastTransitionNote: `${plan.note} · ${xf.toFixed(1)}s`,
+      lastTransitionNote: `${plan.note} · ${xf.toFixed(1)}s${ratioNote}`,
       transitionInFlight: false,
     });
   } catch (e) {
