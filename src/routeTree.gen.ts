@@ -14,6 +14,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated/studio'
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
@@ -58,6 +59,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedStudioRoute = AuthenticatedStudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSoundpoolRoute = AuthenticatedSoundpoolRouteImport.update({
   id: '/soundpool',
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
+  '/studio': typeof AuthenticatedStudioRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/fx/upload': typeof AuthenticatedFxUploadRoute
@@ -205,6 +212,7 @@ export interface FileRoutesByTo {
   '/party-host': typeof AuthenticatedPartyHostRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
+  '/studio': typeof AuthenticatedStudioRoute
   '/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/fx/upload': typeof AuthenticatedFxUploadRoute
@@ -233,6 +241,7 @@ export interface FileRoutesById {
   '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
+  '/_authenticated/studio': typeof AuthenticatedStudioRoute
   '/_authenticated/admin/fx-review': typeof AuthenticatedAdminFxReviewRoute
   '/_authenticated/fx/$fxId': typeof AuthenticatedFxFxIdRoute
   '/_authenticated/fx/upload': typeof AuthenticatedFxUploadRoute
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/party-host'
     | '/settings'
     | '/soundpool'
+    | '/studio'
     | '/admin/fx-review'
     | '/fx/$fxId'
     | '/fx/upload'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/party-host'
     | '/settings'
     | '/soundpool'
+    | '/studio'
     | '/admin/fx-review'
     | '/fx/$fxId'
     | '/fx/upload'
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/_authenticated/party-host'
     | '/_authenticated/settings'
     | '/_authenticated/soundpool'
+    | '/_authenticated/studio'
     | '/_authenticated/admin/fx-review'
     | '/_authenticated/fx/$fxId'
     | '/_authenticated/fx/upload'
@@ -373,6 +385,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/studio': {
+      id: '/_authenticated/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof AuthenticatedStudioRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/soundpool': {
       id: '/_authenticated/soundpool'
@@ -528,6 +547,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
+  AuthenticatedStudioRoute: typeof AuthenticatedStudioRoute
   AuthenticatedAdminFxReviewRoute: typeof AuthenticatedAdminFxReviewRoute
   AuthenticatedFxFxIdRoute: typeof AuthenticatedFxFxIdRoute
   AuthenticatedFxUploadRoute: typeof AuthenticatedFxUploadRoute
@@ -548,6 +568,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,
+  AuthenticatedStudioRoute: AuthenticatedStudioRoute,
   AuthenticatedAdminFxReviewRoute: AuthenticatedAdminFxReviewRoute,
   AuthenticatedFxFxIdRoute: AuthenticatedFxFxIdRoute,
   AuthenticatedFxUploadRoute: AuthenticatedFxUploadRoute,
