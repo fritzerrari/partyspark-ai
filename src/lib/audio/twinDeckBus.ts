@@ -75,9 +75,12 @@ const deck: Record<DeckSide, {
   src: MediaElementAudioSourceNode | null;
   filter: BiquadFilterNode | null;
   gain: GainNode | null;
+  eqLow: BiquadFilterNode | null;
+  eqMid: BiquadFilterNode | null;
+  eqHigh: BiquadFilterNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null },
-  B: { el: null, src: null, filter: null, gain: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
