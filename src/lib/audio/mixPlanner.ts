@@ -93,8 +93,15 @@ export function planMix(
     mode = r.mode; bars = r.bars; notes = `🎲 ${r.notes}`;
   } else if (force !== "auto") {
     mode = force as TransitionMode;
-    bars = mode === "doubleDrop" ? 8 : mode === "loopRoll" ? 4 : mode === "bassSwap" ? 16 : 8;
+    bars = mode === "doubleDrop" ? 8 : mode === "loopRoll" ? 4 : mode === "bassSwap" ? 16 : mode === "genreBridge" ? 32 : 8;
     notes = `Manuell: ${mode}`;
+  } else if (bpmDiff > 0.18 || (!keyCompat && bpmDiff > 0.08)) {
+    // Cross-genre territory: slow country → fast reggae. Use a pre-rendered
+    // bridge snippet locked to the outgoing key+tempo so the listener stays
+    // grooving while the new material sneaks in.
+    mode = "genreBridge";
+    bars = 24;
+    notes = `Genre-Bridge ${curBpm.toFixed(0)}→${nxtBpm.toFixed(0)} BPM · ${current.camelot ?? "?"}→${next.camelot ?? "?"}`;
   } else if (bpmDiff <= 0.03 && keyCompat && current.cues && next.cues) {
     // Profi-Move: perfekt kompatibel → doubleDrop oder bassSwap
     const r = Math.random();
