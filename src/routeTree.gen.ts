@@ -19,6 +19,7 @@ import { Route as AuthenticatedStudioRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedSoundpoolRouteImport } from './routes/_authenticated/soundpool'
 import { Route as AuthenticatedSoundDesignerRouteImport } from './routes/_authenticated/sound-designer'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedRemixRouteImport } from './routes/_authenticated/remix'
 import { Route as AuthenticatedPartyHostRouteImport } from './routes/_authenticated/party-host'
 import { Route as AuthenticatedMomentsRouteImport } from './routes/_authenticated/moments'
 import { Route as AuthenticatedLyricWriterRouteImport } from './routes/_authenticated/lyric-writer'
@@ -90,6 +91,11 @@ const AuthenticatedSoundDesignerRoute =
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedRemixRoute = AuthenticatedRemixRouteImport.update({
+  id: '/remix',
+  path: '/remix',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedPartyHostRoute = AuthenticatedPartyHostRouteImport.update({
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
+  '/remix': typeof AuthenticatedRemixRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/moments': typeof AuthenticatedMomentsRoute
   '/party-host': typeof AuthenticatedPartyHostRoute
+  '/remix': typeof AuthenticatedRemixRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/soundpool': typeof AuthenticatedSoundpoolRoute
@@ -293,6 +301,7 @@ export interface FileRoutesById {
   '/_authenticated/lyric-writer': typeof AuthenticatedLyricWriterRoute
   '/_authenticated/moments': typeof AuthenticatedMomentsRoute
   '/_authenticated/party-host': typeof AuthenticatedPartyHostRoute
+  '/_authenticated/remix': typeof AuthenticatedRemixRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/sound-designer': typeof AuthenticatedSoundDesignerRoute
   '/_authenticated/soundpool': typeof AuthenticatedSoundpoolRoute
@@ -328,6 +337,7 @@ export interface FileRouteTypes {
     | '/lyric-writer'
     | '/moments'
     | '/party-host'
+    | '/remix'
     | '/settings'
     | '/sound-designer'
     | '/soundpool'
@@ -361,6 +371,7 @@ export interface FileRouteTypes {
     | '/lyric-writer'
     | '/moments'
     | '/party-host'
+    | '/remix'
     | '/settings'
     | '/sound-designer'
     | '/soundpool'
@@ -395,6 +406,7 @@ export interface FileRouteTypes {
     | '/_authenticated/lyric-writer'
     | '/_authenticated/moments'
     | '/_authenticated/party-host'
+    | '/_authenticated/remix'
     | '/_authenticated/settings'
     | '/_authenticated/sound-designer'
     | '/_authenticated/soundpool'
@@ -494,6 +506,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/remix': {
+      id: '/_authenticated/remix'
+      path: '/remix'
+      fullPath: '/remix'
+      preLoaderRoute: typeof AuthenticatedRemixRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/party-host': {
@@ -666,6 +685,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedLyricWriterRoute: typeof AuthenticatedLyricWriterRoute
   AuthenticatedMomentsRoute: typeof AuthenticatedMomentsRoute
   AuthenticatedPartyHostRoute: typeof AuthenticatedPartyHostRoute
+  AuthenticatedRemixRoute: typeof AuthenticatedRemixRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSoundDesignerRoute: typeof AuthenticatedSoundDesignerRoute
   AuthenticatedSoundpoolRoute: typeof AuthenticatedSoundpoolRoute
@@ -692,6 +712,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedLyricWriterRoute: AuthenticatedLyricWriterRoute,
   AuthenticatedMomentsRoute: AuthenticatedMomentsRoute,
   AuthenticatedPartyHostRoute: AuthenticatedPartyHostRoute,
+  AuthenticatedRemixRoute: AuthenticatedRemixRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSoundDesignerRoute: AuthenticatedSoundDesignerRoute,
   AuthenticatedSoundpoolRoute: AuthenticatedSoundpoolRoute,

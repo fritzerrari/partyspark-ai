@@ -32,7 +32,9 @@ function RemixRoute() {
 
   const items: { id: string; label: string; path: string; bucket: "recordings" | "tracks" }[] = [
     ...recs.map((r) => ({ id: `r:${r.id}`, label: `🎤 ${r.title ?? r.kind}`, path: r.storage_path, bucket: "recordings" as const })),
-    ...tracks.map((t) => ({ id: `t:${t.id}`, label: `🎵 ${t.title ?? "Track"}`, path: t.storage_path, bucket: "tracks" as const })),
+    ...tracks
+      .filter((t): t is typeof t & { storage_path: string } => !!t.storage_path)
+      .map((t) => ({ id: `t:${t.id}`, label: `🎵 ${t.title ?? "Track"}`, path: t.storage_path, bucket: "tracks" as const })),
   ];
 
   async function render() {
