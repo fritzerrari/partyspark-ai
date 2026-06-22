@@ -167,9 +167,12 @@ export function StemMixer() {
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
   const runStemRecipe = useTwinDeck((s) => s.runStemRecipe);
+  const runClean = useTwinDeck((s) => s.runCleanRecipe);
   const smartMix = useTwinDeck((s) => s.smartMix);
   const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
+  const phase = useTwinDeck((s) => s.transitionPhase);
+  const engine = useTwinDeck((s) => s.transitionEngine);
   const [recipe, setRecipe] = useState<RecipeId | "auto">("auto");
 
   const fromSide: DeckSide = crossfader < 0.5 ? "A" : "B";
@@ -183,7 +186,14 @@ export function StemMixer() {
   }, [fromSide, toSide, getTransitionQuality]);
 
   async function fire() {
-    await runStemRecipe(fromSide, toSide, recipe === "auto" ? undefined : recipe);
+    // Manual fire: only run the destructive stem-recipe engine if BOTH decks
+    // truly have real Demucs stems. Otherwise fall back to the Clean DJ
+    // engine so we don't shred the original audio.
+    if (quality.mode === "real") {
+      await runStemRecipe(fromSide, toSide, recipe === "auto" ? undefined : recipe);
+    } else {
+      await runClean(fromSide, toSide);
+    }
   }
 
   async function fireSmart() {
