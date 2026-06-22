@@ -10,6 +10,7 @@
 import type { MixSet, TrackProfile, TransitionEvent, TransitionPlan, TransitionType } from "./types";
 import { computeMixability } from "./mixability";
 import { planTransition } from "./planner";
+import { Mp3Encoder } from "@breezystack/lamejs";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Playlist ordering
