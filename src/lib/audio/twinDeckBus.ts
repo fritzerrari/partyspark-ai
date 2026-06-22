@@ -777,6 +777,8 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   transitionMode: "auto",
   transitionInFlight: false,
   lastTransitionNote: null,
+  transitionPhase: null,
+  transitionEngine: null,
   autoTimerOn: false,
   autoTimerSec: 90,
   autoTimerCountdown: 90,
