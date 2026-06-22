@@ -4,6 +4,7 @@ import type { EngineTrack } from "./engine";
 import { camelotCompatible } from "./analyze";
 import type { RecipeId } from "./transitionRecipes";
 import { pickRecipe } from "./transitionRecipes";
+import type { StemId } from "./stemSplit";
 
 export type TransitionQuality = {
   /** 0..100 overall mix-quality score. */
@@ -19,6 +20,12 @@ export type TransitionQuality = {
   recommendedRecipe: RecipeId;
   /** "real" if BOTH decks have real stems; "hybrid" if one; else "pseudo". */
   mode: "real" | "hybrid" | "pseudo";
+  /** Length in bars for the recommended transition (8/12/16). */
+  bars: number;
+  /** Which incoming stem to "tease" first as a preview. */
+  teaserStem: StemId;
+  /** Aggression level — smooth, performance, or emergency rescue. */
+  aggression: "smooth" | "performance" | "emergency";
 };
 
 function hasVocals(t: EngineTrack | null | undefined): boolean {
@@ -89,8 +96,36 @@ export function scoreTransition(opts: {
     energyJump,
   });
 
+  // ---- Performance choices (length / teaser / aggression) ----
+  const aggression: TransitionQuality["aggression"] =
+    bpmDeltaPct > 0.10 || !keyCompatible ? "emergency"
+    : energyJump > 0.2 || (fromVoc && toVoc) ? "performance"
+    : "smooth";
+
+  // Longer transitions when match is good, shorter when we're in emergency mode.
+  const bars = aggression === "emergency" ? 12
+             : aggression === "performance" ? 16
+             : 12;
+
+  // Teaser stem: pick something that contrasts with what's currently dominant on outgoing.
+  // - Both have vocals → tease incoming drums to flag the new track without vocal clash.
+  // - Outgoing has vocals, incoming instrumental → tease incoming melody.
+  // - Outgoing instrumental, incoming vocals → tease incoming vocal hook.
+  // - Big energy jump → tease incoming drums (build hype).
+  let teaserStem: StemId = "drums";
+  if (fromVoc && toVoc) teaserStem = "drums";
+  else if (fromVoc && !toVoc) teaserStem = "other";
+  else if (!fromVoc && toVoc) teaserStem = "vocals";
+  else if (energyJump > 0.2) teaserStem = "drums";
+  else teaserStem = "other";
+
+  if (mode === "pseudo") {
+    warnings.push("Pseudo-Stems aktiv — Trennschärfe begrenzt. Echte Stems pro Deck generieren für saubere Performance.");
+  }
+
   return {
     score, bpmScore, keyScore, energyScore, vocalConflict,
     bpmDeltaPct, bpmDelta, keyCompatible, warnings, recommendedRecipe, mode,
+    bars, teaserStem, aggression,
   };
 }
