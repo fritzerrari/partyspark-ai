@@ -218,8 +218,6 @@ function Library() {
       setSelectedIds((s) => [...new Set([...s, ...ids])]);
     }
   }
-    (t.title + " " + (t.artist ?? "")).toLowerCase().includes(search.toLowerCase()),
-  );
 
   function toggleSelect(id: string) {
     setSelectedIds((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
