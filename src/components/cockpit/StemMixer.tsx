@@ -35,6 +35,7 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
   const setStem = useTwinDeck((s) => s.setStem);
   const resetStems = useTwinDeck((s) => s.resetStems);
   const getStemGains = useTwinDeck((s) => s.getStemGains);
+  const getStemLevels = useTwinDeck((s) => s.getStemLevels);
   const stemsMode = useTwinDeck((s) => s[side].stemsMode);
   const trackId = useTwinDeck((s) => s[side].track?.id ?? null);
   const attachRealStems = useTwinDeck((s) => s.attachRealStems);
@@ -53,12 +54,16 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
   }, [stems, stemsMode, side, attachRealStems]);
 
   const [vals, setVals] = useState<Record<StemId, number>>({ drums: 1, bass: 1, vocals: 1, other: 1 });
+  const [levels, setLevels] = useState<Record<StemId, number>>({ drums: 0, bass: 0, vocals: 0, other: 0 });
 
   // Poll the actual gain values so recipe-driven changes show up in the UI.
   useEffect(() => {
-    const id = window.setInterval(() => setVals(getStemGains(side)), 80);
+    const id = window.setInterval(() => {
+      setVals(getStemGains(side));
+      setLevels(getStemLevels(side));
+    }, 60);
     return () => clearInterval(id);
-  }, [side, getStemGains]);
+  }, [side, getStemGains, getStemLevels]);
 
   return (
     <div className="flex-1 rounded-xl border border-white/10 bg-black/40 p-2">
@@ -117,25 +122,36 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
           const meta = STEM_META[stem];
           const Icon = meta.icon;
           const v = vals[stem];
+          const lvl = levels[stem];
           return (
             <div key={stem} className="flex flex-col items-center gap-1">
               <Icon className="h-3 w-3" style={{ color: meta.color }} />
-              <input
-                type="range"
-                min={0} max={1.5} step={0.01}
-                value={v}
-                onChange={(e) => {
-                  const nv = parseFloat(e.target.value);
-                  setStem(side, stem, nv, 0.03);
-                  setVals((prev) => ({ ...prev, [stem]: nv }));
-                }}
-                className="h-20 w-2 cursor-pointer appearance-none rounded-full bg-white/10"
-                style={{
-                  writingMode: "vertical-lr" as never,
-                  WebkitAppearance: "slider-vertical" as never,
-                  accentColor: meta.color,
-                }}
-              />
+              <div className="relative flex h-20 items-end gap-1">
+                {/* VU meter */}
+                <div className="relative h-full w-1.5 overflow-hidden rounded-full bg-white/5">
+                  <div
+                    className="absolute bottom-0 left-0 right-0 rounded-full transition-[height] duration-75"
+                    style={{ height: `${Math.round(lvl * 100)}%`, background: meta.color, boxShadow: `0 0 6px ${meta.color}` }}
+                  />
+                </div>
+                {/* Slider */}
+                <input
+                  type="range"
+                  min={0} max={1.5} step={0.01}
+                  value={v}
+                  onChange={(e) => {
+                    const nv = parseFloat(e.target.value);
+                    setStem(side, stem, nv, 0.03);
+                    setVals((prev) => ({ ...prev, [stem]: nv }));
+                  }}
+                  className="h-20 w-2 cursor-pointer appearance-none rounded-full bg-white/10"
+                  style={{
+                    writingMode: "vertical-lr" as never,
+                    WebkitAppearance: "slider-vertical" as never,
+                    accentColor: meta.color,
+                  }}
+                />
+              </div>
               <span className="text-[9px] text-stage-foreground/60">{meta.label}</span>
               <span className="font-mono text-[8px] text-stage-foreground/40">{Math.round(v * 100)}</span>
             </div>
