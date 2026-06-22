@@ -575,6 +575,21 @@ export function getDeckSignal(side: DeckSide) {
   };
 }
 
+/** Public: get a shared analyser node on the master bus for room-wide visualization. */
+let masterAnalyser: AnalyserNode | null = null;
+export function getMasterAnalyser(): AnalyserNode | null {
+  ensureCtx();
+  if (!ctx || !masterGain) return null;
+  if (!masterAnalyser) {
+    masterAnalyser = ctx.createAnalyser();
+    masterAnalyser.fftSize = 1024;
+    masterAnalyser.smoothingTimeConstant = 0.78;
+    // Tap off master without affecting output
+    masterGain.connect(masterAnalyser);
+  }
+  return masterAnalyser;
+}
+
 async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeHint) {
   ensureCtx(); wireDeck("A"); wireDeck("B");
   if (!ctx) return;
