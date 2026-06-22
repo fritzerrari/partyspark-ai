@@ -372,6 +372,10 @@ function recomputeEffective(side: DeckSide) {
 
 function applyCrossfader(state: BusState) {
   if (!deck.A.gain || !deck.B.gain) return;
+  // During an active transition the planner / recipe owns the deck gains via
+  // AudioParam ramps. Writing .gain.value here cancels those scheduled ramps
+  // and breaks the choreography — so we no-op while a transition is running.
+  if (state.transitionInFlight) return;
   const gA = Math.cos((state.crossfader * Math.PI) / 2);
   const gB = Math.sin((state.crossfader * Math.PI) / 2);
   deck.A.gain.gain.value = state.A.volume * gA;
@@ -973,6 +977,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
 
   setStem(side, stem, value, sec = 0.05) {
     ensureCtx(); wireDeck(side);
+    // Pseudo-stems are additive band-filters layered on the dry signal —
+    // moving them while a real stem player isn't attached colours the full
+    // mix instead of isolating a stem. Refuse the write unless real stems
+    // are active, so manual sliders can't quietly destroy the audio.
+    const st = get();
+    if (st[side].stemsMode !== "real") return;
     deck[side].stems?.setGain(stem, value, sec);
   },
   resetStems(side) {
