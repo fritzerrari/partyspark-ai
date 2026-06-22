@@ -6,6 +6,7 @@ import type { EngineTrack } from "@/lib/audio/engine";
 import { TwinDeck } from "@/components/cockpit/TwinDeck";
 import { MicRecorder } from "@/components/recording/MicRecorder";
 import { StemMixer } from "@/components/cockpit/StemMixer";
+import { AiMixBuilder } from "@/components/cockpit/AiMixBuilder";
 import { StepSequencer } from "@/components/cockpit/StepSequencer";
 import { CoachHud } from "@/components/cockpit/CoachHud";
 import { SingAlongPanel } from "@/components/cockpit/SingAlongPanel";
@@ -159,6 +160,8 @@ function Cockpit() {
       <TwinDeck tracks={tracks} />
 
       <StemMixer />
+
+      <AiMixBuilder tracks={tracks} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
         <SingAlongPanel />
