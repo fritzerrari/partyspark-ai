@@ -957,6 +957,27 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       other: s.gains.other.gain.value,
     };
   },
+  getStemLevels(side) {
+    const m = deck[side].stemMeter;
+    if (!m) return { drums: 0, bass: 0, vocals: 0, other: 0 };
+    return m.getLevels();
+  },
+  getTransitionQuality(from, to) {
+    const st = get();
+    return scoreTransition({
+      fromTrack: st[from].track,
+      toTrack: st[to].track,
+      fromRate: deck[from].el?.playbackRate ?? st[from].pitch ?? 1,
+      toRate: deck[to].el?.playbackRate ?? st[to].pitch ?? 1,
+      fromMode: st[from].stemsMode,
+      toMode: st[to].stemsMode,
+    });
+  },
+  async smartMix(from, to) {
+    const q = get().getTransitionQuality(from, to);
+    await get().runStemRecipe(from, to, q.recommendedRecipe);
+    return q.recommendedRecipe;
+  },
   async runStemRecipe(from, to, id) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
     if (!ctx) return;
