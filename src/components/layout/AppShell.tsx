@@ -4,26 +4,12 @@ import {
   PartyPopper,
   Music2,
   Mic,
-  Repeat,
-  Sparkles,
   Settings as SettingsIcon,
-  Layers,
   LogOut,
-  MoreHorizontal,
-  Volume2,
   ShieldCheck,
-  Bot,
-  CalendarHeart,
-  Trophy,
-  PenLine,
-  Music4,
-  AudioWaveform,
-  Users,
-  Wand2,
-  Compass,
 } from "lucide-react";
 import { Disc3 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery } from "@tanstack/react-query";
@@ -45,7 +31,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const [moreOpen, setMoreOpen] = useState(false);
   const { data: isAdmin } = useQuery({ ...isAdminOptions(user?.id ?? ""), enabled: !!user?.id });
 
   async function handleSignOut() {
