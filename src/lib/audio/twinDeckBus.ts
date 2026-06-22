@@ -1550,10 +1550,12 @@ function scheduleEvent(ev: TransitionEvent, when: number, totalDur: number) {
     case "tempo": {
       const el = target.el;
       if (!el) return;
-      // playbackRate isn't an AudioParam — defer to wall-clock setTimeout.
+      // playbackRate isn't an AudioParam — RAF-interpolate from current rate
+      // to target over `rampSec` so BPM-mismatched mixes don't pitch-jump.
       const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
       const clamped = Math.max(0.88, Math.min(1.12, ev.rate));
-      setTimeout(() => { try { el.playbackRate = clamped; } catch { /* noop */ } }, delayMs);
+      const glideMs = Math.max(120, rampSec * 1000 * 2.4); // longer = more musical
+      setTimeout(() => { glidePlaybackRate(el, clamped, glideMs); }, delayMs);
       return;
     }
     case "cut": {
