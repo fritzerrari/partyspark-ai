@@ -449,14 +449,40 @@ function Library() {
 
         {/* Smart list */}
         <div className="min-w-0">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {fullyFiltered.length} von {tracks.length} Tracks
-            </p>
-            <button
-              onClick={() => setFiltersOpen((o) => !o)}
-              className="flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest lg:hidden"
-            >
+          <div className="mb-2 flex min-h-[36px] flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleSelectAll}
+                disabled={fullyFiltered.length === 0 || bulkDeleting}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition hover:bg-muted disabled:opacity-50"
+              >
+                {fullyFiltered.length > 0 && fullyFiltered.every((t) => selectedIds.includes(t.id)) ? (
+                  <><CheckSquare className="h-3.5 w-3.5 text-[var(--neon-magenta)]" /> Keine</>
+                ) : (
+                  <><SquareIcon className="h-3.5 w-3.5" /> Alle</>
+                )}
+              </button>
+              {selectedIds.length > 0 && (
+                <span className="rounded-full bg-[var(--neon-magenta)]/15 px-2.5 py-1 text-[10px] font-bold text-[var(--neon-magenta)]">
+                  {selectedIds.length} ausgewählt
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={deleteSelected}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-500 transition hover:bg-red-500/25 disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  {bulkDeleting ? "Löschen…" : "Löschen"}
+                </button>
+              )}
+              <button
+                onClick={() => setFiltersOpen((o) => !o)}
+                className="flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest lg:hidden"
+              >
               {filtersOpen ? <X className="h-3 w-3" /> : <Filter className="h-3 w-3" />}
               {filtersOpen ? "Filter zu" : "Filter"}
             </button>
