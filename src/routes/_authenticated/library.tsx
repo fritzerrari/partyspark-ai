@@ -591,13 +591,14 @@ function ToggleRow({ checked, onChange, label }: { checked: boolean; onChange: (
   );
 }
 
-function Chip({ children, accent, warn, muted }: { children: React.ReactNode; accent?: boolean; warn?: boolean; muted?: boolean }) {
+function Chip({ children, accent, warn, muted, ok }: { children: React.ReactNode; accent?: boolean; warn?: boolean; muted?: boolean; ok?: boolean }) {
   return (
     <span className={cn(
       "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest",
       accent && "bg-[var(--neon-cyan)]/15 text-[var(--neon-cyan)]",
       warn && "bg-amber-500/20 text-amber-600 dark:text-amber-300",
-      !accent && !warn && !muted && "bg-muted text-foreground/80",
+      ok && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300",
+      !accent && !warn && !muted && !ok && "bg-muted text-foreground/80",
       muted && "text-muted-foreground/50",
     )}>{children}</span>
   );
