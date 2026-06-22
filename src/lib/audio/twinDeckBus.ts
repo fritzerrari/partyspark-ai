@@ -179,7 +179,8 @@ function ensureCtx() {
     bridgeGain.gain.value = 0;
     bridgeFilter = ctx.createBiquadFilter();
     bridgeFilter.type = "highpass";
-    bridgeFilter.frequency.value = 220;
+    // Transparent by default — only the genre-bridge flow lifts this to >100 Hz.
+    bridgeFilter.frequency.value = 20;
     bridgeFilter.Q.value = 0.7;
     bridgeFilter.connect(bridgeGain);
     bridgeGain.connect(masterGain);
