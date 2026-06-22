@@ -137,15 +137,29 @@ function Cockpit() {
 
   return (
     <div className="space-y-4 pb-32 animate-fade-up sm:pb-4">
-      <div className="rounded-3xl stage-gradient p-4 sm:p-5">
+      <div className="relative overflow-hidden rounded-3xl stage-gradient p-5 sm:p-6">
+        {/* Ambient bg pulse */}
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--neon-cyan)]/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[var(--neon-magenta)]/10 blur-3xl" />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-black uppercase tracking-[0.18em] text-stage-foreground sm:text-2xl">DJ Cockpit</h1>
-            <p className="mt-1 text-[10px] uppercase tracking-widest text-stage-foreground/60 sm:text-xs">
-              Twin Decks · Auto-DJ · Sing-Along · FX
+          <div className="relative">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-stage-foreground/60">
+              Schritt 3 · Spiele deine Party
+            </p>
+            <h1 className="mt-1 text-2xl font-black uppercase tracking-tight text-stage-foreground sm:text-3xl">
+              <span className="bg-gradient-to-r from-[var(--neon-cyan)] to-[var(--neon-magenta)] bg-clip-text text-transparent">
+                DJ Cockpit
+              </span>
+            </h1>
+            <p className="mt-1 text-[11px] text-stage-foreground/70">
+              {tracks.length === 0
+                ? "Noch keine Tracks — lade welche in deine Library."
+                : tracks.length < 2
+                  ? `${tracks.length} Track verfügbar — du brauchst min. 2 für Auto-DJ.`
+                  : `${tracks.length} Tracks bereit · Mixen, singen, FX, aufnehmen.`}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="relative flex flex-wrap gap-2">
             <button
               onClick={openVisualizer}
               className="min-h-[44px] rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold uppercase tracking-widest text-stage-foreground transition-all hover:bg-white/20 active:scale-95 flex items-center justify-center gap-2"
