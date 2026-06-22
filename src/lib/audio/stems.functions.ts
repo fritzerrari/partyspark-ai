@@ -50,11 +50,10 @@ type DbRow = {
   updated_at: string;
 };
 
-async function rowToResult(
-  supabase: ReturnType<typeof requireSupabaseAuth> extends never ? never :
-    Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
-  row: DbRow,
-): Promise<StemRow> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseLike = any;
+
+async function rowToResult(supabase: SupabaseLike, row: DbRow): Promise<StemRow> {
   const paths: Record<Stem, string | null> = {
     drums: row.drums_path, bass: row.bass_path, vocals: row.vocals_path, other: row.other_path,
   };
@@ -73,10 +72,7 @@ async function rowToResult(
   };
 }
 
-async function loadRow(
-  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
-  trackId: string,
-): Promise<DbRow | null> {
+async function loadRow(supabase: SupabaseLike, trackId: string): Promise<DbRow | null> {
   const { data } = await supabase.from("track_stems").select("*").eq("track_id", trackId).maybeSingle();
   return (data as DbRow | null) ?? null;
 }
