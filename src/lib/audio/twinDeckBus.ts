@@ -13,6 +13,7 @@ import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
 import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
 import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
+import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -36,6 +37,8 @@ export type DeckState = {
   bridgeReady: boolean;
   bridgeBuilding: boolean;
   bridgeNotes: string | null;
+  /** Real Demucs stems status for this deck's current track. */
+  stemsMode: "pseudo" | "loading" | "real";
 };
 
 type BusState = {
@@ -90,6 +93,10 @@ type Actions = {
   runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId) => Promise<void>;
   /** Snapshot of current stem-gains for the UI. */
   getStemGains: (side: DeckSide) => Record<StemId, number>;
+  /** Attach real Demucs stems (4 buffers) to a deck. */
+  attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
+  /** Drop back to pseudo-stems on a deck. */
+  detachRealStems: (side: DeckSide) => void;
   dispose: () => void;
 };
 
@@ -105,9 +112,10 @@ const deck: Record<DeckSide, {
   eqHigh: BiquadFilterNode | null;
   analyser: AnalyserNode | null;
   stems: StemSplit | null;
+  realStems: RealStemPlayer | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
@@ -124,6 +132,7 @@ function emptyDeck(): DeckState {
     analyzing: false, analyzeProgress: 0,
     effectiveBpm: null, effectiveKey: null, keyShiftSemis: 0,
     bridgeReady: false, bridgeBuilding: false, bridgeNotes: null,
+    stemsMode: "pseudo",
   };
 }
 
