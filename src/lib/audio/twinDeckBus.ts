@@ -20,6 +20,7 @@ import {
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { createStemMeter, type StemMeter } from "./stemMeter";
+import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
@@ -162,9 +163,13 @@ const deck: Record<DeckSide, {
   stems: StemSplit | null;
   realStems: RealStemPlayer | null;
   stemMeter: StemMeter | null;
+  /** Pitch-preserving live time-stretch node (SoundTouch worklet). */
+  stretch: LiveStretchNode | null;
+  /** Bypass node used while the async stretch node is being built. */
+  stretchPlaceholder: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
