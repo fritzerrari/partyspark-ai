@@ -14,6 +14,8 @@ import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync
 import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
 import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
+import { scoreTransition, type TransitionQuality } from "./transitionQuality";
+import { createStemMeter, type StemMeter } from "./stemMeter";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -113,9 +115,10 @@ const deck: Record<DeckSide, {
   analyser: AnalyserNode | null;
   stems: StemSplit | null;
   realStems: RealStemPlayer | null;
+  stemMeter: StemMeter | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
