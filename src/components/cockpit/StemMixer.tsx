@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTwinDeck, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { RECIPES } from "@/lib/audio/transitionRecipes";
+import { decideTransition } from "@/lib/audio/transitionDecision";
 import type { StemId } from "@/lib/audio/stemSplit";
 import { cn } from "@/lib/utils";
 import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2, AlertTriangle, Zap, Lock } from "lucide-react";
@@ -111,7 +112,7 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
               }}
               disabled={generate.isPending || stems?.status === "processing"}
               className="flex items-center gap-1 rounded border border-[var(--neon-amber)]/60 bg-[var(--neon-amber)]/10 px-1.5 py-0.5 text-[9px] text-[var(--neon-amber)] hover:bg-[var(--neon-amber)]/20 disabled:opacity-50"
-              title="Echte Demucs-Stems per HuggingFace Space generieren"
+              title="Echte Stems für dieses Deck generieren"
             >
               {generate.isPending || stems?.status === "processing"
                 ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
@@ -199,6 +200,12 @@ export function StemMixer() {
 
   // Re-score whenever a deck/pitch/mode changes.
   const [quality, setQuality] = useState(() => getTransitionQuality(fromSide, toSide));
+  const decision = decideTransition({
+    fromTrack: fromSide === "A" ? A.track : B.track,
+    toTrack: toSide === "A" ? A.track : B.track,
+    fromMode: fromSide === "A" ? A.stemsMode : B.stemsMode,
+    toMode: toSide === "A" ? A.stemsMode : B.stemsMode,
+  });
   useEffect(() => {
     const id = window.setInterval(() => setQuality(getTransitionQuality(fromSide, toSide)), 400);
     return () => clearInterval(id);
