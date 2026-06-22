@@ -927,7 +927,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       camelot: track.camelot ?? keyToCamelot(track.musicalKey ?? null),
     };
     d.el.src = enriched.url;
-    d.el.playbackRate = get()[side].pitch;
+    setDeckRate(side, get()[side].pitch);
     set((s) => ({ [side]: {
       ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0,
       isPlaying: false, bridgeReady: false, bridgeNotes: null,
