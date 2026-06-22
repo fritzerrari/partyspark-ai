@@ -184,6 +184,8 @@ function Library() {
     } finally {
       setDeletingId(null);
     }
+  }
+
   async function deleteSelected() {
     if (selectedIds.length === 0) return;
     const count = selectedIds.length;
