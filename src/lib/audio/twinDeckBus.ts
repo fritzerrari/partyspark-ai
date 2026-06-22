@@ -1347,11 +1347,207 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
   },
 
+  async executePlan(plan) {
+    ensureCtx(); wireDeck("A"); wireDeck("B");
+    if (!ctx) return;
+    const st = get();
+    if (st.transitionInFlight) return;
+    const fromSide = (plan.events.find((e) => e.kind === "cut" && e.action === "pause")?.deck
+      ?? (plan.fromTrackId && st.A.track?.id === plan.fromTrackId ? "A" : "B")) as DeckSide;
+    const toSide: DeckSide = fromSide === "A" ? "B" : "A";
+    const fromDeck = deck[fromSide];
+    const toDeck = deck[toSide];
+    if (!fromDeck.gain || !toDeck.gain) return;
+    set({
+      transitionInFlight: true,
+      transitionEngine: plan.fallbackUsed ? "clean" : "real",
+      transitionPhase: "cue",
+    });
+    try {
+      if (ctx.state === "suspended") void ctx.resume();
+      const base = ctx.currentTime + Math.max(0, plan.startAtCtxTime - ctx.currentTime);
+      // Animate the visible UI crossfader over the plan window — purely cosmetic
+      // since applyCrossfader is no-op'd during transitionInFlight.
+      animateCrossfader(toSide === "B" ? 1 : 0, plan.durationSec * 1000);
+      // Schedule every event on the AudioContext clock.
+      for (const ev of plan.events) {
+        const tAt = base + Math.max(0, ev.t);
+        scheduleEvent(ev, tAt, plan.durationSec);
+      }
+      // Lightweight phase ticks: cue → tease → layer → strip → switch → reveal.
+      const phases: TransitionPhase[] = ["cue", "tease", "layer", "strip", "switch", "reveal"];
+      const stepMs = (plan.durationSec * 1000) / phases.length;
+      phases.forEach((p, i) => {
+        setTimeout(() => {
+          if (!get().transitionInFlight) return;
+          set({ transitionPhase: p });
+        }, i * stepMs);
+      });
+      // Wait for the plan to complete (real-time).
+      await new Promise<void>((r) => setTimeout(r, Math.max(250, plan.durationSec * 1000 + 80)));
+      recomputeEffective(toSide);
+      set({
+        lastTransitionNote: `Plan · ${plan.type} · ${plan.bars} bars · score ${plan.qualityScore}`,
+        transitionInFlight: false,
+        transitionPhase: null,
+        transitionEngine: null,
+      });
+    } catch (e) {
+      console.warn("executePlan failed", e);
+      set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
+    } finally {
+      // Always neutralise EQ/filter so a thrown plan can't leave a deck filtered.
+      try { resetEq(fromSide); resetEq(toSide); resetFilter(fromSide); resetFilter(toSide); } catch { /* noop */ }
+      // Snap UI crossfader to its target so the next interaction starts clean.
+      try { applyCrossfader(get()); } catch { /* noop */ }
+    }
+  },
+
+  async smartMixPlan(from, to, opts) {
+    const st = get();
+    if (!st[from].track || !st[to].track) return null;
+    // Make sure both decks have fresh analysis so the plan reasons over real data.
+    if (!st[from].track?.beatGrid || !st[from].track?.bpm) await get().ensureAnalysis(from).catch(() => {});
+    if (!st[to].track?.beatGrid || !st[to].track?.bpm) await get().ensureAnalysis(to).catch(() => {});
+    const cur = get();
+    const fromTrack = cur[from].track!;
+    const toTrack = cur[to].track!;
+    // Position incoming at intro-end / first drop so we don't blend into silence.
+    const toEl = deck[to].el;
+    if (toEl && toTrack.cues && toEl.currentTime < 0.5) {
+      try { toEl.currentTime = Math.max(0, toTrack.cues.introEnd || toTrack.cues.firstDrop || 0); } catch { /* noop */ }
+    }
+    const profileFrom = trackProfileFromEngine(fromTrack, { stemsAvailable: cur[from].stemsMode === "real" });
+    const profileTo = trackProfileFromEngine(toTrack, { stemsAvailable: cur[to].stemsMode === "real" });
+    if (!ctx) ensureCtx();
+    if (!ctx) return null;
+    // Align start to next downbeat of outgoing deck for musical timing.
+    const grid = fromTrack.beatGrid ?? [];
+    const fEl = deck[from].el;
+    let startCtx = ctx.currentTime + 0.05;
+    if (fEl && grid.length) {
+      const now = fEl.currentTime;
+      const next = grid.find((b) => b > now + 0.08);
+      if (next != null) startCtx = ctx.currentTime + (next - now) / (fEl.playbackRate || 1);
+    }
+    const { plan } = planTransition({
+      from: profileFrom, to: profileTo,
+      fromDeck: from, toDeck: to,
+      startAtCtxTime: startCtx,
+      forceType: opts?.force, bars: opts?.bars,
+    }, { from: cur[from].volume, to: cur[to].volume });
+    await get().executePlan(plan);
+    return plan;
+  },
+
   dispose() {
     stopAutoTimer();
     if (rafId) cancelAnimationFrame(rafId);
   },
 }));
+
+/** Schedule a single TransitionEvent onto the live deck graph. */
+function scheduleEvent(ev: TransitionEvent, when: number, totalDur: number) {
+  if (!ctx) return;
+  const target = deck[ev.deck];
+  if (!target) return;
+  const rampSec = Math.max(0.05, Math.min(totalDur * 0.5, totalDur / 6));
+  switch (ev.kind) {
+    case "gain": {
+      if (ev.target === "deck") {
+        const g = target.gain?.gain;
+        if (!g) return;
+        g.cancelScheduledValues(when);
+        g.setValueAtTime(g.value, when);
+        g.linearRampToValueAtTime(Math.max(0, ev.to), when + rampSec);
+      } else if (ev.target === "stem" && ev.stem) {
+        // Real stems only — the bus already refuses pseudo writes elsewhere.
+        const stems = target.stems;
+        const useState = useTwinDeck.getState()[ev.deck];
+        if (useState.stemsMode !== "real" || !stems) return;
+        const gainNode = stems.gains[ev.stem as StemId];
+        if (!gainNode) return;
+        gainNode.gain.cancelScheduledValues(when);
+        gainNode.gain.setValueAtTime(gainNode.gain.value, when);
+        gainNode.gain.linearRampToValueAtTime(Math.max(0, ev.to), when + rampSec);
+      }
+      return;
+    }
+    case "filter": {
+      const f = target.filter;
+      if (!f) return;
+      if (ev.filterType === "off") {
+        // Open the filter completely (transparent).
+        f.frequency.cancelScheduledValues(when);
+        f.frequency.setValueAtTime(f.frequency.value, when);
+        f.frequency.exponentialRampToValueAtTime(22000, when + rampSec);
+        // Reset type back to lowpass at the same time so a later move doesn't
+        // inherit a stale highpass state.
+        setTimeout(() => { try { if (f.type !== "lowpass") f.type = "lowpass"; } catch { /* noop */ } }, Math.max(0, (when - ctx!.currentTime) * 1000));
+        return;
+      }
+      // Schedule a type change just before the frequency ramp.
+      const setTypeAtMs = Math.max(0, (when - ctx.currentTime) * 1000);
+      const desired = ev.filterType;
+      setTimeout(() => { try { if (f.type !== desired) f.type = desired; } catch { /* noop */ } }, setTypeAtMs);
+      f.frequency.cancelScheduledValues(when);
+      f.frequency.setValueAtTime(f.frequency.value, when);
+      if (ev.ramp === "exp") {
+        f.frequency.exponentialRampToValueAtTime(Math.max(40, ev.freq), when + rampSec);
+      } else {
+        f.frequency.linearRampToValueAtTime(Math.max(40, ev.freq), when + rampSec);
+      }
+      return;
+    }
+    case "eq": {
+      const band = ev.band === "low" ? target.eqLow : ev.band === "mid" ? target.eqMid : target.eqHigh;
+      if (!band) return;
+      band.gain.cancelScheduledValues(when);
+      band.gain.setValueAtTime(band.gain.value, when);
+      band.gain.linearRampToValueAtTime(ev.gainDb, when + rampSec);
+      return;
+    }
+    case "tempo": {
+      const el = target.el;
+      if (!el) return;
+      // playbackRate isn't an AudioParam — defer to wall-clock setTimeout.
+      const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
+      const clamped = Math.max(0.88, Math.min(1.12, ev.rate));
+      setTimeout(() => { try { el.playbackRate = clamped; } catch { /* noop */ } }, delayMs);
+      return;
+    }
+    case "cut": {
+      const el = target.el;
+      if (!el) return;
+      const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
+      setTimeout(() => {
+        try {
+          if (ev.action === "play") { if (el.paused) void el.play().catch(() => {}); }
+          else if (ev.action === "pause") { el.pause(); }
+          else if (ev.action === "seek" && typeof ev.seekTo === "number") { el.currentTime = Math.max(0, ev.seekTo); }
+        } catch { /* noop */ }
+      }, delayMs);
+      return;
+    }
+    case "fx": {
+      // Lightweight: emulate echoTail via a quick filter sweep on the deck filter.
+      if (ev.fx === "echoTail") {
+        const f = target.filter;
+        if (!f) return;
+        f.frequency.cancelScheduledValues(when);
+        f.frequency.setValueAtTime(f.frequency.value, when);
+        f.frequency.exponentialRampToValueAtTime(800, when + rampSec);
+      } else if (ev.fx === "filterSweep") {
+        const f = target.filter;
+        if (!f) return;
+        f.frequency.cancelScheduledValues(when);
+        f.frequency.setValueAtTime(f.frequency.value, when);
+        f.frequency.exponentialRampToValueAtTime(400, when + rampSec);
+      }
+      return;
+    }
+  }
+}
 
 /** Compatibility helper: highlight whether decks are key/BPM compatible. */
 export function compatHint(a: EngineTrack | null, b: EngineTrack | null): {
