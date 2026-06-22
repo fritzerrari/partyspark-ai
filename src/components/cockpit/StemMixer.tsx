@@ -15,6 +15,22 @@ const STEM_META: Record<StemId, { label: string; color: string; icon: IconCmp }>
   other:  { label: "Melody", color: "var(--neon-lime)",    icon: Piano },
 };
 
+function StemStatusBadge({ status, mode, progress }: { status: string; mode: "pseudo"|"loading"|"real"; progress: number }) {
+  let color = "bg-amber-400/20 text-amber-300 border-amber-400/40";
+  let label = "Pseudo";
+  if (mode === "real") { color = "bg-emerald-400/20 text-emerald-300 border-emerald-400/40"; label = "Real ✓"; }
+  else if (mode === "loading") { color = "bg-cyan-400/20 text-cyan-300 border-cyan-400/40"; label = "Lade…"; }
+  else if (status === "processing" || status === "pending") {
+    color = "bg-cyan-400/20 text-cyan-300 border-cyan-400/40 animate-pulse";
+    label = `Sep ${progress}%`;
+  } else if (status === "failed") {
+    color = "bg-red-500/20 text-red-300 border-red-500/40"; label = "Fehler";
+  }
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[8px] uppercase tracking-widest ${color}`}>{label}</span>
+  );
+}
+
 function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string }) {
   const setStem = useTwinDeck((s) => s.setStem);
   const resetStems = useTwinDeck((s) => s.resetStems);
