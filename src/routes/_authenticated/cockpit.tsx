@@ -123,7 +123,7 @@ function Cockpit() {
           const c = new Ctx();
           try {
             const buf = await c.decodeAudioData(ab);
-            addArtifact({ kind: "recording", title: `Auto-DJ Set · ${new Date().toLocaleTimeString()}`, buffer: buf });
+            addArtifact({ kind: "recording", title: `Party-Modus Set · ${new Date().toLocaleTimeString()}`, buffer: buf });
             toast.success("Set in den Projekt-Bus gespeichert");
           } catch { toast.error("Aufnahme konnte nicht dekodiert werden"); }
           finally { void c.close(); }
