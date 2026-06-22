@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Upload, Music2, Heart, Play, Loader2, Search, Wand2,
   CheckSquare, Square as SquareIcon, Filter, X, ArrowRight,
-  Disc3, Sparkles, AudioLines,
+  Disc3, Sparkles, AudioLines, Trash2, CheckCircle2,
 } from "lucide-react";
 import { tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +43,7 @@ function Library() {
   const [onlyFavs, setOnlyFavs] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loadingDeck, setLoadingDeck] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const engine = useEngine();
   const loadDeck = useTwinDeck((s) => s.loadDeck);
 
@@ -163,6 +164,25 @@ function Library() {
   async function favorite(t: (typeof tracks)[number]) {
     await supabase.from("tracks").update({ is_favorite: !t.is_favorite }).eq("id", t.id);
     qc.invalidateQueries({ queryKey: ["tracks"] });
+  }
+
+  async function deleteTrack(t: (typeof tracks)[number]) {
+    if (!confirm(`"${t.title}" wirklich löschen?`)) return;
+    setDeletingId(t.id);
+    try {
+      if (t.storage_path) {
+        await supabase.storage.from("tracks").remove([t.storage_path]);
+      }
+      const { error } = await supabase.from("tracks").delete().eq("id", t.id);
+      if (error) throw error;
+      setSelectedIds((s) => s.filter((x) => x !== t.id));
+      qc.invalidateQueries({ queryKey: ["tracks"] });
+      toast.success("Track gelöscht");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   const filtered = tracks.filter((t) =>
@@ -452,6 +472,14 @@ function Library() {
 
                     <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-primary/40 via-primary/20 to-accent/40">
                       <AudioLines className="absolute inset-0 m-auto h-5 w-5 text-white/70" />
+                      {analyzed && (
+                        <span
+                          title="Analysiert"
+                          className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[var(--neon-cyan)] text-black shadow-[0_0_10px_rgba(0,255,255,0.6)] ring-2 ring-card"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </span>
+                      )}
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -462,7 +490,9 @@ function Library() {
                     <div className="hidden items-center gap-1.5 sm:flex">
                       {t.bpm ? <Chip>{Math.round(t.bpm)} BPM</Chip> : <Chip muted>—</Chip>}
                       {cam ? <Chip accent>{cam}</Chip> : null}
-                      {!analyzed && <Chip warn>unanalysiert</Chip>}
+                      {analyzed
+                        ? <Chip ok>✓ analysiert</Chip>
+                        : <Chip warn>unanalysiert</Chip>}
                     </div>
 
                     <div className="hidden w-16 shrink-0 md:block" title={`Energy ${energy}`}>
@@ -487,8 +517,14 @@ function Library() {
 
                     <button onClick={() => reanalyze(t)} disabled={analyzingId === t.id}
                       className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-[var(--neon-cyan)] disabled:opacity-50"
-                      title="Analysieren">
+                      title={analyzed ? "Erneut analysieren" : "Analysieren"}>
                       {analyzingId === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                    </button>
+
+                    <button onClick={() => deleteTrack(t)} disabled={deletingId === t.id}
+                      className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-red-500 disabled:opacity-50"
+                      title="Track löschen">
+                      {deletingId === t.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </button>
 
                     <div className="hidden shrink-0 items-center gap-1 sm:flex">
@@ -555,13 +591,14 @@ function ToggleRow({ checked, onChange, label }: { checked: boolean; onChange: (
   );
 }
 
-function Chip({ children, accent, warn, muted }: { children: React.ReactNode; accent?: boolean; warn?: boolean; muted?: boolean }) {
+function Chip({ children, accent, warn, muted, ok }: { children: React.ReactNode; accent?: boolean; warn?: boolean; muted?: boolean; ok?: boolean }) {
   return (
     <span className={cn(
       "rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest",
       accent && "bg-[var(--neon-cyan)]/15 text-[var(--neon-cyan)]",
       warn && "bg-amber-500/20 text-amber-600 dark:text-amber-300",
-      !accent && !warn && !muted && "bg-muted text-foreground/80",
+      ok && "bg-emerald-500/20 text-emerald-600 dark:text-emerald-300",
+      !accent && !warn && !muted && !ok && "bg-muted text-foreground/80",
       muted && "text-muted-foreground/50",
     )}>{children}</span>
   );
