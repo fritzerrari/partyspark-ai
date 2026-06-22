@@ -18,6 +18,8 @@ import { Sparkles, Square, Disc, Mic, MonitorPlay } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { startVisualBridge } from "@/lib/audio/visualBridge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Bot, Music2, Volume2, Grid3x3, Lightbulb } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/cockpit")({
   head: () => ({ meta: [{ title: "DJ Cockpit — PartyPilot AI" }] }),
@@ -182,27 +184,77 @@ function Cockpit() {
 
       <TwinDeck tracks={tracks} />
 
-      <StemMixer />
+      <Tabs defaultValue="autodj" className="w-full">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl bg-card/60 p-1.5 backdrop-blur">
+          {[
+            { v: "autodj", label: "Auto-DJ", icon: Bot },
+            { v: "stems", label: "Stems & Mix", icon: Music2 },
+            { v: "karaoke", label: "Karaoke", icon: Mic },
+            { v: "fx", label: "FX & Drops", icon: Volume2 },
+            { v: "sequencer", label: "Sequencer", icon: Grid3x3 },
+            { v: "coach", label: "Coach", icon: Lightbulb },
+          ].map(({ v, label, icon: Icon }) => (
+            <TabsTrigger
+              key={v}
+              value={v}
+              className="flex-1 min-w-[110px] gap-2 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <Icon className="h-3.5 w-3.5" /> {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      <AiMixBuilder tracks={tracks} />
+        <TabsContent value="autodj" className="mt-4">
+          {tracks.length < 2 ? (
+            <EmptyHint title="Auto-DJ braucht Tracks" body="Lade Songs in deine Library — der AI Mix-Builder plant dann automatisch perfekte Übergänge." to="/library" cta="Zur Library" />
+          ) : (
+            <AiMixBuilder tracks={tracks} />
+          )}
+        </TabsContent>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
-        <SingAlongPanel />
-        <FxPadGrid />
-      </div>
+        <TabsContent value="stems" className="mt-4">
+          <StemMixer />
+        </TabsContent>
 
-      <MicRecorder title="Vocal Drop Studio (Live FX)" />
+        <TabsContent value="karaoke" className="mt-4">
+          <SingAlongPanel />
+        </TabsContent>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-        <StepSequencer />
-        <CoachHud />
-      </div>
+        <TabsContent value="fx" className="mt-4 space-y-4">
+          <FxPadGrid />
+          <MicRecorder title="Vocal Drop Studio (Live FX)" />
+        </TabsContent>
+
+        <TabsContent value="sequencer" className="mt-4">
+          <StepSequencer />
+        </TabsContent>
+
+        <TabsContent value="coach" className="mt-4">
+          <CoachHud />
+        </TabsContent>
+      </Tabs>
 
       {/* Mobile sticky helper banner */}
       <div className="fixed bottom-4 left-4 right-4 z-40 rounded-full border border-white/15 bg-black/80 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-stage-foreground/80 backdrop-blur sm:hidden">
         <Mic className="mr-1 inline h-3 w-3 text-[var(--neon-magenta)]" /> Mikro & Pads ↓ · Auto-DJ ↑
       </div>
 
+    </div>
+  );
+}
+
+function EmptyHint({ title, body, to, cta }: { title: string; body: string; to: string; cta: string }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-white/15 bg-card/40 p-8 text-center">
+      <Lightbulb className="mx-auto mb-3 h-8 w-8 text-[var(--neon-cyan)]" />
+      <h3 className="text-base font-bold text-stage-foreground">{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm text-stage-foreground/70">{body}</p>
+      <Link
+        to={to}
+        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--neon-cyan)] px-5 py-2 text-xs font-bold uppercase tracking-widest text-black hover:brightness-110"
+      >
+        {cta}
+      </Link>
     </div>
   );
 }
