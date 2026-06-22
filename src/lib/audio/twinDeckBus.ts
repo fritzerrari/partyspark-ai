@@ -1228,9 +1228,11 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         aggression: decision.aggression,
         decision,
       });
+      try { console.info("[smartMix] real-stems recipe →", decision.recipe, decision); } catch { /* noop */ }
       return { engine: "real", recipe: decision.recipe, decision };
     }
     await get().runCleanRecipe(from, to, decision.recipe as CleanRecipeId, { bars: decision.bars, decision });
+    try { console.info("[smartMix] clean recipe →", decision.recipe, "bars=", decision.bars, "sync=", decision.syncAllowed, decision); } catch { /* noop */ }
     return { engine: "clean", recipe: decision.recipe, decision };
   },
   async runCleanRecipe(from, to, id, opts) {

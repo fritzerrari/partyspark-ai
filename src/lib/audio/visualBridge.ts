@@ -27,15 +27,22 @@ export function startVisualBridge(): () => void {
   if (raf) return stop;
   if (typeof window === "undefined") return stop;
   channel = new BroadcastChannel(CHANNEL);
-  const analyser = getMasterAnalyser();
-  if (!analyser) return stop;
-  const N = analyser.frequencyBinCount;
-  const data = new Uint8Array(N);
-  const binsPerBand = Math.max(1, Math.floor(N / BANDS));
+  // The AudioContext doesn't exist until the user plays the first track.
+  // Poll lazily inside the loop so the bridge becomes live the moment audio
+  // starts — no permanent silent fail if started before any deck plays.
+  let analyser: AnalyserNode | null = getMasterAnalyser();
+  let data = new Uint8Array(new ArrayBuffer(analyser ? analyser.frequencyBinCount : 0));
+  let binsPerBand = analyser ? Math.max(1, Math.floor(analyser.frequencyBinCount / BANDS)) : 1;
   let last = 0;
   function tick(t: number) {
     raf = requestAnimationFrame(tick);
-    if (!analyser || !channel) return;
+    if (!channel) return;
+    if (!analyser) {
+      analyser = getMasterAnalyser();
+      if (!analyser) return;
+      data = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+      binsPerBand = Math.max(1, Math.floor(analyser.frequencyBinCount / BANDS));
+    }
     if (t - last < 33) return; // ~30fps
     last = t;
     analyser.getByteFrequencyData(data);

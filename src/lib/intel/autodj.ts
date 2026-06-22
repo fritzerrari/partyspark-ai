@@ -197,9 +197,29 @@ export async function renderMixToWav(set: MixSet, opts: RenderOptions = {}): Pro
     const anchor = inLay.startSec; // crossfade begins when next track starts
     // Make sure the incoming deck's gain starts at 0 before the plan opens it.
     decks[inLay.deck].gain.gain.setValueAtTime(0, Math.max(0, anchor - 0.001));
-    for (const ev of plan.events) {
-      const tAt = anchor + Math.max(0, ev.t);
-      applyEventOffline(ev, tAt, plan.durationSec, decks, inLay.deck, outLay.deck);
+    // Compute a per-event ramp length = time until the NEXT event on the same
+    // parameter (deck + param). Otherwise every move uses 1/6 of the whole
+    // plan and discrete recipe steps smear into a slow crossfade.
+    const evs = plan.events.map((ev, idx) => ({ ev, idx, t: Math.max(0, ev.t) }));
+    const paramKey = (ev: TransitionEvent): string | null => {
+      if (ev.kind === "gain")   return ev.target === "deck" ? `g:${ev.deck}` : null;
+      if (ev.kind === "filter") return `f:${ev.deck}`;
+      if (ev.kind === "eq")     return `e:${ev.deck}:${ev.band}`;
+      return null;
+    };
+    for (const cur of evs) {
+      const key = paramKey(cur.ev);
+      let nextT = plan.durationSec;
+      if (key) {
+        for (const o of evs) {
+          if (o.idx === cur.idx) continue;
+          if (paramKey(o.ev) !== key) continue;
+          if (o.t > cur.t && o.t < nextT) nextT = o.t;
+        }
+      }
+      const rampSec = Math.max(0.04, nextT - cur.t);
+      const tAt = anchor + cur.t;
+      applyEventOffline(cur.ev, tAt, rampSec, decks, inLay.deck, outLay.deck);
     }
     // Defensive: after the plan window, ensure outgoing is silent and incoming is full.
     const after = anchor + plan.durationSec + 0.01;
@@ -256,13 +276,12 @@ function resetFilterAt(d: { filter: BiquadFilterNode }, t: number) {
 function applyEventOffline(
   ev: TransitionEvent,
   when: number,
-  totalDur: number,
+  rampSec: number,
   decks: Record<"A" | "B", ReturnType<typeof makeDeck>>,
   _inDeck: "A" | "B",
   _outDeck: "A" | "B",
 ) {
   const d = decks[ev.deck];
-  const rampSec = Math.max(0.05, Math.min(totalDur * 0.5, totalDur / 6));
   switch (ev.kind) {
     case "gain": {
       // Stem events skipped offline (no per-stem source).
