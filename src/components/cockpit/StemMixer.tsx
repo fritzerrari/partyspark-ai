@@ -326,11 +326,13 @@ export function StemMixer() {
       </div>
 
       <p className="text-[9px] text-stage-foreground/50">
-        Transitions laufen als bar-genaue Stem-Choreografie: erst Teaser eines
-        einzelnen Parts des neuen Tracks, dann Groove-Layer, Stripdown, Bass/Drum-Switch
-        auf dem Downbeat, dann Reveal. Kein linearer Crossfade. Real-Modus nutzt
-        echte Demucs-Stems pro Deck; Pseudo trennt nur per Spektrum und klingt
-        deshalb weniger sauber.
+        Ohne echte Stems läuft eine <b className="text-stage-foreground/80">Clean DJ Transition</b>:
+        bar-genaue EQ-/Filter-Moves auf dem Originalsignal — Bass-Swap, Filter Build,
+        Hook Tease, Drum-Top Blend, Drop Cut oder Echo Out. Das Originallied bleibt
+        klar erkennbar. Sobald für <b>beide</b> Decks echte Demucs-Stems geladen sind,
+        wechselt Smart Mix automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
+        Vocals, Drums, Bass und Melody werden unabhängig choreografiert (Teaser →
+        Layer → Strip → Downbeat Switch → Reveal).
       </p>
     </div>
   );
