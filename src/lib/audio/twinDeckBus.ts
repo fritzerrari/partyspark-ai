@@ -1100,7 +1100,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const fromStems = deck[from].stems;
     const toStems = deck[to].stems;
     if (!fromStems || !toStems) return;
-    set({ transitionInFlight: true });
+    set({ transitionInFlight: true, transitionEngine: "real", transitionPhase: "cue" });
     try {
       // BPM sync + beat align like the normal transition.
       const fromDeck = deck[from];
@@ -1171,10 +1171,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       set({
         lastTransitionNote: `${RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId} · ${bars} bars${ratioNote}`,
         transitionInFlight: false,
+        transitionPhase: null,
+        transitionEngine: null,
       });
     } catch (e) {
       console.warn("stem recipe failed", e);
-      set({ transitionInFlight: false });
+      set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
     }
   },
 
