@@ -187,7 +187,8 @@ export function StemMixer() {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
-  const smartMix = useTwinDeck((s) => s.smartMix);
+  const smartMixPlan = useTwinDeck((s) => s.smartMixPlan);
+  const lastPlan = useTwinDeck((s) => s.lastPlan);
   const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
   const phase = useTwinDeck((s) => s.transitionPhase);
@@ -208,10 +209,10 @@ export function StemMixer() {
       toast.error("Beide Decks brauchen einen Track.");
       return;
     }
-    const used = await smartMix(fromSide, toSide);
-    if (used) {
-      const engineLabel = used.engine === "real" ? "Real Stem Performance" : "Clean DJ Transition";
-      toast.success(`Smart Mix · ${engineLabel} · ${used.recipe}`);
+    const plan = await smartMixPlan(fromSide, toSide);
+    if (plan) {
+      const engineLabel = plan.fallbackUsed ? "Clean DJ Transition" : "AI Plan";
+      toast.success(`${engineLabel} · ${plan.type} · ${plan.bars} bars · Score ${plan.qualityScore}`);
     }
   }
 
