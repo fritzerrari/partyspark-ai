@@ -13,12 +13,25 @@ import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
 import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
 import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
+import {
+  runCleanRecipe, pickCleanRecipe, CLEAN_RECIPES,
+  type CleanRecipeId, type TransitionPhase,
+} from "./cleanDjTransitions";
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
+
+/** Public DJ bus accessor (filter + 3-band EQ + gain) for transition engines. */
+export type DjBus = {
+  filter: BiquadFilterNode | null;
+  eqLow: BiquadFilterNode | null;
+  eqMid: BiquadFilterNode | null;
+  eqHigh: BiquadFilterNode | null;
+  gain: GainNode | null;
+};
 
 export type DeckState = {
   track: EngineTrack | null;
@@ -51,6 +64,10 @@ type BusState = {
   transitionMode: TransitionModeHint;
   transitionInFlight: boolean;
   lastTransitionNote: string | null;
+  /** Live phase of an in-flight transition, for UI status. */
+  transitionPhase: TransitionPhase | null;
+  /** Which engine is running ("real" or "clean") or null when idle. */
+  transitionEngine: "real" | "clean" | null;
   autoTimerOn: boolean;
   autoTimerSec: number;       // interval
   autoTimerCountdown: number; // seconds until next
@@ -100,7 +117,9 @@ type Actions = {
   /** Pure scorer for the pending transition between two decks. */
   getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
   /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
-  smartMix: (from: DeckSide, to: DeckSide) => Promise<RecipeId | null>;
+  smartMix: (from: DeckSide, to: DeckSide) => Promise<{ engine: "real" | "clean"; recipe: string } | null>;
+  /** Run a Clean DJ EQ-based transition (no fake stems). */
+  runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
   attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
   /** Drop back to pseudo-stems on a deck. */
@@ -758,6 +777,8 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   transitionMode: "auto",
   transitionInFlight: false,
   lastTransitionNote: null,
+  transitionPhase: null,
+  transitionEngine: null,
   autoTimerOn: false,
   autoTimerSec: 90,
   autoTimerCountdown: 90,
@@ -975,12 +996,98 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
   async smartMix(from, to) {
     const q = get().getTransitionQuality(from, to);
-    await get().runStemRecipe(from, to, q.recommendedRecipe, {
-      bars: q.bars,
-      teaserStem: q.teaserStem,
-      aggression: q.aggression,
+    // Only the Real-Stem engine should touch the stem buses; otherwise the
+    // pseudo-band split would destroy the original audio. Anything that
+    // isn't fully "real" routes to the Clean DJ engine, which rides
+    // EQ/filter/gain on the dry deck signal.
+    if (q.mode === "real") {
+      await get().runStemRecipe(from, to, q.recommendedRecipe, {
+        bars: q.bars,
+        teaserStem: q.teaserStem,
+        aggression: q.aggression,
+      });
+      return { engine: "real", recipe: q.recommendedRecipe };
+    }
+    const cleanId = pickCleanRecipe({
+      bpmDeltaPct: q.bpmDeltaPct,
+      keyCompatible: q.keyCompatible,
+      fromHasVocals: (get()[from].track?.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+      toHasVocals: (get()[to].track?.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+      energyJump: (get()[to].track?.energy ?? 0.5) - (get()[from].track?.energy ?? 0.5),
     });
-    return q.recommendedRecipe;
+    await get().runCleanRecipe(from, to, cleanId, { bars: q.bars });
+    return { engine: "clean", recipe: cleanId };
+  },
+  async runCleanRecipe(from, to, id, opts) {
+    ensureCtx(); wireDeck("A"); wireDeck("B");
+    if (!ctx) return;
+    const st = get();
+    const fromTrack = st[from].track;
+    const toTrack = st[to].track;
+    if (!fromTrack || !toTrack) return;
+    if (st.transitionInFlight) return;
+    const fromDeck = deck[from];
+    const toDeck = deck[to];
+    if (!fromDeck.gain || !toDeck.gain) return;
+    set({ transitionInFlight: true, transitionEngine: "clean", transitionPhase: "cue" });
+    try {
+      const toUserVol = st[to].volume;
+      const fromUserVol = st[from].volume;
+      // Make sure pseudo-stem overlays are silent so they don't colour the dry
+      // signal during the transition.
+      fromDeck.stems?.reset();
+      toDeck.stems?.reset();
+      // Start incoming silently.
+      if (toDeck.el && toDeck.el.paused) {
+        try { await toDeck.el.play(); } catch { /* gesture */ }
+      }
+      if (ctx.state === "suspended") void ctx.resume();
+      const ratio = syncTempo(from, to);
+      beatAlign(from, to);
+      // Open outgoing to its user volume, incoming starts at 0.
+      toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
+      toDeck.gain.gain.setValueAtTime(0, ctx.currentTime);
+      fromDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
+      fromDeck.gain.gain.setValueAtTime(fromUserVol, ctx.currentTime);
+      await waitForNextBeat(from);
+      const secPerBar = fromTrack.bpm ? (60 / fromTrack.bpm) * 4 : 2;
+      const bars = Math.max(8, Math.min(24, opts?.bars ?? 16));
+      const recipeId: CleanRecipeId = id ?? pickCleanRecipe({
+        bpmDeltaPct: fromTrack.bpm && toTrack.bpm ? Math.abs(fromTrack.bpm - toTrack.bpm) / fromTrack.bpm : 0,
+        keyCompatible: camelotCompatible(fromTrack.camelot ?? "", toTrack.camelot ?? ""),
+        fromHasVocals: (fromTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+        toHasVocals: (toTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+        energyJump: (toTrack.energy ?? 0.5) - (fromTrack.energy ?? 0.5),
+      });
+      animateCrossfader(to === "B" ? 1 : 0, secPerBar * bars * 1000);
+      await runCleanRecipe(recipeId, {
+        ctx,
+        from: {
+          filter: fromDeck.filter, eqLow: fromDeck.eqLow, eqMid: fromDeck.eqMid,
+          eqHigh: fromDeck.eqHigh, gain: fromDeck.gain,
+        },
+        to: {
+          filter: toDeck.filter, eqLow: toDeck.eqLow, eqMid: toDeck.eqMid,
+          eqHigh: toDeck.eqHigh, gain: toDeck.gain,
+        },
+        secPerBar, bars, fromUserVol, toUserVol,
+        waitForBeat: () => waitForNextBeat(from),
+        onPhase: (phase) => set({ transitionPhase: phase }),
+      });
+      try { fromDeck.el?.pause(); } catch { /* noop */ }
+      recomputeEffective(to);
+      const ratioNote = ratio !== 1 ? ` · sync ×${ratio.toFixed(3)}` : "";
+      const label = CLEAN_RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId;
+      set({
+        lastTransitionNote: `Clean DJ · ${label} · ${bars} bars${ratioNote}`,
+        transitionInFlight: false,
+        transitionPhase: null,
+        transitionEngine: null,
+      });
+    } catch (e) {
+      console.warn("clean recipe failed", e);
+      set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
+    }
   },
   async runStemRecipe(from, to, id, opts) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
@@ -993,7 +1100,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const fromStems = deck[from].stems;
     const toStems = deck[to].stems;
     if (!fromStems || !toStems) return;
-    set({ transitionInFlight: true });
+    set({ transitionInFlight: true, transitionEngine: "real", transitionPhase: "cue" });
     try {
       // BPM sync + beat align like the normal transition.
       const fromDeck = deck[from];
@@ -1064,10 +1171,12 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       set({
         lastTransitionNote: `${RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId} · ${bars} bars${ratioNote}`,
         transitionInFlight: false,
+        transitionPhase: null,
+        transitionEngine: null,
       });
     } catch (e) {
       console.warn("stem recipe failed", e);
-      set({ transitionInFlight: false });
+      set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
     }
   },
 

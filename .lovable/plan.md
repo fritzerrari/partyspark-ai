@@ -1,87 +1,131 @@
-## Ziel
+## Befund
 
-Die Transition darf nicht mehr wie ein Crossfade wirken. Sie soll wie eine DJ-Performance klingen: lange, bar-genaue Phrasen, frühe Teaser des nächsten Songs, einzelne Stems als Vorankündigung, Bass-/Drum-Swaps auf Downbeats, Vocal-Konflikt-Vermeidung und klare Spannungsbögen.
+Die aktuelle Version klingt grundsätzlich kaputt, weil das normale Deck-Signal permanent durch die pseudo-Stem-Spektralaufteilung läuft. Diese Pseudo-Stems sind keine echte Trennung: Bass, Drums, Vocals und Melody werden nur per Filtern aus demselben Song herausgeschnitten und danach wieder summiert. Dadurch ist selbst „neutral“ kein sauberer Originaltrack mehr, sondern ein gefiltertes, dünnes, phasiges Rebuild-Signal. Wenn dann zwei solcher Signale ineinander gemischt werden, klingt es wie zwei schlecht generierte Songs plus Fade.
 
-## Was ich ändern werde
+Zusätzlich animiert die Transition zwar Stem-Gains, aber die Quelle ist in Pseudo-Mode akustisch nicht belastbar. Die Engine versucht also „Moises-Workflow“ zu spielen, obwohl keine echten getrennten Signale vorhanden sind. Das muss getrennt werden: Originalaudio bleibt immer sauber; nur echte Stems dürfen als Stem-Mix-Core verwendet werden.
 
-1. **Crossfade aus dem Kern entfernen**
-   - `Smart Mix` und die Stem-Recipes steuern nicht mehr primär Deck-Lautstärken oder den sichtbaren Crossfader.
-   - Der Crossfader bleibt nur UI-/Safety-Fallback am Ende.
-   - Der hörbare Mix läuft über einzelne Stem-Busse: vocals, drums, bass, other.
+## Neuer Ansatz
 
-2. **Neue „Pro DJ“-Transition-Architektur**
-   - Jede Transition bekommt mehrere echte Phasen statt einem linearen Fade:
-     - **Preview / Tease**: nur ein einzelnes Element aus dem neuen Track kommt kurz rein, z. B. Vocal-Chop, Hi-Hat/Drums oder Melody.
-     - **Groove Layer**: Incoming Drums oder Percussion laufen unter dem alten Track.
-     - **Tension / Stripdown**: alter Track wird auf wenige Parts reduziert, z. B. nur Drums oder nur Vocal.
-     - **Downbeat Switch**: Bass/Drums wechseln hart und musikalisch auf dem Downbeat.
-     - **Reveal**: neuer Track öffnet sich vollständig.
-   - Übergänge werden länger: typischerweise 12–16 Bars statt 8 Bars.
+### 1. Audioqualität reparieren
 
-3. **Recipes komplett verschärfen**
-   Die vorhandenen sechs Recipes bleiben namentlich, werden aber musikalisch neu choreografiert:
-   - **Vocal-Out / Drums-In**: Incoming Drums teasen früh, outgoing Vocals werden gezielt beantwortet/geduckt, dann rhythmischer Swap.
-   - **Bass Swap**: Incoming Melody/Drums kommen ohne Bass rein, Bass wechselt hart auf Downbeat, danach erst Full Reveal.
-   - **Drum Bridge**: beide Tracks werden temporär auf Rhythmus reduziert, Incoming Drums übernehmen schrittweise, ideal für schlechte BPM/Key-Matches.
-   - **Acapella Intro**: Outgoing Vocal steht fast allein, Incoming Instrumental baut darunter Spannung auf, dann Vocal-Trade.
-   - **Instrumental Bed**: Outgoing Instrumental wird als Bett genutzt, Incoming Vocal/Lead nur kurz angedeutet, dann vollständige Öffnung.
-   - **Drop Switch**: kurzer Build mit einzelnen Incoming-Parts, dann simultaner Bass+Drums-Switch auf dem Drop.
+- Normales Playback wird wieder direkt aus dem Originaltrack gespeist.
+- Pseudo-Stems werden nicht mehr dauerhaft als Hauptsignal benutzt.
+- In Pseudo-Mode bleibt der Track klar erkennbar; Übergänge nutzen dann professionelle DJ-Techniken auf sauberem Originalaudio: EQ-Isolator, Filter, rhythmische Cuts, Loop-/Drop-Ins, kurze Teaser.
+- „Real Stem Mode“ wird nur aktiviert, wenn echte getrennte Buffers für beide Decks geladen sind.
 
-4. **„Andeutung, dass neues Lied kommt“ erzwingen**
-   - Jede Recipe muss innerhalb der ersten 1–2 Bars hörbar einen einzelnen Part des neuen Tracks einblenden.
-   - Nicht immer derselbe Part: je nach Track-Kontext wählt die Engine Drums, Vocal, Bass oder Melody als Teaser.
-   - Teaser werden kurz wieder rausgenommen, damit es nach DJ-Ride statt permanentem Fade klingt.
+### 2. Zwei ehrliche Mix-Modi
 
-5. **Phrase- und Downbeat-Logik verbessern**
-   - Start auf nächstem Downbeat, bei vorhandener Beatgrid-Analyse eher auf 4-/8-Bar-Phrasen.
-   - Switch-Punkte liegen auf Bar-Grenzen, nicht irgendwo im Fade.
-   - Wenn Beatgrid fehlt, fallback auf BPM-basierte Bar-Schätzung.
+```text
+Real Stem Mode
+Original track muted, echte buffers: vocals / drums / bass / other
+→ vollständige stem-basierte Choreografie
 
-6. **Konflikte aktiv vermeiden**
-   - Vocals beider Tracks dürfen nicht lange gleichzeitig offen sein.
-   - Bass beider Tracks darf nur sehr kurz gleichzeitig offen sein.
-   - Mindestens ein Drum-Bus bleibt in der Mitte der Transition hörbar, damit der Groove nicht zusammenbricht.
+Clean DJ Mode / Pseudo Mode
+Original track bleibt Hauptsignal
+→ keine fake-vocal/bass-isolation als Hauptmix
+→ EQ, Filter, Rhythm-Gates, Cue-Teaser, Bass-Kill, Drum-Bridge nur soweit sauber möglich
+```
 
-7. **Smart Mix wird mutiger**
-   - Die automatische Wahl entscheidet nicht nur „welches Recipe“, sondern auch:
-     - Transition-Länge: 8 / 12 / 16 Bars
-     - Teaser-Stem: vocals / drums / bass / other
-     - Aggressivität: smooth / performance / emergency
-   - Bei schlechtem BPM/Key-Match wird Drum Bridge oder Drop Switch bevorzugt, nicht ein softer Fade.
+Pseudo darf nicht mehr versuchen, wie echte Stems zu klingen. Pseudo soll musikalisch brauchbar sein, aber ehrlich limitiert.
 
-8. **UI ehrlicher machen**
-   - Der Button wird als Performance-Mix klarer erkennbar.
-   - Quality Panel zeigt zusätzlich:
-     - gewählte Länge in Bars
-     - Teaser-Stem
-     - Warnung, wenn nur Pseudo-Stems aktiv sind
-   - „Real“ bleibt nur erlaubt, wenn beide Decks echte getrennte AudioBuffer nutzen.
+### 3. Transition-Engine neu bauen
 
-## Technische Umsetzung
+Ich ersetze die aktuelle Recipe-Ausführung durch einen Performance-Sequencer mit klarer Timeline:
 
-- `src/lib/audio/transitionRecipes.ts`
-  - Recipes von linearen Gain-Ramps zu phasenbasierten Stem-Choreografien umbauen.
-  - Helper für `teaseStem`, `killConflicts`, `holdGroove`, `barWait`, `setDeckStemScene` ergänzen.
+- absolute AudioContext-Zeit statt viele `setTimeout`-Rampen
+- Phasen über 16/24/32 Beats, nicht nur kurzer Fade
+- erkennbare Ankündigung des nächsten Songs innerhalb der ersten Phrase
+- Downbeat-Switches statt linearer Pegelüberblendung
+- outgoing bleibt bis zum Switch musikalisch sauber
+- incoming wird erst als Teaser, dann als Groove-/Hook-Layer eingeführt
+
+Beispielstruktur:
+
+```text
+1. Cue / Tease
+   kurzer Hook, Drum-Top oder Vocal-Shout vom neuen Track
+
+2. Return to groove
+   Teaser wieder raus, alter Track bleibt klar
+
+3. Layer build
+   incoming drums/highs/other langsam rein, Bass noch blockiert
+
+4. Strip / tension
+   outgoing reduziert: Bass oder Vocals raus, Rhythmus bleibt
+
+5. Downbeat switch
+   Bass/Drums wechseln hart oder halb-hart auf Bar-Grenze
+
+6. Reveal
+   neuer Track öffnet vollständig, alter Track geht sauber raus
+```
+
+### 4. Real-Stem-Choreografien verbessern
+
+Für echte Stems werden die bestehenden Rezepte nicht nur „Gain-Fades“, sondern echte DJ-Moves:
+
+- **Vocal Guard:** nie zwei dominante Vocals gleichzeitig
+- **Bass Mutex:** nie zwei volle Basslines gleichzeitig außer extrem kurz vor Switch
+- **Drum Anchor:** mindestens ein Drum-/Rhythmusbus bleibt stabil
+- **Hook Teaser:** ein kurzer erkennbarer Hook/Part des neuen Tracks kommt früh rein und verschwindet wieder
+- **Phrase Lock:** große Wechsel nur auf Bar-/Phrase-Grenzen
+- **Energy Ramp:** Energie wird nicht zufällig dünn, sondern bewusst aufgebaut oder abgeräumt
+
+### 5. Pseudo-/Clean-DJ-Rezepte statt kaputter fake-Stems
+
+Wenn keine echten Stems verfügbar sind:
+
+- kein vollständiges pseudo-vocal/pseudo-bass-Rebuild als Hauptsignal
+- originaler Track bleibt trocken/sauber
+- Incoming-Preview über kurze Originalaudio-Cues bei reduziertem EQ
+- Bass-Swap über echte EQ-Low-Kills, nicht über fake-bass-Stem
+- Drum-Bridge nur als sauberer Highpass-/Lowcut-/Loop-artiger Groove, nicht als zerstörte Drum-Isolation
+- schlechte BPM/Key-Kombinationen nutzen Cut/Drop/echo/short tease statt langer Matsch-Blend
+
+### 6. Mix-Auswahl strenger machen
+
+Smart Mix wird konservativer und musikalischer:
+
+- Gute BPM + gute Key-Kompatibilität → längere blends, hook tease, bass swap
+- Gute BPM + schlechte Key-Kompatibilität → drum/high-only tease, kein melodischer Layer
+- Schlechte BPM → kurze Performance-Transition, Drop Switch oder Echo/Cut, kein langer Blend
+- Zwei Vocal-Tracks → incoming vocals bleiben bis nach Switch gemutet
+- Keine echten Stems → Score sichtbar gedeckelt, aber Audio bleibt sauber
+
+### 7. UI-Anpassung
+
+- Status klarer: **Real Stems**, **Clean DJ Mode**, **Pseudo Preview only**
+- Smart Mix zeigt, welche Engine wirklich läuft: `Real Stem Performance` oder `Clean DJ Transition`
+- Warnung, wenn versucht wird, Real-Stem-Rezepte ohne echte Stems zu fahren
+- Transition-Status zeigt aktuelle Phase: `Tease`, `Layer`, `Strip`, `Switch`, `Reveal`
+- Manual stem sliders steuern echte Stems nur in Real Mode; in Pseudo/Clean Mode werden sie als EQ-/preview-limited Controls dargestellt, damit keine falsche Erwartung entsteht
+
+## Dateien, die ich ändere
+
+- `src/lib/audio/stemSplit.ts`
+  - Pseudo-Split aus dem normalen Playback entfernen oder auf Preview/Analyse begrenzen.
 
 - `src/lib/audio/twinDeckBus.ts`
-  - `runStemRecipe` um 12–16-Bar-Optionen, Phrase-Waiting und Smart-Mix-Parameter erweitern.
-  - Crossfader während der Transition nicht mehr als hörbaren Hauptmechanismus verwenden.
-  - Erst am Ende Deck-State und UI-Crossfader finalisieren.
+  - Audio-Graph umbauen: clean original bus + real stem bus + DJ EQ bus.
+  - Smart Mix entscheidet zwischen Real-Stem-Engine und Clean-DJ-Engine.
+  - Crossfader nicht mehr als Kern der Transition verwenden.
+
+- `src/lib/audio/transitionRecipes.ts`
+  - Real-Stem-Rezepte als echte Performance-Timelines neu schreiben.
+
+- Neue Datei `src/lib/audio/cleanDjTransitions.ts`
+  - Saubere Übergänge ohne fake-Stem-Zerstörung: EQ-swap, hook tease, drum/top tease, bass kill, drop cut.
+
+- Neue Datei `src/lib/audio/performanceScheduler.ts`
+  - AudioParam-sichere Timeline für beat-/bar-genaue Events.
 
 - `src/lib/audio/transitionQuality.ts`
-  - Empfehlung um `bars`, `teaserStem`, `aggression` und `riskReason` erweitern.
-  - Stärkere Penalty für Pseudo-Modus und große BPM/Key-Risiken.
+  - Scoring und Recipe-Auswahl auf Real-vs-Clean Mode trennen.
 
 - `src/components/cockpit/StemMixer.tsx`
-  - Quality Panel um die neue Performance-Entscheidung erweitern.
-  - Pseudo-Hinweis deutlicher machen, aber keine falsche „Real“-Sprache verwenden.
+  - UI ehrlich machen: Real-Stem Controls vs Clean-DJ Controls, Phase-Anzeige, klare Warnungen.
 
-## Akzeptanzkriterien
+## Ziel der neuen Version
 
-- Smart Mix klingt nicht mehr wie ein linearer Fade.
-- Innerhalb der ersten Bars ist hörbar ein einzelner Part des nächsten Tracks als Teaser da.
-- Längere Übergänge über 12–16 Bars sind möglich und Standard für gute Matches.
-- Bass/Drums wechseln musikalisch auf Downbeats.
-- Vocals kollidieren nicht dauerhaft.
-- Pseudo-Modus wird klar als begrenzter Fallback gezeigt.
-- Real-Modus wird nur angezeigt, wenn echte getrennte Stem-Buffers beider Decks aktiv sind.
+Das Ergebnis soll nicht mehr so klingen, als würden zwei zerstörte Songs ineinander verschwimmen. Ohne echte Stems bleibt die Musik erkennbar und sauber, mit DJ-artigen EQ-/Cue-Übergängen. Mit echten Stems entsteht dann die eigentliche Moises-artige Performance: einzelne Parts des nächsten Songs werden hörbar angekündigt, Konflikte werden vermieden, Bass/Drums wechseln bewusst auf Downbeats, und Übergänge wirken länger, musikalischer und virtuoser.

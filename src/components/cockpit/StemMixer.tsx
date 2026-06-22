@@ -167,9 +167,12 @@ export function StemMixer() {
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
   const runStemRecipe = useTwinDeck((s) => s.runStemRecipe);
+  const runClean = useTwinDeck((s) => s.runCleanRecipe);
   const smartMix = useTwinDeck((s) => s.smartMix);
   const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
+  const phase = useTwinDeck((s) => s.transitionPhase);
+  const engine = useTwinDeck((s) => s.transitionEngine);
   const [recipe, setRecipe] = useState<RecipeId | "auto">("auto");
 
   const fromSide: DeckSide = crossfader < 0.5 ? "A" : "B";
@@ -183,7 +186,14 @@ export function StemMixer() {
   }, [fromSide, toSide, getTransitionQuality]);
 
   async function fire() {
-    await runStemRecipe(fromSide, toSide, recipe === "auto" ? undefined : recipe);
+    // Manual fire: only run the destructive stem-recipe engine if BOTH decks
+    // truly have real Demucs stems. Otherwise fall back to the Clean DJ
+    // engine so we don't shred the original audio.
+    if (quality.mode === "real") {
+      await runStemRecipe(fromSide, toSide, recipe === "auto" ? undefined : recipe);
+    } else {
+      await runClean(fromSide, toSide);
+    }
   }
 
   async function fireSmart() {
@@ -193,9 +203,8 @@ export function StemMixer() {
     }
     const used = await smartMix(fromSide, toSide);
     if (used) {
-      const label = RECIPES.find((r) => r.id === used)?.label ?? used;
-      const modeLabel = quality.mode === "real" ? "Real ✓" : quality.mode === "hybrid" ? "Hybrid" : "Pseudo";
-      toast.success(`Smart Mix · ${label} · ${modeLabel}`);
+      const engineLabel = used.engine === "real" ? "Real Stem Performance" : "Clean DJ Transition";
+      toast.success(`Smart Mix · ${engineLabel} · ${used.recipe}`);
     }
   }
 
@@ -220,6 +229,11 @@ export function StemMixer() {
           <span className={cn("rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-widest", modePill.color)}>
             {modePill.label}
           </span>
+          {inFlight && (
+            <span className="rounded border border-[var(--neon-cyan)]/40 bg-[var(--neon-cyan)]/10 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[var(--neon-cyan)] animate-pulse">
+              {engine === "real" ? "Real" : "Clean"} · {phase ?? "…"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <select
@@ -312,11 +326,13 @@ export function StemMixer() {
       </div>
 
       <p className="text-[9px] text-stage-foreground/50">
-        Transitions laufen als bar-genaue Stem-Choreografie: erst Teaser eines
-        einzelnen Parts des neuen Tracks, dann Groove-Layer, Stripdown, Bass/Drum-Switch
-        auf dem Downbeat, dann Reveal. Kein linearer Crossfade. Real-Modus nutzt
-        echte Demucs-Stems pro Deck; Pseudo trennt nur per Spektrum und klingt
-        deshalb weniger sauber.
+        Ohne echte Stems läuft eine <b className="text-stage-foreground/80">Clean DJ Transition</b>:
+        bar-genaue EQ-/Filter-Moves auf dem Originalsignal — Bass-Swap, Filter Build,
+        Hook Tease, Drum-Top Blend, Drop Cut oder Echo Out. Das Originallied bleibt
+        klar erkennbar. Sobald für <b>beide</b> Decks echte Demucs-Stems geladen sind,
+        wechselt Smart Mix automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
+        Vocals, Drums, Bass und Melody werden unabhängig choreografiert (Teaser →
+        Layer → Strip → Downbeat Switch → Reveal).
       </p>
     </div>
   );
