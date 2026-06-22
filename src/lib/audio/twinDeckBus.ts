@@ -713,7 +713,7 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
       await new Promise((r) => setTimeout(r, reveal * 1000));
       // Phase C — REVEAL: bridge fades, real incoming starts at its native tempo+key.
       if (toDeck.el) {
-        toDeck.el.playbackRate = 1;
+        setDeckRate(to, 1);
         useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
         try { if (plan.startAtSecOfNext > 0.5) toDeck.el.currentTime = plan.startAtSecOfNext; } catch { /* noop */ }
         if (toDeck.el.paused) { try { await toDeck.el.play(); } catch { /* noop */ } }
