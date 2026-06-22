@@ -1005,6 +1005,22 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     });
   },
   async smartMix(from, to) {
+    // Ensure both decks have analysis (BPM, beatgrid, cues, key) before we
+    // even score the transition — otherwise smart-mix flies blind.
+    const stPre = get();
+    if (!stPre[from].track?.beatGrid || !stPre[from].track?.bpm) {
+      await get().ensureAnalysis(from).catch(() => {});
+    }
+    if (!stPre[to].track?.beatGrid || !stPre[to].track?.bpm) {
+      await get().ensureAnalysis(to).catch(() => {});
+    }
+    // Position incoming deck at its drop/intro-end if we have a cue and the
+    // deck is currently parked at 0 — so we don't blend into a silent intro.
+    const toEl = deck[to].el;
+    const toCues = get()[to].track?.cues;
+    if (toEl && toCues && toEl.currentTime < 0.5) {
+      try { toEl.currentTime = Math.max(0, toCues.introEnd || toCues.firstDrop || 0); } catch { /* noop */ }
+    }
     const q = get().getTransitionQuality(from, to);
     // Only the Real-Stem engine should touch the stem buses; otherwise the
     // pseudo-band split would destroy the original audio. Anything that
