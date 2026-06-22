@@ -755,7 +755,7 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         rampGain(toDeck.gain, toUserVol, xf);
         const r = await ramp;
         // restore outgoing rate (it's about to pause anyway)
-        try { if (fromDeck.el) fromDeck.el.playbackRate = 1; } catch { /* noop */ }
+        try { setDeckRate(from, 1); } catch { /* noop */ }
         useTwinDeck.setState((s) => ({
           [to]: { ...s[to], pitch: 1 },
         } as Partial<BusState>));
