@@ -27,6 +27,18 @@ import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
 
 export type DeckSide = "A" | "B";
 
+/** Compact summary of the most recently executed transition plan (UI HUD). */
+export type LastPlanInfo = {
+  type: import("@/lib/intel/types").TransitionType;
+  bars: number;
+  score: number;
+  durationSec: number;
+  from: DeckSide;
+  to: DeckSide;
+  fallbackUsed: boolean;
+  at: number;
+};
+
 /** Public DJ bus accessor (filter + 3-band EQ + gain) for transition engines. */
 export type DjBus = {
   filter: BiquadFilterNode | null;
@@ -79,6 +91,8 @@ type BusState = {
   needsUserGesture: boolean;
   recording: boolean;
   lastRecordingUrl: string | null;
+  /** Summary of the last executed AI transition plan (for UI HUD). */
+  lastPlan: LastPlanInfo | null;
 };
 
 type Actions = {
@@ -799,6 +813,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   needsUserGesture: false,
   recording: false,
   lastRecordingUrl: null,
+  lastPlan: null,
 
   init() {
     ensureCtx(); wireDeck("A"); wireDeck("B");
@@ -809,6 +824,21 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     ensureCtx(); wireDeck(side);
     const d = deck[side];
     if (!d.el) return;
+    // Tear down any real-stem session from the previous track on this side
+    // so the new track always starts in clean pseudo mode until its own
+    // Demucs stems are loaded.
+    if (d.realStems) {
+      try { d.realStems.dispose(); } catch { /* noop */ }
+      d.realStems = null;
+      if (d.stems && ctx) {
+        try {
+          const inputGain = (d.stems.input as GainNode).gain;
+          inputGain.cancelScheduledValues(ctx.currentTime);
+          inputGain.setValueAtTime(1, ctx.currentTime);
+        } catch { /* noop */ }
+      }
+      set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
+    }
     // Fill in camelot if missing (cheap derivation)
     const enriched: EngineTrack = {
       ...track,
@@ -1391,6 +1421,16 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         transitionInFlight: false,
         transitionPhase: null,
         transitionEngine: null,
+        lastPlan: {
+          type: plan.type,
+          bars: plan.bars,
+          score: plan.qualityScore,
+          durationSec: plan.durationSec,
+          from: fromSide,
+          to: toSide,
+          fallbackUsed: !!plan.fallbackUsed,
+          at: performance.now(),
+        },
       });
     } catch (e) {
       console.warn("executePlan failed", e);

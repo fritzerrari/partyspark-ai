@@ -187,7 +187,8 @@ export function StemMixer() {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
-  const smartMix = useTwinDeck((s) => s.smartMix);
+  const smartMixPlan = useTwinDeck((s) => s.smartMixPlan);
+  const lastPlan = useTwinDeck((s) => s.lastPlan);
   const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
   const phase = useTwinDeck((s) => s.transitionPhase);
@@ -208,10 +209,10 @@ export function StemMixer() {
       toast.error("Beide Decks brauchen einen Track.");
       return;
     }
-    const used = await smartMix(fromSide, toSide);
-    if (used) {
-      const engineLabel = used.engine === "real" ? "Real Stem Performance" : "Clean DJ Transition";
-      toast.success(`Smart Mix · ${engineLabel} · ${used.recipe}`);
+    const plan = await smartMixPlan(fromSide, toSide);
+    if (plan) {
+      const engineLabel = plan.fallbackUsed ? "Clean DJ Transition" : "AI Plan";
+      toast.success(`${engineLabel} · ${plan.type} · ${plan.bars} bars · Score ${plan.qualityScore}`);
     }
   }
 
@@ -332,6 +333,28 @@ export function StemMixer() {
           </div>
         )}
       </div>
+
+      {/* Last executed AI plan summary */}
+      {lastPlan && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--neon-cyan)]/30 bg-black/40 px-2 py-1.5 text-[9px] uppercase tracking-widest text-stage-foreground/70">
+          <span className="text-[var(--neon-cyan)]">Letzter Plan</span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">
+            {lastPlan.from} → {lastPlan.to}
+          </span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">{lastPlan.type}</span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">{lastPlan.bars} bars</span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">{lastPlan.durationSec.toFixed(1)}s</span>
+          <span className={cn(
+            "rounded px-1.5 py-0.5 font-mono normal-case",
+            lastPlan.score >= 75 ? "bg-emerald-500/15 text-emerald-300"
+            : lastPlan.score >= 50 ? "bg-amber-500/15 text-amber-300"
+            : "bg-red-500/15 text-red-300",
+          )}>Score {lastPlan.score}</span>
+          {lastPlan.fallbackUsed && (
+            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono normal-case text-amber-300">Clean Fallback</span>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-3">
         <DeckStemColumn side="A" deckTitle={A.track?.title ?? "—"} />
