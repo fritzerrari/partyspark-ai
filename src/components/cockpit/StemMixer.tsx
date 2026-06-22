@@ -305,7 +305,7 @@ export function StemMixer() {
             <span className="text-[9px] text-stage-foreground/40">/ 100</span>
           </div>
           <span className="text-[9px] text-stage-foreground/60">
-            Empfehlung: <span className="text-[var(--neon-amber)]">{RECIPES.find((r) => r.id === quality.recommendedRecipe)?.label}</span>
+            Empfehlung: <span className="text-[var(--neon-amber)]">{decision.recipeLabel}</span>
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-stage-foreground/60">
@@ -372,8 +372,8 @@ export function StemMixer() {
         Ohne echte Stems läuft eine <b className="text-stage-foreground/80">Clean DJ Transition</b>:
         bar-genaue EQ-/Filter-Moves auf dem Originalsignal — Bass-Swap, Filter Build,
         Hook Tease, Drum-Top Blend, Drop Cut oder Echo Out. Das Originallied bleibt
-        klar erkennbar. Sobald für <b>beide</b> Decks echte Demucs-Stems geladen sind,
-        wechselt Smart Mix automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
+        klar erkennbar. Sobald für <b>beide</b> Decks echte Stems geladen sind,
+        wechselt Auto-DJ automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
         Vocals, Drums, Bass und Melody werden unabhängig choreografiert (Teaser →
         Layer → Strip → Downbeat Switch → Reveal).
       </p>
