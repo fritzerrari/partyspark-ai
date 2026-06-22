@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTwinDeck, peekNextPlan } from "@/lib/audio/twinDeckBus";
-import { TRANSITION_LABELS } from "@/lib/audio/engine";
+import { decideTransition } from "@/lib/audio/transitionDecision";
 import { Wand2, ArrowRight, TrendingUp, TrendingDown, Minus, Music2, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,8 @@ export function NextMoveCard() {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const transitionMode = useTwinDeck((s) => s.transitionMode);
+  const crossfader = useTwinDeck((s) => s.crossfader);
+  const upcoming = useTwinDeck((s) => s.upcomingMix);
 
   const [peek, setPeek] = useState<Peek>(null);
   useEffect(() => {
@@ -46,6 +48,12 @@ export function NextMoveCard() {
 
   const fromTrack = peek.from === "A" ? A.track : B.track;
   const toTrack = peek.to === "A" ? A.track : B.track;
+  const liveDecision = upcoming ?? decideTransition({
+    fromTrack,
+    toTrack,
+    fromMode: peek.from === "A" ? A.stemsMode : B.stemsMode,
+    toMode: peek.to === "A" ? A.stemsMode : B.stemsMode,
+  });
   const fromBpm = fromTrack?.bpm ?? null;
   const toBpm = toTrack?.bpm ?? null;
   const energyFrom = fromTrack?.energy ?? null;
@@ -97,9 +105,11 @@ export function NextMoveCard() {
             {inFlight && <span className="ml-auto rounded bg-[var(--neon-amber)]/30 px-1.5 py-0.5 text-[9px] font-bold text-[var(--neon-amber)]">LIVE</span>}
           </div>
           <div className="mt-0.5 truncate text-sm font-bold text-stage-foreground">
-            {TRANSITION_LABELS[peek.mode] ?? peek.mode}
+            Auto-DJ · {liveDecision.recipeLabel}
           </div>
-          <div className="mt-0.5 line-clamp-1 text-[10px] text-stage-foreground/60">{peek.note}</div>
+          <div className="mt-0.5 line-clamp-1 text-[10px] text-stage-foreground/60">
+            {liveDecision.engine === "real" ? "Real-Stem Recipe" : "Clean-DJ Originalsignal"} · Score {liveDecision.score} · {liveDecision.syncAllowed ? `Sync ×${liveDecision.syncRate.toFixed(3)}` : "kein Stretch"}
+          </div>
         </div>
       </div>
 
@@ -120,6 +130,9 @@ export function NextMoveCard() {
           </div>
           <div className="mt-0.5 flex items-center justify-center gap-0.5 text-[9px]">
             <EnergyIcon className="h-3 w-3" /> {dE > 0 ? "+" : ""}{Math.round(dE)}
+          </div>
+          <div className="mt-0.5 text-[8px] uppercase tracking-widest text-stage-foreground/40">
+            {liveDecision.engine} · {liveDecision.bars}b
           </div>
         </div>
         <div className="text-center">
