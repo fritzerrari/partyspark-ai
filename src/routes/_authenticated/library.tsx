@@ -1,13 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Upload, Music2, Heart, Play, Loader2, Search, Wand2, CheckSquare, Square as SquareIcon } from "lucide-react";
+import {
+  Upload, Music2, Heart, Play, Loader2, Search, Wand2,
+  CheckSquare, Square as SquareIcon, Filter, X, ArrowRight,
+  Disc3, Sparkles, AudioLines,
+} from "lucide-react";
 import { tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useEngine } from "@/lib/audio/engine";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { useTwinDeck } from "@/lib/audio/twinDeckBus";
+import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { analyzeAudio, decodeToBuffer } from "@/lib/audio/analyze";
