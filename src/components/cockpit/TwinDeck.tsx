@@ -42,7 +42,7 @@ export function TwinDeck({ tracks }: Props) {
   const toggle = useTwinDeck((s) => s.toggle);
   const scrub = useTwinDeck((s) => s.scrub);
   const sync = useTwinDeck((s) => s.sync);
-  const smartMix = useTwinDeck((s) => s.smartMix);
+  const smartMixPlan = useTwinDeck((s) => s.smartMixPlan);
   const ensureAnalysis = useTwinDeck((s) => s.ensureAnalysis);
   const setPool = useTwinDeck((s) => s.setPool);
   const setAutoTimerSec = useTwinDeck((s) => s.setAutoTimerSec);
@@ -123,12 +123,12 @@ export function TwinDeck({ tracks }: Props) {
             )}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <NeonButton onClick={() => smartMix("A", "B")}
+            <NeonButton onClick={() => { void smartMixPlan("A", "B"); }}
               variant="active" size="sm"
               disabled={!A.track || !B.track || inFlight}>
               <Wand2 className="h-3 w-3" /> A → B
             </NeonButton>
-            <NeonButton onClick={() => smartMix("B", "A")}
+            <NeonButton onClick={() => { void smartMixPlan("B", "A"); }}
               variant="danger" size="sm"
               disabled={!A.track || !B.track || inFlight}>
               <Wand2 className="h-3 w-3" /> B → A
