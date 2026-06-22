@@ -824,6 +824,21 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     ensureCtx(); wireDeck(side);
     const d = deck[side];
     if (!d.el) return;
+    // Tear down any real-stem session from the previous track on this side
+    // so the new track always starts in clean pseudo mode until its own
+    // Demucs stems are loaded.
+    if (d.realStems) {
+      try { d.realStems.dispose(); } catch { /* noop */ }
+      d.realStems = null;
+      if (d.stems && ctx) {
+        try {
+          const inputGain = (d.stems.input as GainNode).gain;
+          inputGain.cancelScheduledValues(ctx.currentTime);
+          inputGain.setValueAtTime(1, ctx.currentTime);
+        } catch { /* noop */ }
+      }
+      set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
+    }
     // Fill in camelot if missing (cheap derivation)
     const enriched: EngineTrack = {
       ...track,
