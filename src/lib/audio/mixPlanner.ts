@@ -18,6 +18,8 @@ export type TrackMeta = {
   } | null;
   durationSec?: number | null;
   energy?: number | null;
+  /** Voiced-probability map (0..1) sampled per second from analyze.ts. */
+  vocalMap?: { t: number; voiced: number }[] | null;
 };
 
 export type MixPlan = {
@@ -27,6 +29,10 @@ export type MixPlan = {
   triggerAtSecOfCurrent: number; // where in current track to start the transition
   bpmRatio: number;             // next.bpm / current.bpm — used for time-stretch hint
   notes: string;
+  /** true if the trigger was snapped to a phrase (8-bar) boundary. */
+  phraseSnapped?: boolean;
+  /** Seconds the trigger was pushed forward to clear an active vocal segment. */
+  vocalDeferSec?: number;
 };
 
 const DEFAULT_BARS = 16; // 16 beats ≈ 4 bars
