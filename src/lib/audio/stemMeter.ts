@@ -12,14 +12,14 @@ export function createStemMeter(
   gains: Record<StemId, GainNode>,
 ): StemMeter {
   const analysers: Record<StemId, AnalyserNode> = {} as Record<StemId, AnalyserNode>;
-  const buffers: Record<StemId, Uint8Array> = {} as Record<StemId, Uint8Array>;
+  const buffers: Record<StemId, Uint8Array<ArrayBuffer>> = {} as Record<StemId, Uint8Array<ArrayBuffer>>;
   (Object.keys(gains) as StemId[]).forEach((k) => {
     const a = ctx.createAnalyser();
     a.fftSize = 256;
     a.smoothingTimeConstant = 0.65;
     gains[k].connect(a);
     analysers[k] = a;
-    buffers[k] = new Uint8Array(a.fftSize);
+    buffers[k] = new Uint8Array(new ArrayBuffer(a.fftSize));
   });
 
   function getLevels(): Record<StemId, number> {
