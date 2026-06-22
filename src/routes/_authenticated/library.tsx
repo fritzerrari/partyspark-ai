@@ -487,6 +487,7 @@ function Library() {
               {filtersOpen ? "Filter zu" : "Filter"}
             </button>
           </div>
+        </div>
 
           {tracks.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-border bg-card/40 p-12 text-center">
