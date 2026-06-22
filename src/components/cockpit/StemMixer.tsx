@@ -229,6 +229,11 @@ export function StemMixer() {
           <span className={cn("rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-widest", modePill.color)}>
             {modePill.label}
           </span>
+          {inFlight && (
+            <span className="rounded border border-[var(--neon-cyan)]/40 bg-[var(--neon-cyan)]/10 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-[var(--neon-cyan)] animate-pulse">
+              {engine === "real" ? "Real" : "Clean"} · {phase ?? "…"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <select
