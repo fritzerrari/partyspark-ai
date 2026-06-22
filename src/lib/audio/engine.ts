@@ -569,7 +569,7 @@ export const useEngine = create<State & Actions>((set, get) => ({
       try {
         const { planMix } = await import("./mixPlanner");
         const plan = planMix(
-          { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy },
+          { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy, vocalMap: state.current.vocalMap },
           { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
           state.positionSec,
           { forceMode: state.transitionMode },
