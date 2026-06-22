@@ -1,84 +1,87 @@
-## Goal
+## Ziel
 
-Replace the current crossfade-leaning transition engine with a **stem-first engine**. Every transition rides 4 independent buses (vocals, drums, bass, other) on each deck. Crossfader becomes a fallback safety net, not the mechanism.
+Die Transition darf nicht mehr wie ein Crossfade wirken. Sie soll wie eine DJ-Performance klingen: lange, bar-genaue Phrasen, frühe Teaser des nächsten Songs, einzelne Stems als Vorankündigung, Bass-/Drum-Swaps auf Downbeats, Vocal-Konflikt-Vermeidung und klare Spannungsbögen.
 
-## What changes
+## Was ich ändern werde
 
-### 1. Stem-first audio graph (`twinDeckBus.ts`, `realStemPlayer.ts`, `stemSplit.ts`)
-- Real-stem mode becomes the **canonical** path. When 4 buffers are attached:
-  - MediaElement output to the deck gain is muted (already exists, harden it).
-  - Pseudo `stems.input` is muted (already exists, harden it).
-  - The 4 `BufferSourceNode`s feed `stems.gains[stem]` directly → recipes operate on real audio.
-- Pseudo split stays as fallback only. Source of truth for the deck "mode" is exposed:
-  - `stemsMode: "pseudo" | "loading" | "real"` (exists) — UI labels strictly tied to this.
-  - A transition is labeled **Real** only when BOTH decks report `stemsMode === "real"`.
+1. **Crossfade aus dem Kern entfernen**
+   - `Smart Mix` und die Stem-Recipes steuern nicht mehr primär Deck-Lautstärken oder den sichtbaren Crossfader.
+   - Der Crossfader bleibt nur UI-/Safety-Fallback am Ende.
+   - Der hörbare Mix läuft über einzelne Stem-Busse: vocals, drums, bass, other.
 
-### 2. Six transition recipes (`transitionRecipes.ts`)
-Rewrite the recipe table to the exact six requested, all beat-aligned via `waitForNextBeat`, and all stem-only (no master crossfade):
+2. **Neue „Pro DJ“-Transition-Architektur**
+   - Jede Transition bekommt mehrere echte Phasen statt einem linearen Fade:
+     - **Preview / Tease**: nur ein einzelnes Element aus dem neuen Track kommt kurz rein, z. B. Vocal-Chop, Hi-Hat/Drums oder Melody.
+     - **Groove Layer**: Incoming Drums oder Percussion laufen unter dem alten Track.
+     - **Tension / Stripdown**: alter Track wird auf wenige Parts reduziert, z. B. nur Drums oder nur Vocal.
+     - **Downbeat Switch**: Bass/Drums wechseln hart und musikalisch auf dem Downbeat.
+     - **Reveal**: neuer Track öffnet sich vollständig.
+   - Übergänge werden länger: typischerweise 12–16 Bars statt 8 Bars.
 
-1. **vocalOutDrumsIn** — outgoing vocals duck → silence, incoming drums fade in on the bar, then everything else swaps.
-2. **bassSwap** — bass swap on the downbeat (hard cut on bass bus), everything else crossfaded slowly.
-3. **drumBridge** — outgoing collapses to drums-only for 2 bars, incoming drums layered, then incoming reveals melody + bass.
-4. **acapellaIntro** — outgoing reduced to vocals only, incoming starts drums + bass under it, then incoming vocals replace outgoing.
-5. **instrumentalBed** — outgoing vocals out, outgoing other/bass form a bed, incoming full mix fades in.
-6. **dropSwitch** — both decks ride to the next downbeat, swap bass + drums simultaneously on the drop, melody/vocals crossfade behind.
+3. **Recipes komplett verschärfen**
+   Die vorhandenen sechs Recipes bleiben namentlich, werden aber musikalisch neu choreografiert:
+   - **Vocal-Out / Drums-In**: Incoming Drums teasen früh, outgoing Vocals werden gezielt beantwortet/geduckt, dann rhythmischer Swap.
+   - **Bass Swap**: Incoming Melody/Drums kommen ohne Bass rein, Bass wechselt hart auf Downbeat, danach erst Full Reveal.
+   - **Drum Bridge**: beide Tracks werden temporär auf Rhythmus reduziert, Incoming Drums übernehmen schrittweise, ideal für schlechte BPM/Key-Matches.
+   - **Acapella Intro**: Outgoing Vocal steht fast allein, Incoming Instrumental baut darunter Spannung auf, dann Vocal-Trade.
+   - **Instrumental Bed**: Outgoing Instrumental wird als Bett genutzt, Incoming Vocal/Lead nur kurz angedeutet, dann vollständige Öffnung.
+   - **Drop Switch**: kurzer Build mit einzelnen Incoming-Parts, dann simultaner Bass+Drums-Switch auf dem Drop.
 
-Automatic conflict-mute helper: when both decks have vocals active during the swap window, the outgoing vocals are force-ducked to 0 within 100 ms.
-Drums/rhythm stability: a min-floor (≥ 0.25) on at least one drums bus through the middle 50 % of the recipe.
+4. **„Andeutung, dass neues Lied kommt“ erzwingen**
+   - Jede Recipe muss innerhalb der ersten 1–2 Bars hörbar einen einzelnen Part des neuen Tracks einblenden.
+   - Nicht immer derselbe Part: je nach Track-Kontext wählt die Engine Drums, Vocal, Bass oder Melody als Teaser.
+   - Teaser werden kurz wieder rausgenommen, damit es nach DJ-Ride statt permanentem Fade klingt.
 
-### 3. Pre-transition beat & key alignment
-Wrap every recipe with a single `prepareTransition(from, to)`:
-- `syncTempo` (exists) → playback-rate match (half/double-time aware).
-- `beatAlign` (exists) → align next downbeats.
-- Compute BPM delta % and key compatibility (`camelotCompatible`).
-- Returns a `TransitionQuality` object (see #5).
+5. **Phrase- und Downbeat-Logik verbessern**
+   - Start auf nächstem Downbeat, bei vorhandener Beatgrid-Analyse eher auf 4-/8-Bar-Phrasen.
+   - Switch-Punkte liegen auf Bar-Grenzen, nicht irgendwo im Fade.
+   - Wenn Beatgrid fehlt, fallback auf BPM-basierte Bar-Schätzung.
 
-### 4. Smart Mix button + UI (`StemMixer.tsx`)
-- Add a **Moises-style Smart Mix** primary button: picks the best recipe from BPM delta, key compat, vocal overlap, and stem mode; runs `prepareTransition` then the recipe.
-- Replace the existing recipe `<select>` with the 6 new recipes (keep Auto).
-- Header pill shows aggregated mode: **Real** (both decks real), **Hybrid** (one real), **Pseudo** (none).
-- Per-deck card now shows:
-  - **4 live VU meters** (vocals / drums / bass / other) driven by an AnalyserNode tapped off each stem `gains[stem]`.
-  - **4 vertical sliders** (already there) — keep, but values shown next to live meter.
-- **Quality scoring panel** below the button:
-  - `score 0–100`, color-coded.
-  - Sub-scores: BPM match, key compat, energy delta, vocal-conflict risk.
-- **Warnings**:
-  - If `|bpmDelta| > 8 %` or key not Camelot-compatible → red banner with the offending number + suggestion (e.g. "Pitch Deck B by −2 semitones" or "Use Drum Bridge to hide tempo gap").
+6. **Konflikte aktiv vermeiden**
+   - Vocals beider Tracks dürfen nicht lange gleichzeitig offen sein.
+   - Bass beider Tracks darf nur sehr kurz gleichzeitig offen sein.
+   - Mindestens ein Drum-Bus bleibt in der Mitte der Transition hörbar, damit der Groove nicht zusammenbricht.
 
-### 5. New module `src/lib/audio/transitionQuality.ts`
-Pure function: `scoreTransition({fromTrack, toTrack, fromRate, toRate, stemsMode}) → { score, bpmScore, keyScore, energyScore, vocalConflict, warnings[], recommendedRecipe }`. Used by both the score panel and the Smart Mix auto-pick.
+7. **Smart Mix wird mutiger**
+   - Die automatische Wahl entscheidet nicht nur „welches Recipe“, sondern auch:
+     - Transition-Länge: 8 / 12 / 16 Bars
+     - Teaser-Stem: vocals / drums / bass / other
+     - Aggressivität: smooth / performance / emergency
+   - Bei schlechtem BPM/Key-Match wird Drum Bridge oder Drop Switch bevorzugt, nicht ein softer Fade.
 
-### 6. New module `src/lib/audio/stemMeter.ts`
-Tiny helper attaching a `AnalyserNode` to each `stems.gains[stem]` and returning a `getLevels(): Record<StemId, number>` (RMS 0..1). `StemMixer.tsx` polls at 30 fps.
+8. **UI ehrlicher machen**
+   - Der Button wird als Performance-Mix klarer erkennbar.
+   - Quality Panel zeigt zusätzlich:
+     - gewählte Länge in Bars
+     - Teaser-Stem
+     - Warnung, wenn nur Pseudo-Stems aktiv sind
+   - „Real“ bleibt nur erlaubt, wenn beide Decks echte getrennte AudioBuffer nutzen.
 
-### 7. Mute-conflict + rhythm-stable safety pass (`twinDeckBus.ts`)
-Inside `runStemRecipe`:
-- Before recipe runs: detect vocal overlap (both `vocals` > 0.2) → schedule auto-duck on outgoing.
-- Throughout: enforce drums floor by clamping any `setGain("drums", v)` below 0.25 during phase 2–3 to 0.25 on at least one side.
+## Technische Umsetzung
 
-### 8. Strictly correct "Real vs Pseudo" labeling
-- Single source: `getTransitionMode(state) → "real" | "hybrid" | "pseudo"` computed from `A.stemsMode` + `B.stemsMode`.
-- Used by the Smart Mix button label, the per-deck badges, and the post-transition toast.
+- `src/lib/audio/transitionRecipes.ts`
+  - Recipes von linearen Gain-Ramps zu phasenbasierten Stem-Choreografien umbauen.
+  - Helper für `teaseStem`, `killConflicts`, `holdGroove`, `barWait`, `setDeckStemScene` ergänzen.
 
-## Files
+- `src/lib/audio/twinDeckBus.ts`
+  - `runStemRecipe` um 12–16-Bar-Optionen, Phrase-Waiting und Smart-Mix-Parameter erweitern.
+  - Crossfader während der Transition nicht mehr als hörbaren Hauptmechanismus verwenden.
+  - Erst am Ende Deck-State und UI-Crossfader finalisieren.
 
-**Edit**
-- `src/lib/audio/twinDeckBus.ts` — harden real-stem routing mute, add `prepareTransition`, conflict-mute, rhythm-floor, expose `getTransitionMode`, expose stem-level meters.
-- `src/lib/audio/transitionRecipes.ts` — replace 5 recipes with the 6 requested; tighten `pickRecipe`.
-- `src/components/cockpit/StemMixer.tsx` — Smart Mix button, meters, quality panel, warning banner, mode pill.
-- `src/lib/audio/realStemPlayer.ts` — ensure pseudo mute on attach + restore on detach (already partially there).
+- `src/lib/audio/transitionQuality.ts`
+  - Empfehlung um `bars`, `teaserStem`, `aggression` und `riskReason` erweitern.
+  - Stärkere Penalty für Pseudo-Modus und große BPM/Key-Risiken.
 
-**New**
-- `src/lib/audio/transitionQuality.ts` — pure scoring + recommendation.
-- `src/lib/audio/stemMeter.ts` — per-stem RMS analyser helper.
+- `src/components/cockpit/StemMixer.tsx`
+  - Quality Panel um die neue Performance-Entscheidung erweitern.
+  - Pseudo-Hinweis deutlicher machen, aber keine falsche „Real“-Sprache verwenden.
 
-**No DB / no server changes.** Stems pipeline (HF Space, `track_stems` table, `stems.functions.ts`, `useTrackStems`) stays as is.
+## Akzeptanzkriterien
 
-## Acceptance
-
-- Clicking **Smart Mix** with two analyzed tracks runs an audible, beat-locked stem transition (not a master crossfade).
-- Per-deck 4 live meters move with the music.
-- Badge says **Real** only when both decks have 4 attached AudioBuffers.
-- BPM > 8 % off or incompatible key → visible red warning + recommended recipe.
-- Quality score updates whenever a deck/pitch changes.
+- Smart Mix klingt nicht mehr wie ein linearer Fade.
+- Innerhalb der ersten Bars ist hörbar ein einzelner Part des nächsten Tracks als Teaser da.
+- Längere Übergänge über 12–16 Bars sind möglich und Standard für gute Matches.
+- Bass/Drums wechseln musikalisch auf Downbeats.
+- Vocals kollidieren nicht dauerhaft.
+- Pseudo-Modus wird klar als begrenzter Fallback gezeigt.
+- Real-Modus wird nur angezeigt, wenn echte getrennte Stem-Buffers beider Decks aktiv sind.
