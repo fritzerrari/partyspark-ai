@@ -14,7 +14,6 @@ export function NextMoveCard() {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const transitionMode = useTwinDeck((s) => s.transitionMode);
-  const crossfader = useTwinDeck((s) => s.crossfader);
   const upcoming = useTwinDeck((s) => s.upcomingMix);
 
   const [peek, setPeek] = useState<Peek>(null);
