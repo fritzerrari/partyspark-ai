@@ -1421,6 +1421,16 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         transitionInFlight: false,
         transitionPhase: null,
         transitionEngine: null,
+        lastPlan: {
+          type: plan.type,
+          bars: plan.bars,
+          score: plan.qualityScore,
+          durationSec: plan.durationSec,
+          from: fromSide,
+          to: toSide,
+          fallbackUsed: !!plan.fallbackUsed,
+          at: performance.now(),
+        },
       });
     } catch (e) {
       console.warn("executePlan failed", e);
