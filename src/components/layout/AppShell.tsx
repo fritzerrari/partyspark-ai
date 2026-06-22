@@ -3,7 +3,6 @@ import {
   Home,
   PartyPopper,
   Music2,
-  Mic,
   Settings as SettingsIcon,
   LogOut,
   ShieldCheck,
