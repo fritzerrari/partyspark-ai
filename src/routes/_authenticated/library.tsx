@@ -44,6 +44,7 @@ function Library() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loadingDeck, setLoadingDeck] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const engine = useEngine();
   const loadDeck = useTwinDeck((s) => s.loadDeck);
 
