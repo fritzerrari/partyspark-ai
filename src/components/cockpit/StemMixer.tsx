@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { useTwinDeck, type DeckSide } from "@/lib/audio/twinDeckBus";
-import { RECIPES, type RecipeId } from "@/lib/audio/transitionRecipes";
+import { RECIPES } from "@/lib/audio/transitionRecipes";
 import type { StemId } from "@/lib/audio/stemSplit";
 import { cn } from "@/lib/utils";
-import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2, AlertTriangle, Zap } from "lucide-react";
+import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2, AlertTriangle, Zap, Lock } from "lucide-react";
 import { useTrackStems } from "@/hooks/useTrackStems";
 import { toast } from "sonner";
+
+const PHASES = ["cue", "tease", "layer", "strip", "switch", "reveal"] as const;
+const PHASE_LABELS: Record<string, string> = {
+  cue: "Cue", tease: "Tease", layer: "Layer",
+  strip: "Strip", switch: "Switch", reveal: "Reveal", done: "Done",
+};
 
 type IconCmp = React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
 const STEM_META: Record<StemId, { label: string; color: string; icon: IconCmp }> = {
@@ -37,10 +43,17 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
   const getStemGains = useTwinDeck((s) => s.getStemGains);
   const getStemLevels = useTwinDeck((s) => s.getStemLevels);
   const stemsMode = useTwinDeck((s) => s[side].stemsMode);
+  const inFlight = useTwinDeck((s) => s.transitionInFlight);
   const trackId = useTwinDeck((s) => s[side].track?.id ?? null);
   const attachRealStems = useTwinDeck((s) => s.attachRealStems);
   const detachRealStems = useTwinDeck((s) => s.detachRealStems);
   const { data: stems, generate } = useTrackStems(trackId);
+
+  // Sliders only do real work when actual separated buffers are loaded.
+  // In pseudo mode they would just colour the original signal through fake
+  // band-pass filters and make the song unrecognisable — so we hard-lock
+  // them and tell the user to generate real stems first.
+  const slidersLocked = stemsMode !== "real" || inFlight;
 
   // Auto-attach real stems when they become ready and we're not already on them.
   useEffect(() => {
@@ -117,7 +130,14 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
       {stems?.status === "failed" && stems.error && (
         <p className="mb-1 text-[9px] text-red-400 truncate" title={stems.error}>⚠ {stems.error}</p>
       )}
-      <div className="grid grid-cols-4 gap-2">
+      <div className={cn("grid grid-cols-4 gap-2 relative", slidersLocked && "opacity-90")}>
+        {slidersLocked && stemsMode !== "real" && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md bg-black/55 backdrop-blur-[2px]">
+            <span className="flex items-center gap-1 rounded border border-white/10 bg-black/70 px-2 py-1 text-[9px] uppercase tracking-widest text-stage-foreground/80">
+              <Lock className="h-2.5 w-2.5" /> Clean DJ Mode · Echte Stems generieren für Slider
+            </span>
+          </div>
+        )}
         {(Object.keys(STEM_META) as StemId[]).map((stem) => {
           const meta = STEM_META[stem];
           const Icon = meta.icon;
@@ -128,7 +148,7 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
               <Icon className="h-3 w-3" style={{ color: meta.color }} />
               <div className="relative flex h-20 items-end gap-1">
                 {/* VU meter */}
-                <div className="relative h-full w-1.5 overflow-hidden rounded-full bg-white/5">
+                <div className="relative h-full w-3 overflow-hidden rounded-full bg-white/5">
                   <div
                     className="absolute bottom-0 left-0 right-0 rounded-full transition-[height] duration-75"
                     style={{ height: `${Math.round(lvl * 100)}%`, background: meta.color, boxShadow: `0 0 6px ${meta.color}` }}
@@ -139,12 +159,13 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
                   type="range"
                   min={0} max={1.5} step={0.01}
                   value={v}
+                  disabled={slidersLocked}
                   onChange={(e) => {
                     const nv = parseFloat(e.target.value);
                     setStem(side, stem, nv, 0.03);
                     setVals((prev) => ({ ...prev, [stem]: nv }));
                   }}
-                  className="h-20 w-2 cursor-pointer appearance-none rounded-full bg-white/10"
+                  className="h-20 w-3 cursor-pointer appearance-none rounded-full bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                   style={{
                     writingMode: "vertical-lr" as never,
                     WebkitAppearance: "slider-vertical" as never,
@@ -166,14 +187,11 @@ export function StemMixer() {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
-  const runStemRecipe = useTwinDeck((s) => s.runStemRecipe);
-  const runClean = useTwinDeck((s) => s.runCleanRecipe);
   const smartMix = useTwinDeck((s) => s.smartMix);
   const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
   const phase = useTwinDeck((s) => s.transitionPhase);
   const engine = useTwinDeck((s) => s.transitionEngine);
-  const [recipe, setRecipe] = useState<RecipeId | "auto">("auto");
 
   const fromSide: DeckSide = crossfader < 0.5 ? "A" : "B";
   const toSide: DeckSide = fromSide === "A" ? "B" : "A";
@@ -184,17 +202,6 @@ export function StemMixer() {
     const id = window.setInterval(() => setQuality(getTransitionQuality(fromSide, toSide)), 400);
     return () => clearInterval(id);
   }, [fromSide, toSide, getTransitionQuality]);
-
-  async function fire() {
-    // Manual fire: only run the destructive stem-recipe engine if BOTH decks
-    // truly have real Demucs stems. Otherwise fall back to the Clean DJ
-    // engine so we don't shred the original audio.
-    if (quality.mode === "real") {
-      await runStemRecipe(fromSide, toSide, recipe === "auto" ? undefined : recipe);
-    } else {
-      await runClean(fromSide, toSide);
-    }
-  }
 
   async function fireSmart() {
     if (!A.track || !B.track) {
@@ -236,44 +243,50 @@ export function StemMixer() {
           )}
         </div>
         <div className="flex items-center gap-1">
-          <select
-            value={recipe}
-            onChange={(e) => setRecipe(e.target.value as RecipeId | "auto")}
-            className="rounded border border-white/10 bg-black/40 px-2 py-1 text-[10px] text-stage-foreground"
-            title={recipe !== "auto" ? RECIPES.find((r) => r.id === recipe)?.hint : "Engine pickt das beste Rezept anhand BPM/Key/Vocals"}
-          >
-            <option value="auto">Auto (smart pick)</option>
-            {RECIPES.map((r) => (
-              <option key={r.id} value={r.id}>{r.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={fire}
-            disabled={inFlight || !A.track || !B.track}
-            className={cn(
-              "rounded-md border px-2 py-1 text-[10px] uppercase tracking-widest",
-              inFlight
-                ? "border-white/10 text-stage-foreground/40"
-                : "border-[var(--neon-amber)] bg-[var(--neon-amber)]/15 text-[var(--neon-amber)] hover:bg-[var(--neon-amber)]/25",
-            )}
-          >
-            {inFlight ? "läuft…" : `Mix ${fromSide} → ${toSide}`}
-          </button>
           <button
             onClick={fireSmart}
             disabled={inFlight || !A.track || !B.track}
             className={cn(
-              "flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-widest",
+              "flex items-center gap-1 rounded-md border px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest",
               inFlight
                 ? "border-white/10 text-stage-foreground/40"
                 : "border-[var(--neon-cyan)] bg-[var(--neon-cyan)]/20 text-[var(--neon-cyan)] hover:bg-[var(--neon-cyan)]/30",
             )}
             title="Wählt das beste Rezept anhand BPM, Key, Vocals & Energie und fährt es beat-synchron"
           >
-            <Zap className="h-3 w-3" /> Smart Mix
+            <Zap className="h-3.5 w-3.5" />
+            {inFlight ? `läuft · ${phase ?? "…"}` : `Smart Mix ${fromSide} → ${toSide}`}
           </button>
         </div>
       </div>
+
+      {/* Phase timeline — visible during a transition so the performer sees
+          which stage the choreography is in. */}
+      {inFlight && (
+        <div className="flex items-center gap-1 rounded-md border border-white/10 bg-black/40 px-2 py-1.5">
+          {PHASES.map((p, i) => {
+            const activeIdx = PHASES.indexOf((phase ?? "cue") as typeof PHASES[number]);
+            const isActive = i === activeIdx;
+            const isDone = activeIdx > i || phase === "done";
+            return (
+              <div key={p} className="flex flex-1 items-center gap-1">
+                <div className={cn(
+                  "h-2 flex-1 rounded-full transition-colors",
+                  isActive ? "bg-[var(--neon-cyan)] animate-pulse"
+                  : isDone ? "bg-[var(--neon-cyan)]/40"
+                  : "bg-white/10",
+                )} />
+                <span className={cn(
+                  "text-[8px] uppercase tracking-widest",
+                  isActive ? "text-[var(--neon-cyan)]"
+                  : isDone ? "text-stage-foreground/50"
+                  : "text-stage-foreground/30",
+                )}>{PHASE_LABELS[p]}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Quality + warnings */}
       <div className="rounded-xl border border-white/10 bg-black/40 p-2 space-y-1.5">
