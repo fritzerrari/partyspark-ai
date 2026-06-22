@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/layout/AppShell";
 import { Loader2 } from "lucide-react";
+import { TrackDropZone } from "@/components/upload/TrackDropZone";
 
 function PendingScreen() {
   return (
@@ -34,6 +35,7 @@ function AuthedLayout() {
   return (
     <AppShell>
       <Outlet />
+      <TrackDropZone />
     </AppShell>
   );
 }
