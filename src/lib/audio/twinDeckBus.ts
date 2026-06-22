@@ -92,7 +92,7 @@ type Actions = {
   /** Reset a deck's stem split to neutral (all = 1). */
   resetStems: (side: DeckSide) => void;
   /** Run a stem-based transition recipe between two decks. */
-  runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId) => Promise<void>;
+  runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId, opts?: { bars?: number; teaserStem?: StemId; aggression?: "smooth" | "performance" | "emergency" }) => Promise<void>;
   /** Snapshot of current stem-gains for the UI. */
   getStemGains: (side: DeckSide) => Record<StemId, number>;
   /** Live RMS levels per stem (0..1) — for VU meters. */
@@ -975,10 +975,14 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
   async smartMix(from, to) {
     const q = get().getTransitionQuality(from, to);
-    await get().runStemRecipe(from, to, q.recommendedRecipe);
+    await get().runStemRecipe(from, to, q.recommendedRecipe, {
+      bars: q.bars,
+      teaserStem: q.teaserStem,
+      aggression: q.aggression,
+    });
     return q.recommendedRecipe;
   },
-  async runStemRecipe(from, to, id) {
+  async runStemRecipe(from, to, id, opts) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
     if (!ctx) return;
     const st = get();
@@ -1033,15 +1037,18 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         energyJump: toE - fromE,
       });
       const secPerBar = fromTrack.bpm ? (60 / fromTrack.bpm) * 4 : 2;
-      const bars = 8;
-      // Animate the crossfader visually toward the incoming side; the *audio* is
-      // handled by stem swaps so the crossfader is mostly cosmetic here.
+      const bars = Math.max(8, Math.min(20, opts?.bars ?? 12));
+      // Animate the visible crossfader gently — the AUDIO is fully handled by
+      // stem swaps. We only nudge the UI fader near the end so it doesn't
+      // become a parallel hidden master crossfade.
       animateCrossfader(to === "B" ? 1 : 0, secPerBar * bars * 1000);
       await runRecipe(recipeId, {
         ctx,
         fromStems, toStems,
         secPerBar, bars,
         waitForBeat: () => waitForNextBeat(from),
+        teaserStem: opts?.teaserStem,
+        aggression: opts?.aggression,
       });
       // Clean up: pause outgoing, reset its stems to neutral so it's ready to be
       // reused, restore the deck gain to user volume.
