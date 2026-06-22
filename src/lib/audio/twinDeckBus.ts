@@ -1114,6 +1114,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     // Kick off analysis in background for both
     void get().ensureAnalysis("A");
     void get().ensureAnalysis("B");
+    setUpcomingMix(firstSide, otherSide, get().autoTimerSec);
     // Arm the auto-timer
     set({ autoTimerOn: true, autoTimerCountdown: get().autoTimerSec });
     startAutoTimer();
