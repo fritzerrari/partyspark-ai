@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.51",
+    "@breezystack/lamejs": "^1.2.7",
     "@fontsource/figtree": "^5.2.10",
     "@fontsource/outfit": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",

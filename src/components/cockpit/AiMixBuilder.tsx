@@ -1,37 +1,47 @@
 import { useState } from "react";
-import { Wand2, Loader2, Download } from "lucide-react";
+import { Wand2, Loader2, Download, FileAudio } from "lucide-react";
 import { toast } from "sonner";
 import type { EngineTrack } from "@/lib/audio/engine";
 import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
-import { planMixSet, renderMixToWav, type RenderProgress } from "@/lib/intel/autodj";
+import { planMixSet, renderMixToWav, renderMixToMp3, type RenderProgress } from "@/lib/intel/autodj";
+import { batchAnalyze, type BatchAnalyzeProgress } from "@/lib/intel/batchAnalyze";
 import type { MixSet } from "@/lib/intel/types";
 import { cn } from "@/lib/utils";
 
 export function AiMixBuilder({ tracks }: { tracks: EngineTrack[] }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<RenderProgress | null>(null);
+  const [analyzeProgress, setAnalyzeProgress] = useState<BatchAnalyzeProgress | null>(null);
   const [mixSet, setMixSet] = useState<MixSet | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloadKind, setDownloadKind] = useState<"wav" | "mp3">("wav");
 
-  async function build() {
+  async function build(format: "wav" | "mp3") {
     if (tracks.length < 2) { toast.error("Mindestens 2 analysierte Tracks nötig."); return; }
     setBusy(true);
     setMixSet(null);
+    setAnalyzeProgress(null);
     setDownloadUrl((u) => { if (u) URL.revokeObjectURL(u); return null; });
+    setDownloadKind(format);
     try {
-      const profiles = tracks
-        .filter((t) => t.url && t.bpm)
+      // 1) Batch-analyze tracks that don't have BPM yet.
+      const ready = await batchAnalyze(tracks.filter((t) => t.url), setAnalyzeProgress);
+      setAnalyzeProgress(null);
+      const profiles = ready
+        .filter((t) => t.bpm)
         .map((t) => trackProfileFromEngine(t, { stemsAvailable: false }));
       if (profiles.length < 2) {
-        toast.error("Tracks brauchen Analyse (BPM/Key/Beat-Grid). Lege sie kurz in ein Deck.");
+        toast.error("Konnte nicht genug Tracks analysieren.");
         setBusy(false); return;
       }
       const set = planMixSet(profiles);
       setMixSet(set);
-      const blob = await renderMixToWav(set, { onProgress: setProgress });
+      const blob = format === "mp3"
+        ? await renderMixToMp3(set, { onProgress: setProgress })
+        : await renderMixToWav(set, { onProgress: setProgress });
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
-      toast.success(`Mix fertig · ${set.tracks.length} Tracks · Ø ${set.meanScore}/100`);
+      toast.success(`${format.toUpperCase()} fertig · ${set.tracks.length} Tracks · Ø ${set.meanScore}/100`);
     } catch (e) {
       console.error(e);
       toast.error(`Render-Fehler: ${(e as Error).message}`);
@@ -52,7 +62,7 @@ export function AiMixBuilder({ tracks }: { tracks: EngineTrack[] }) {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={build}
+            onClick={() => build("wav")}
             disabled={busy || tracks.length < 2}
             className={cn(
               "flex items-center gap-1 rounded-md border px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest",
@@ -62,19 +72,44 @@ export function AiMixBuilder({ tracks }: { tracks: EngineTrack[] }) {
             )}
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
-            {busy ? "Render…" : "Mix erstellen"}
+            {busy ? "Render…" : "Mix · WAV"}
+          </button>
+          <button
+            onClick={() => build("mp3")}
+            disabled={busy || tracks.length < 2}
+            className={cn(
+              "flex items-center gap-1 rounded-md border px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest",
+              busy
+                ? "border-white/10 text-stage-foreground/40"
+                : "border-[var(--neon-amber)] bg-[var(--neon-amber)]/15 text-[var(--neon-amber)] hover:bg-[var(--neon-amber)]/25",
+            )}
+          >
+            <FileAudio className="h-3.5 w-3.5" />
+            MP3
           </button>
           {downloadUrl && mixSet && (
             <a
               href={downloadUrl}
-              download={`partypilot-mix-${Date.now()}.wav`}
+              download={`partypilot-mix-${Date.now()}.${downloadKind}`}
               className="flex items-center gap-1 rounded-md border border-[var(--neon-cyan)] bg-[var(--neon-cyan)]/15 px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[var(--neon-cyan)] hover:bg-[var(--neon-cyan)]/25"
             >
-              <Download className="h-3.5 w-3.5" /> WAV
+              <Download className="h-3.5 w-3.5" /> {downloadKind.toUpperCase()}
             </a>
           )}
         </div>
       </div>
+
+      {analyzeProgress && (
+        <div className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-[9px] uppercase tracking-widest text-stage-foreground/70">
+          <div className="flex items-center justify-between">
+            <span className="truncate">Analyse {analyzeProgress.index + 1}/{analyzeProgress.total} · {analyzeProgress.title}</span>
+            <span className="font-mono">{Math.round(analyzeProgress.pct)}%</span>
+          </div>
+          <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/10">
+            <div className="h-full bg-[var(--neon-amber)]" style={{ width: `${analyzeProgress.pct}%` }} />
+          </div>
+        </div>
+      )}
 
       {busy && progress && (
         <div className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-[9px] uppercase tracking-widest text-stage-foreground/70">

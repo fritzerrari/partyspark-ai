@@ -10,6 +10,7 @@
 import type { MixSet, TrackProfile, TransitionEvent, TransitionPlan, TransitionType } from "./types";
 import { computeMixability } from "./mixability";
 import { planTransition } from "./planner";
+import { Mp3Encoder } from "@breezystack/lamejs";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. Playlist ordering
@@ -329,6 +330,70 @@ function encodeWav(buf: AudioBuffer): ArrayBuffer {
       view.setInt16(p, s < 0 ? s * 0x8000 : s * 0x7fff, true);
       p += 2;
     }
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. MP3 export (lamejs, 192 kbps stereo)
+
+/** Same as renderMixToWav but encodes the rendered AudioBuffer to MP3.
+ *  Returns an audio/mpeg Blob suitable for download. */
+export async function renderMixToMp3(
+  set: MixSet,
+  opts: RenderOptions & { kbps?: number } = {},
+): Promise<Blob> {
+  // Reuse the WAV pipeline up to the encode step, then transcode.
+  // (We re-implement render here so we keep the AudioBuffer in scope.)
+  if (!set.tracks.length) throw new Error("MixSet has no tracks");
+  const wavBlob = await renderMixToWav(set, opts);
+  // Decode WAV back to AudioBuffer so we have a clean source for lamejs.
+  const Ctx = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
+    || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) throw new Error("AudioContext not available");
+  const decodeCtx = new Ctx();
+  let buf: AudioBuffer;
+  try {
+    const ab = await wavBlob.arrayBuffer();
+    buf = await decodeCtx.decodeAudioData(ab.slice(0));
+  } finally {
+    try { await decodeCtx.close(); } catch { /* noop */ }
+  }
+  opts.onProgress?.({ stage: "encode", pct: 50 });
+  const mp3 = encodeMp3(buf, opts.kbps ?? 192, (p) => {
+    opts.onProgress?.({ stage: "encode", pct: 50 + p * 0.5 });
+  });
+  return new Blob(mp3 as unknown as BlobPart[], { type: "audio/mpeg" });
+}
+
+function encodeMp3(buf: AudioBuffer, kbps: number, onProgress?: (pct: number) => void): Uint8Array[] {
+  const numCh = Math.min(2, buf.numberOfChannels);
+  const sampleRate = buf.sampleRate;
+  const encoder = new Mp3Encoder(numCh, sampleRate, kbps);
+  const left = floatToInt16(buf.getChannelData(0));
+  const right = numCh > 1 ? floatToInt16(buf.getChannelData(1)) : left;
+  const chunkSize = 1152;
+  const out: Uint8Array[] = [];
+  const total = left.length;
+  for (let i = 0; i < total; i += chunkSize) {
+    const l = left.subarray(i, i + chunkSize);
+    const r = right.subarray(i, i + chunkSize);
+    const mp3buf = numCh > 1 ? encoder.encodeBuffer(l, r) : encoder.encodeBuffer(l);
+    if (mp3buf.length > 0) out.push(new Uint8Array(mp3buf));
+    if (i % (chunkSize * 64) === 0) onProgress?.(i / total);
+  }
+  const flush = encoder.flush();
+  if (flush.length > 0) out.push(new Uint8Array(flush));
+  onProgress?.(1);
+  return out;
+}
+
+function floatToInt16(f: Float32Array): Int16Array {
+  const out = new Int16Array(f.length);
+  for (let i = 0; i < f.length; i++) {
+    let s = f[i];
+    if (s > 1) s = 1; else if (s < -1) s = -1;
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   return out;
 }

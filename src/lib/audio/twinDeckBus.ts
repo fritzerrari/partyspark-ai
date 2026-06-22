@@ -417,6 +417,24 @@ function animateCrossfader(toValue: number, durationMs: number) {
   rafId = requestAnimationFrame(step);
 }
 
+/** Smoothly glide an HTMLMediaElement.playbackRate (no AudioParam available). */
+const gliderTimers = new WeakMap<HTMLMediaElement, number>();
+function glidePlaybackRate(el: HTMLMediaElement, target: number, durationMs: number) {
+  const prev = gliderTimers.get(el);
+  if (prev) cancelAnimationFrame(prev);
+  const from = el.playbackRate || 1;
+  const t0 = performance.now();
+  const step = (now: number) => {
+    const p = Math.min(1, (now - t0) / Math.max(50, durationMs));
+    // ease-in-out cubic for a musical bend
+    const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    try { el.playbackRate = from + (target - from) * ease; } catch { /* noop */ }
+    if (p < 1) gliderTimers.set(el, requestAnimationFrame(step));
+    else gliderTimers.delete(el);
+  };
+  gliderTimers.set(el, requestAnimationFrame(step));
+}
+
 let autoTimerInterval: number | null = null;
 let poolCursor = 0;
 const recentlyPlayedIds: string[] = [];
@@ -1550,10 +1568,12 @@ function scheduleEvent(ev: TransitionEvent, when: number, totalDur: number) {
     case "tempo": {
       const el = target.el;
       if (!el) return;
-      // playbackRate isn't an AudioParam — defer to wall-clock setTimeout.
+      // playbackRate isn't an AudioParam — RAF-interpolate from current rate
+      // to target over `rampSec` so BPM-mismatched mixes don't pitch-jump.
       const delayMs = Math.max(0, (when - ctx.currentTime) * 1000);
       const clamped = Math.max(0.88, Math.min(1.12, ev.rate));
-      setTimeout(() => { try { el.playbackRate = clamped; } catch { /* noop */ } }, delayMs);
+      const glideMs = Math.max(120, rampSec * 1000 * 2.4); // longer = more musical
+      setTimeout(() => { glidePlaybackRate(el, clamped, glideMs); }, delayMs);
       return;
     }
     case "cut": {
