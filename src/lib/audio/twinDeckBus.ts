@@ -179,7 +179,8 @@ function ensureCtx() {
     bridgeGain.gain.value = 0;
     bridgeFilter = ctx.createBiquadFilter();
     bridgeFilter.type = "highpass";
-    bridgeFilter.frequency.value = 220;
+    // Transparent by default — only the genre-bridge flow lifts this to >100 Hz.
+    bridgeFilter.frequency.value = 20;
     bridgeFilter.Q.value = 0.7;
     bridgeFilter.connect(bridgeGain);
     bridgeGain.connect(masterGain);
@@ -879,8 +880,17 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
 
   async transition(from, to, opts) {
+    // UNIFIED: all manual transition triggers route through Smart Mix so the
+    // upper deck buttons and the StemMixer use the SAME engine. The legacy
+    // `runTransition()` path stays in the codebase for the genre-bridge /
+    // pitch-lock flows that pre-render a bridge snippet, but is only used
+    // when the user explicitly forces a non-auto mode.
     const hint = opts?.mode ?? get().transitionMode;
-    await runTransition(from, to, hint);
+    if (hint && hint !== "auto" && hint !== "random") {
+      await runTransition(from, to, hint);
+      return;
+    }
+    await get().smartMix(from, to);
   },
 
   setPool(tracks) { set({ pool: tracks }); poolCursor = 0; },
@@ -995,6 +1005,22 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     });
   },
   async smartMix(from, to) {
+    // Ensure both decks have analysis (BPM, beatgrid, cues, key) before we
+    // even score the transition — otherwise smart-mix flies blind.
+    const stPre = get();
+    if (!stPre[from].track?.beatGrid || !stPre[from].track?.bpm) {
+      await get().ensureAnalysis(from).catch(() => {});
+    }
+    if (!stPre[to].track?.beatGrid || !stPre[to].track?.bpm) {
+      await get().ensureAnalysis(to).catch(() => {});
+    }
+    // Position incoming deck at its drop/intro-end if we have a cue and the
+    // deck is currently parked at 0 — so we don't blend into a silent intro.
+    const toEl = deck[to].el;
+    const toCues = get()[to].track?.cues;
+    if (toEl && toCues && toEl.currentTime < 0.5) {
+      try { toEl.currentTime = Math.max(0, toCues.introEnd || toCues.firstDrop || 0); } catch { /* noop */ }
+    }
     const q = get().getTransitionQuality(from, to);
     // Only the Real-Stem engine should touch the stem buses; otherwise the
     // pseudo-band split would destroy the original audio. Anything that
@@ -1087,6 +1113,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     } catch (e) {
       console.warn("clean recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
+    } finally {
+      // Safety net: ALWAYS reset both decks' EQ + filter so a thrown error
+      // can never leave a deck with a -24 dB low-shelf permanently engaged.
+      try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
     }
   },
   async runStemRecipe(from, to, id, opts) {
@@ -1177,6 +1207,9 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     } catch (e) {
       console.warn("stem recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
+    } finally {
+      // Safety net: ensure neither deck remains with a frozen EQ/filter state.
+      try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
     }
   },
 

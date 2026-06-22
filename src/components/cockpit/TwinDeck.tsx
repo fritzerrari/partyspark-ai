@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { EngineTrack } from "@/lib/audio/engine";
-import { TRANSITION_LABELS } from "@/lib/audio/engine";
 import { useTwinDeck, compatHint, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { Turntable } from "./Turntable";
 import { DeckLiveHud } from "./DeckLiveHud";
@@ -11,7 +10,7 @@ import { DeckSpectrum } from "./DeckSpectrum";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { Led } from "@/components/ui/LedIndicator";
 import { RotaryKnob } from "@/components/ui/RotaryKnob";
-import { Play, Pause, RotateCw, Headphones, Zap, Wand2, ArrowLeftRight, RefreshCw, Timer, Shuffle } from "lucide-react";
+import { Play, Pause, RotateCw, Headphones, Zap, Wand2, ArrowLeftRight, RefreshCw, Timer, Shuffle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = { tracks: EngineTrack[] };
@@ -27,8 +26,9 @@ export function TwinDeck({ tracks }: Props) {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
-  const transitionMode = useTwinDeck((s) => s.transitionMode);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
+  const phase = useTwinDeck((s) => s.transitionPhase);
+  const engine = useTwinDeck((s) => s.transitionEngine);
   const lastNote = useTwinDeck((s) => s.lastTransitionNote);
   const autoTimerOn = useTwinDeck((s) => s.autoTimerOn);
   const autoTimerSec = useTwinDeck((s) => s.autoTimerSec);
@@ -42,8 +42,7 @@ export function TwinDeck({ tracks }: Props) {
   const toggle = useTwinDeck((s) => s.toggle);
   const scrub = useTwinDeck((s) => s.scrub);
   const sync = useTwinDeck((s) => s.sync);
-  const transition = useTwinDeck((s) => s.transition);
-  const setTransitionMode = useTwinDeck((s) => s.setTransitionMode);
+  const smartMix = useTwinDeck((s) => s.smartMix);
   const ensureAnalysis = useTwinDeck((s) => s.ensureAnalysis);
   const setPool = useTwinDeck((s) => s.setPool);
   const setAutoTimerSec = useTwinDeck((s) => s.setAutoTimerSec);
@@ -113,32 +112,31 @@ export function TwinDeck({ tracks }: Props) {
           />
         </div>
 
-        {/* Transition mode select */}
-        <div className="space-y-1">
-          <div className="text-[9px] uppercase tracking-widest text-stage-foreground/60">Transition-Stil</div>
-          <select
-            value={transitionMode}
-            onChange={(e) => setTransitionMode(e.target.value as keyof typeof TRANSITION_LABELS)}
-            className="w-full rounded border border-white/10 bg-black/40 px-2 py-1 text-xs text-stage-foreground outline-none"
-          >
-            {(Object.keys(TRANSITION_LABELS) as (keyof typeof TRANSITION_LABELS)[]).map((k) => (
-              <option key={k} value={k}>{TRANSITION_LABELS[k]}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Transition trigger buttons */}
-        <div className="grid grid-cols-2 gap-2">
-          <NeonButton onClick={() => transition("A", "B")}
-            variant="active" size="sm"
-            disabled={!A.track || !B.track || inFlight}>
-            <Wand2 className="h-3 w-3" /> A → B
-          </NeonButton>
-          <NeonButton onClick={() => transition("B", "A")}
-            variant="danger" size="sm"
-            disabled={!A.track || !B.track || inFlight}>
-            <Wand2 className="h-3 w-3" /> B → A
-          </NeonButton>
+        {/* Smart Mix engine status */}
+        <div className="rounded-md border border-[var(--neon-amber)]/30 bg-black/30 p-2 space-y-1">
+          <div className="flex items-center justify-between text-[9px] uppercase tracking-widest text-stage-foreground/70">
+            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-[var(--neon-amber)]" /> Smart Mix Engine</span>
+            {inFlight && (
+              <span className="rounded bg-[var(--neon-cyan)]/15 px-1.5 py-0.5 text-[var(--neon-cyan)] animate-pulse">
+                {engine === "real" ? "Real" : "Clean"} · {phase ?? "…"}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <NeonButton onClick={() => smartMix("A", "B")}
+              variant="active" size="sm"
+              disabled={!A.track || !B.track || inFlight}>
+              <Wand2 className="h-3 w-3" /> A → B
+            </NeonButton>
+            <NeonButton onClick={() => smartMix("B", "A")}
+              variant="danger" size="sm"
+              disabled={!A.track || !B.track || inFlight}>
+              <Wand2 className="h-3 w-3" /> B → A
+            </NeonButton>
+          </div>
+          <p className="text-[8px] text-stage-foreground/50 leading-tight">
+            Ein Mix-System: nutzt echte Stems wenn vorhanden, sonst Clean-DJ EQ/Filter auf dem Originalsignal.
+          </p>
         </div>
 
         <NeonButton onClick={() => sync("A", "B")} variant="armed" size="sm" disabled={!A.track?.bpm || !B.track?.bpm}>
