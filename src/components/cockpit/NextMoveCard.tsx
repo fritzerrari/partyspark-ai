@@ -100,11 +100,11 @@ export function NextMoveCard() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-stage-foreground/60">
-            <Timer className="h-3 w-3" /> Next Move
+            <Timer className="h-3 w-3" /> Nächster Übergang
             {inFlight && <span className="ml-auto rounded bg-[var(--neon-amber)]/30 px-1.5 py-0.5 text-[9px] font-bold text-[var(--neon-amber)]">LIVE</span>}
           </div>
           <div className="mt-0.5 truncate text-sm font-bold text-stage-foreground">
-            Auto-DJ · {liveDecision.recipeLabel}
+            {liveDecision.recipeLabel}
           </div>
           <div className="mt-0.5 line-clamp-1 text-[10px] text-stage-foreground/60">
             {liveDecision.engine === "real" ? "Real-Stem Recipe" : "Clean-DJ Originalsignal"} · Score {liveDecision.score} · {liveDecision.syncAllowed ? `Sync ×${liveDecision.syncRate.toFixed(3)}` : "kein Stretch"}
