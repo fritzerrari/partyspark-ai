@@ -372,7 +372,7 @@ export function StemMixer() {
         bar-genaue EQ-/Filter-Moves auf dem Originalsignal — Bass-Swap, Filter Build,
         Hook Tease, Drum-Top Blend, Drop Cut oder Echo Out. Das Originallied bleibt
         klar erkennbar. Sobald für <b>beide</b> Decks echte Stems geladen sind,
-        wechselt Auto-DJ automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
+        wechselt der Übergang automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
         Vocals, Drums, Bass und Melody werden unabhängig choreografiert (Teaser →
         Layer → Strip → Downbeat Switch → Reveal).
       </p>
