@@ -184,9 +184,40 @@ function Library() {
     } finally {
       setDeletingId(null);
     }
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (!confirm(`${count} Tracks wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+    setBulkDeleting(true);
+    try {
+      const toDelete = selectedIds
+        .map((id) => tracks.find((t) => t.id === id))
+        .filter((t): t is NonNullable<typeof t> => !!t);
+      const paths = toDelete.map((t) => t.storage_path).filter((p): p is string => !!p);
+      if (paths.length > 0) {
+        await supabase.storage.from("tracks").remove(paths);
+      }
+      const { error } = await supabase.from("tracks").delete().in("id", selectedIds);
+      if (error) throw error;
+      setSelectedIds([]);
+      qc.invalidateQueries({ queryKey: ["tracks"] });
+      toast.success(`${count} Tracks gelöscht`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Massenlöschen fehlgeschlagen");
+    } finally {
+      setBulkDeleting(false);
+    }
   }
 
-  const filtered = tracks.filter((t) =>
+  function toggleSelectAll() {
+    const ids = fullyFiltered.map((t) => t.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((s) => s.filter((id) => !ids.includes(id)));
+    } else {
+      setSelectedIds((s) => [...new Set([...s, ...ids])]);
+    }
+  }
     (t.title + " " + (t.artist ?? "")).toLowerCase().includes(search.toLowerCase()),
   );
 
