@@ -42,7 +42,7 @@ export function TwinDeck({ tracks }: Props) {
   const toggle = useTwinDeck((s) => s.toggle);
   const scrub = useTwinDeck((s) => s.scrub);
   const sync = useTwinDeck((s) => s.sync);
-  const smartMixPlan = useTwinDeck((s) => s.smartMixPlan);
+  const smartMix = useTwinDeck((s) => s.smartMix);
   const ensureAnalysis = useTwinDeck((s) => s.ensureAnalysis);
   const setPool = useTwinDeck((s) => s.setPool);
   const setAutoTimerSec = useTwinDeck((s) => s.setAutoTimerSec);
@@ -123,19 +123,19 @@ export function TwinDeck({ tracks }: Props) {
             )}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <NeonButton onClick={() => { void smartMixPlan("A", "B"); }}
+            <NeonButton onClick={() => { void smartMix("A", "B"); }}
               variant="active" size="sm"
               disabled={!A.track || !B.track || inFlight}>
               <Wand2 className="h-3 w-3" /> A → B
             </NeonButton>
-            <NeonButton onClick={() => { void smartMixPlan("B", "A"); }}
+            <NeonButton onClick={() => { void smartMix("B", "A"); }}
               variant="danger" size="sm"
               disabled={!A.track || !B.track || inFlight}>
               <Wand2 className="h-3 w-3" /> B → A
             </NeonButton>
           </div>
           <p className="text-[8px] text-stage-foreground/50 leading-tight">
-            Ein Mix-System: nutzt echte Stems wenn vorhanden, sonst Clean-DJ EQ/Filter auf dem Originalsignal.
+            Auto-DJ ist der Hauptmodus. Echte Stems werden automatisch genutzt; ohne Stems bleibt das Originalsignal sauber.
           </p>
         </div>
 
