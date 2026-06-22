@@ -996,12 +996,98 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
   async smartMix(from, to) {
     const q = get().getTransitionQuality(from, to);
-    await get().runStemRecipe(from, to, q.recommendedRecipe, {
-      bars: q.bars,
-      teaserStem: q.teaserStem,
-      aggression: q.aggression,
+    // Only the Real-Stem engine should touch the stem buses; otherwise the
+    // pseudo-band split would destroy the original audio. Anything that
+    // isn't fully "real" routes to the Clean DJ engine, which rides
+    // EQ/filter/gain on the dry deck signal.
+    if (q.mode === "real") {
+      await get().runStemRecipe(from, to, q.recommendedRecipe, {
+        bars: q.bars,
+        teaserStem: q.teaserStem,
+        aggression: q.aggression,
+      });
+      return { engine: "real", recipe: q.recommendedRecipe };
+    }
+    const cleanId = pickCleanRecipe({
+      bpmDeltaPct: q.bpmDeltaPct,
+      keyCompatible: q.keyCompatible,
+      fromHasVocals: (get()[from].track?.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+      toHasVocals: (get()[to].track?.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+      energyJump: (get()[to].track?.energy ?? 0.5) - (get()[from].track?.energy ?? 0.5),
     });
-    return q.recommendedRecipe;
+    await get().runCleanRecipe(from, to, cleanId, { bars: q.bars });
+    return { engine: "clean", recipe: cleanId };
+  },
+  async runCleanRecipe(from, to, id, opts) {
+    ensureCtx(); wireDeck("A"); wireDeck("B");
+    if (!ctx) return;
+    const st = get();
+    const fromTrack = st[from].track;
+    const toTrack = st[to].track;
+    if (!fromTrack || !toTrack) return;
+    if (st.transitionInFlight) return;
+    const fromDeck = deck[from];
+    const toDeck = deck[to];
+    if (!fromDeck.gain || !toDeck.gain) return;
+    set({ transitionInFlight: true, transitionEngine: "clean", transitionPhase: "cue" });
+    try {
+      const toUserVol = st[to].volume;
+      const fromUserVol = st[from].volume;
+      // Make sure pseudo-stem overlays are silent so they don't colour the dry
+      // signal during the transition.
+      fromDeck.stems?.reset();
+      toDeck.stems?.reset();
+      // Start incoming silently.
+      if (toDeck.el && toDeck.el.paused) {
+        try { await toDeck.el.play(); } catch { /* gesture */ }
+      }
+      if (ctx.state === "suspended") void ctx.resume();
+      const ratio = syncTempo(from, to);
+      beatAlign(from, to);
+      // Open outgoing to its user volume, incoming starts at 0.
+      toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
+      toDeck.gain.gain.setValueAtTime(0, ctx.currentTime);
+      fromDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
+      fromDeck.gain.gain.setValueAtTime(fromUserVol, ctx.currentTime);
+      await waitForNextBeat(from);
+      const secPerBar = fromTrack.bpm ? (60 / fromTrack.bpm) * 4 : 2;
+      const bars = Math.max(8, Math.min(24, opts?.bars ?? 16));
+      const recipeId: CleanRecipeId = id ?? pickCleanRecipe({
+        bpmDeltaPct: fromTrack.bpm && toTrack.bpm ? Math.abs(fromTrack.bpm - toTrack.bpm) / fromTrack.bpm : 0,
+        keyCompatible: camelotCompatible(fromTrack.camelot ?? "", toTrack.camelot ?? ""),
+        fromHasVocals: (fromTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+        toHasVocals: (toTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
+        energyJump: (toTrack.energy ?? 0.5) - (fromTrack.energy ?? 0.5),
+      });
+      animateCrossfader(to === "B" ? 1 : 0, secPerBar * bars * 1000);
+      await runCleanRecipe(recipeId, {
+        ctx,
+        from: {
+          filter: fromDeck.filter, eqLow: fromDeck.eqLow, eqMid: fromDeck.eqMid,
+          eqHigh: fromDeck.eqHigh, gain: fromDeck.gain,
+        },
+        to: {
+          filter: toDeck.filter, eqLow: toDeck.eqLow, eqMid: toDeck.eqMid,
+          eqHigh: toDeck.eqHigh, gain: toDeck.gain,
+        },
+        secPerBar, bars, fromUserVol, toUserVol,
+        waitForBeat: () => waitForNextBeat(from),
+        onPhase: (phase) => set({ transitionPhase: phase }),
+      });
+      try { fromDeck.el?.pause(); } catch { /* noop */ }
+      recomputeEffective(to);
+      const ratioNote = ratio !== 1 ? ` · sync ×${ratio.toFixed(3)}` : "";
+      const label = CLEAN_RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId;
+      set({
+        lastTransitionNote: `Clean DJ · ${label} · ${bars} bars${ratioNote}`,
+        transitionInFlight: false,
+        transitionPhase: null,
+        transitionEngine: null,
+      });
+    } catch (e) {
+      console.warn("clean recipe failed", e);
+      set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
+    }
   },
   async runStemRecipe(from, to, id, opts) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
