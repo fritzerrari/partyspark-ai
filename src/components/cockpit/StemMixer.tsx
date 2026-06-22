@@ -3,7 +3,9 @@ import { useTwinDeck, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { RECIPES, type RecipeId } from "@/lib/audio/transitionRecipes";
 import type { StemId } from "@/lib/audio/stemSplit";
 import { cn } from "@/lib/utils";
-import { Drum, Music2, Mic2, Piano, Sparkles } from "lucide-react";
+import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2 } from "lucide-react";
+import { useTrackStems } from "@/hooks/useTrackStems";
+import { toast } from "sonner";
 
 type IconCmp = React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
 const STEM_META: Record<StemId, { label: string; color: string; icon: IconCmp }> = {
@@ -17,6 +19,23 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
   const setStem = useTwinDeck((s) => s.setStem);
   const resetStems = useTwinDeck((s) => s.resetStems);
   const getStemGains = useTwinDeck((s) => s.getStemGains);
+  const stemsMode = useTwinDeck((s) => s[side].stemsMode);
+  const trackId = useTwinDeck((s) => s[side].track?.id ?? null);
+  const attachRealStems = useTwinDeck((s) => s.attachRealStems);
+  const detachRealStems = useTwinDeck((s) => s.detachRealStems);
+  const { data: stems, generate } = useTrackStems(trackId);
+
+  // Auto-attach real stems when they become ready and we're not already on them.
+  useEffect(() => {
+    if (!stems || stems.status !== "ready") return;
+    if (stemsMode === "real" || stemsMode === "loading") return;
+    const urls = stems.urls;
+    if (!urls.drums || !urls.bass || !urls.vocals || !urls.other) return;
+    void attachRealStems(side, {
+      drums: urls.drums, bass: urls.bass, vocals: urls.vocals, other: urls.other,
+    });
+  }, [stems, stemsMode, side, attachRealStems]);
+
   const [vals, setVals] = useState<Record<StemId, number>>({ drums: 1, bass: 1, vocals: 1, other: 1 });
 
   // Poll the actual gain values so recipe-driven changes show up in the UI.
@@ -27,17 +46,56 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
 
   return (
     <div className="flex-1 rounded-xl border border-white/10 bg-black/40 p-2">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-widest text-stage-foreground/70">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-stage-foreground/70 truncate">
           Deck {side} <span className="text-stage-foreground/40">· {deckTitle}</span>
         </span>
-        <button
-          onClick={() => resetStems(side)}
-          className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-stage-foreground/60 hover:text-stage-foreground"
-        >
-          Reset
-        </button>
+        <div className="flex items-center gap-1">
+          <StemStatusBadge
+            status={stems?.status ?? "pending"}
+            mode={stemsMode}
+            progress={stems?.progress ?? 0}
+          />
+          {trackId && (stems?.status === "ready" ? (
+            <button
+              onClick={() => stemsMode === "real" ? detachRealStems(side) : void attachRealStems(side, {
+                drums: stems.urls.drums!, bass: stems.urls.bass!,
+                vocals: stems.urls.vocals!, other: stems.urls.other!,
+              })}
+              className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-stage-foreground/70 hover:text-stage-foreground"
+              title={stemsMode === "real" ? "Auf Pseudo-Stems zurück" : "Echte Stems aktivieren"}
+            >
+              {stemsMode === "real" ? "Pseudo" : "Real"}
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                generate.mutate(undefined, {
+                  onError: (e) => toast.error(`Stems: ${(e as Error).message}`),
+                  onSuccess: () => toast("Stem-Separation gestartet — dauert ~60–120 s"),
+                });
+              }}
+              disabled={generate.isPending || stems?.status === "processing"}
+              className="flex items-center gap-1 rounded border border-[var(--neon-amber)]/60 bg-[var(--neon-amber)]/10 px-1.5 py-0.5 text-[9px] text-[var(--neon-amber)] hover:bg-[var(--neon-amber)]/20 disabled:opacity-50"
+              title="Echte Demucs-Stems per HuggingFace Space generieren"
+            >
+              {generate.isPending || stems?.status === "processing"
+                ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                : <Wand2 className="h-2.5 w-2.5" />}
+              Stems
+            </button>
+          ))}
+          <button
+            onClick={() => resetStems(side)}
+            className="rounded border border-white/10 px-1.5 py-0.5 text-[9px] text-stage-foreground/60 hover:text-stage-foreground"
+          >
+            Reset
+          </button>
+        </div>
       </div>
+      {stems?.status === "failed" && stems.error && (
+        <p className="mb-1 text-[9px] text-red-400 truncate" title={stems.error}>⚠ {stems.error}</p>
+      )}
       <div className="grid grid-cols-4 gap-2">
         {(Object.keys(STEM_META) as StemId[]).map((stem) => {
           const meta = STEM_META[stem];
