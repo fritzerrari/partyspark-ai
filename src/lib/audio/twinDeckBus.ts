@@ -212,6 +212,8 @@ function wireDeck(side: DeckSide) {
       d.stems.output.connect(d.gain);
       d.gain.connect(d.analyser);
       d.analyser.connect(masterGain);
+      // Per-stem meters: tap an AnalyserNode off each stem gain node.
+      d.stemMeter = createStemMeter(ctx, d.stems.gains);
     } catch {
       /* already wired */
     }
