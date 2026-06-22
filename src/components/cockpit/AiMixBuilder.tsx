@@ -57,7 +57,7 @@ export function AiMixBuilder({ tracks }: { tracks: EngineTrack[] }) {
         <div className="flex items-center gap-2">
           <Wand2 className="h-3.5 w-3.5 text-[var(--neon-magenta)]" />
           <span className="text-[10px] uppercase tracking-[0.2em] text-stage-foreground/70">
-            AI Auto-DJ · Perfect Party Mix
+            Offline Mix · WAV / MP3 Export
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -153,9 +153,9 @@ export function AiMixBuilder({ tracks }: { tracks: EngineTrack[] }) {
       )}
 
       <p className="text-[9px] text-stage-foreground/50">
-        Sortiert die Library greedy nach Mixability (BPM, Key, Energie, Vocals), plant pro Übergang einen
-        deterministischen Transition-Plan (Bass-Swap, Drop-Switch, Echo-Exit, …) und rendert das komplette
-        Set offline als WAV — beat-genau, ohne Verzerrung. Stems werden offline übersprungen.
+        Dies ist der <b className="text-stage-foreground/80">Offline-Export</b>: die Library wird nach Mixability sortiert,
+        jeder Übergang wird als deterministischer Plan gerendert und das komplette Set wird als Datei ausgegeben —
+        ohne Live-Playback. Für die Party verwende oben den Party-Modus oder den Übergang im Mixer.
       </p>
     </div>
   );

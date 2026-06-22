@@ -99,17 +99,17 @@ function Cockpit() {
     return () => { alive = false; };
   }, [user, addEngineTrack]);
 
-  async function handleAutoDj() {
+  async function handlePartyMode() {
     if (tracks.length < 2) {
       toast.error("Du brauchst mindestens 2 Tracks in der Library.");
       return;
     }
     if (autoTimerOn) {
       stopAutoDj();
-      toast("Auto-DJ pausiert");
+      toast("Party-Modus pausiert");
     } else {
       await startAutoDj();
-      toast.success("Auto-DJ läuft 🎚️ — Tracks werden automatisch gemixt");
+      toast.success("Party-Modus läuft 🎚️ — Tracks werden automatisch geladen und gemixt");
     }
   }
 
@@ -123,7 +123,7 @@ function Cockpit() {
           const c = new Ctx();
           try {
             const buf = await c.decodeAudioData(ab);
-            addArtifact({ kind: "recording", title: `Auto-DJ Set · ${new Date().toLocaleTimeString()}`, buffer: buf });
+            addArtifact({ kind: "recording", title: `Party-Modus Set · ${new Date().toLocaleTimeString()}`, buffer: buf });
             toast.success("Set in den Projekt-Bus gespeichert");
           } catch { toast.error("Aufnahme konnte nicht dekodiert werden"); }
           finally { void c.close(); }
@@ -155,8 +155,8 @@ function Cockpit() {
               {tracks.length === 0
                 ? "Noch keine Tracks — lade welche in deine Library."
                 : tracks.length < 2
-                  ? `${tracks.length} Track verfügbar — du brauchst min. 2 für Auto-DJ.`
-                  : `${tracks.length} Tracks bereit · Mixen, singen, FX, aufnehmen.`}
+                  ? `${tracks.length} Track verfügbar — du brauchst min. 2 für Party-Modus.`
+                  : `${tracks.length} Tracks bereit · Live-Mixen, Export, Stems, FX.`}
             </p>
           </div>
           <div className="relative flex flex-wrap gap-2">
@@ -167,7 +167,7 @@ function Cockpit() {
               <MonitorPlay className="h-3 w-3" /> Beamer
             </button>
             <button
-              onClick={handleAutoDj}
+              onClick={handlePartyMode}
               disabled={tracks.length < 2}
               className={
                 "min-h-[44px] flex-1 sm:flex-none rounded-full px-4 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2 " +
@@ -176,7 +176,7 @@ function Cockpit() {
                   : "bg-[var(--neon-cyan)] text-black hover:brightness-110 neon-glow-cyan")
               }
             >
-              {autoTimerOn ? <><Square className="h-3 w-3" /> Stop Auto-DJ</> : <><Sparkles className="h-4 w-4" /> Auto-DJ starten</>}
+              {autoTimerOn ? <><Square className="h-3 w-3" /> Party-Modus stoppen</> : <><Sparkles className="h-4 w-4" /> Party-Modus starten</>}
             </button>
             <button
               onClick={handleRecord}
@@ -191,7 +191,7 @@ function Cockpit() {
         </div>
         {tracks.length < 2 && (
           <p className="mt-3 text-[11px] text-stage-foreground/70">
-            Lade mindestens 2 Tracks in deine <Link to="/library" className="underline text-[var(--neon-cyan)]">Library</Link>, dann startet Auto-DJ mit einem Klick.
+            Lade mindestens 2 Tracks in deine <Link to="/library" className="underline text-[var(--neon-cyan)]">Library</Link>, dann startet der Party-Modus mit einem Klick.
           </p>
         )}
       </div>
@@ -201,7 +201,7 @@ function Cockpit() {
       <Tabs defaultValue="autodj" className="w-full">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl bg-card/60 p-1.5 backdrop-blur">
           {[
-            { v: "autodj", label: "Auto-DJ", icon: Bot },
+            { v: "autodj", label: "Export", icon: Bot },
             { v: "stems", label: "Stems & Mix", icon: Music2 },
             { v: "karaoke", label: "Karaoke", icon: Mic },
             { v: "fx", label: "FX & Drops", icon: Volume2 },
@@ -220,7 +220,7 @@ function Cockpit() {
 
         <TabsContent value="autodj" className="mt-4">
           {tracks.length < 2 ? (
-            <EmptyHint title="Auto-DJ braucht Tracks" body="Lade Songs in deine Library — der AI Mix-Builder plant dann automatisch perfekte Übergänge." to="/library" cta="Zur Library" />
+            <EmptyHint title="Export braucht Tracks" body="Lade Songs in deine Library — der AI Mix-Builder rendert dann offline ein komplettes Set als WAV/MP3." to="/library" cta="Zur Library" />
           ) : (
             <AiMixBuilder tracks={tracks} />
           )}
@@ -250,7 +250,7 @@ function Cockpit() {
 
       {/* Mobile sticky helper banner */}
       <div className="fixed bottom-4 left-4 right-4 z-40 rounded-full border border-white/15 bg-black/80 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-stage-foreground/80 backdrop-blur sm:hidden">
-        <Mic className="mr-1 inline h-3 w-3 text-[var(--neon-magenta)]" /> Mikro & Pads ↓ · Auto-DJ ↑
+        <Mic className="mr-1 inline h-3 w-3 text-[var(--neon-magenta)]" /> Mikro & Pads ↓ · Party-Modus ↑
       </div>
 
     </div>

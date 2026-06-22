@@ -361,7 +361,7 @@ function ControlPreview() {
                 See what&apos;s playing, what&apos;s next, where the energy is, and how the night is unfolding — at a glance, on any phone.
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
-                {["Twin Decks", "Auto-DJ", "Stem mixer", "Beat-matched", "Beamer mode", "Mic FX"].map((t) => (
+                {["Twin Decks", "Party-Modus", "Stem-Mix", "Beat-matched", "Beamer mode", "Mic FX"].map((t) => (
                   <span key={t} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 backdrop-blur">{t}</span>
                 ))}
               </div>

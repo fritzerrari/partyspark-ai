@@ -96,7 +96,7 @@ export function TransportBar() {
                   </Button>
                   <div className="hidden items-center gap-2 rounded-full bg-muted px-3 py-1 md:flex">
                     <Wand2 className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-xs font-medium">Auto-DJ</span>
+                    <span className="text-xs font-medium">Party-Modus</span>
                     <Switch checked={autoDj} onCheckedChange={setAutoDj} />
                     <Select value={transitionMode} onValueChange={(v) => setTransitionMode(v as TransitionModeHint)}>
                       <SelectTrigger className="h-7 w-[150px] border-none bg-transparent px-2 text-xs">

@@ -15,11 +15,11 @@ export function CoachHud() {
     tips.push({ color: "amber", text: "Wähle einen Track in der Library oder lade einen auf Deck A." });
   } else {
     if (!current.bpm) tips.push({ color: "amber", text: `„${current.title}" hat noch keine BPM-Analyse — reanalysieren in Library.` });
-    if (duration > 0 && duration - position < 20) tips.push({ color: "magenta", text: "Outro in <20s — Auto-DJ vorbereiten oder Deck B starten." });
+    if (duration > 0 && duration - position < 20) tips.push({ color: "magenta", text: "Outro in <20s — Party-Modus aktivieren oder Deck B starten." });
     if (current.bpm && current.bpm > 0) tips.push({ color: "cyan", text: `Tempo Deck A: ${Math.round(current.bpm)} BPM — Sync verwenden für saubere Übergänge.` });
     if (current.cues?.firstDrop && Math.abs(position - current.cues.firstDrop) < 4) tips.push({ color: "lime", text: "Drop nähert sich — perfekte Stelle für Vocal-Layer!" });
     if (autoDj && pendingPlan) {
-      tips.push({ color: "cyan", text: `Auto-DJ: ${pendingPlan.notes} @ ${pendingPlan.triggerAtSecOfCurrent.toFixed(1)}s (${pendingPlan.crossfadeSec.toFixed(1)}s)` });
+      tips.push({ color: "cyan", text: `Nächster Übergang: ${pendingPlan.notes} @ ${pendingPlan.triggerAtSecOfCurrent.toFixed(1)}s (${pendingPlan.crossfadeSec.toFixed(1)}s)` });
     }
     if (autoDj && queue[0] && (!queue[0].bpm || !queue[0].cues)) {
       tips.push({ color: "amber", text: `Nächster Track „${queue[0].title}" nicht analysiert — Übergang fällt auf safe Crossfade zurück.` });
