@@ -21,6 +21,9 @@ import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStem
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { supabase } from "@/integrations/supabase/client";
+import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
+import { planTransition } from "@/lib/intel/planner";
+import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
 
 export type DeckSide = "A" | "B";
 
@@ -124,6 +127,10 @@ type Actions = {
   attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
   /** Drop back to pseudo-stems on a deck. */
   detachRealStems: (side: DeckSide) => void;
+  /** Execute a deterministic transition plan (AI Music Intelligence). */
+  executePlan: (plan: TransitionPlan) => Promise<void>;
+  /** Build a transition plan via the planner and execute it. */
+  smartMixPlan: (from: DeckSide, to: DeckSide, opts?: { force?: import("@/lib/intel/types").TransitionType; bars?: number }) => Promise<TransitionPlan | null>;
   dispose: () => void;
 };
 
