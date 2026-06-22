@@ -813,6 +813,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   needsUserGesture: false,
   recording: false,
   lastRecordingUrl: null,
+  lastPlan: null,
 
   init() {
     ensureCtx(); wireDeck("A"); wireDeck("B");
