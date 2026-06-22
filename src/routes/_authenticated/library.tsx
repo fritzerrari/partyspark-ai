@@ -515,7 +515,7 @@ function Library() {
                 const energy = t.energy ?? 0;
                 const vocalMap = (t as { vocal_map?: { t: number; voiced: number }[] | null }).vocal_map ?? null;
                 const vocalPct = vocalMap && vocalMap.length > 0
-                  ? Math.round((vocalMap.filter((v) => v.voiced > 0.4).length / vocalMap.length) * 100)
+                  ? Math.round((vocalMap.filter((v) => v.voiced > 0.5).length / vocalMap.length) * 100)
                   : null;
                 const selected = selectedIds.includes(t.id);
                 return (
