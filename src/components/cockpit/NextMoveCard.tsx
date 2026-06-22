@@ -25,8 +25,21 @@ export function NextMoveCard() {
 
   if (!peek) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-black/40 p-3 text-center text-[11px] text-stage-foreground/50">
-        Lade beide Decks für die Next-Move-Vorschau.
+      <div className="rounded-2xl border border-dashed border-white/15 bg-gradient-to-r from-[var(--neon-cyan)]/5 via-transparent to-[var(--neon-magenta)]/5 p-4">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 shrink-0">
+            <div className="absolute inset-0 animate-ping rounded-full bg-[var(--neon-cyan)]/20" />
+            <div className="absolute inset-1 grid place-items-center rounded-full border border-[var(--neon-cyan)]/40 bg-black/60">
+              <Wand2 className="h-4 w-4 text-[var(--neon-cyan)]" />
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--neon-cyan)]">Mix-Storyboard wartet</p>
+            <p className="mt-0.5 text-[11px] text-stage-foreground/70">
+              Lade zwei Tracks (Deck A & B) — die KI plant den perfekten Übergang sample-genau und zeigt hier was als nächstes passiert.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
