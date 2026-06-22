@@ -44,6 +44,7 @@ function Library() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loadingDeck, setLoadingDeck] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const engine = useEngine();
   const loadDeck = useTwinDeck((s) => s.loadDeck);
 
@@ -185,9 +186,40 @@ function Library() {
     }
   }
 
-  const filtered = tracks.filter((t) =>
-    (t.title + " " + (t.artist ?? "")).toLowerCase().includes(search.toLowerCase()),
-  );
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (!confirm(`${count} Tracks wirklich löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+    setBulkDeleting(true);
+    try {
+      const toDelete = selectedIds
+        .map((id) => tracks.find((t) => t.id === id))
+        .filter((t): t is NonNullable<typeof t> => !!t);
+      const paths = toDelete.map((t) => t.storage_path).filter((p): p is string => !!p);
+      if (paths.length > 0) {
+        await supabase.storage.from("tracks").remove(paths);
+      }
+      const { error } = await supabase.from("tracks").delete().in("id", selectedIds);
+      if (error) throw error;
+      setSelectedIds([]);
+      qc.invalidateQueries({ queryKey: ["tracks"] });
+      toast.success(`${count} Tracks gelöscht`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Massenlöschen fehlgeschlagen");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  function toggleSelectAll() {
+    const ids = fullyFiltered.map((t) => t.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds((s) => s.filter((id) => !ids.includes(id)));
+    } else {
+      setSelectedIds((s) => [...new Set([...s, ...ids])]);
+    }
+  }
 
   function toggleSelect(id: string) {
     setSelectedIds((s) => s.includes(id) ? s.filter((x) => x !== id) : [...s, id]);
@@ -417,18 +449,45 @@ function Library() {
 
         {/* Smart list */}
         <div className="min-w-0">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {fullyFiltered.length} von {tracks.length} Tracks
-            </p>
-            <button
-              onClick={() => setFiltersOpen((o) => !o)}
-              className="flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest lg:hidden"
-            >
+          <div className="mb-2 flex min-h-[36px] flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleSelectAll}
+                disabled={fullyFiltered.length === 0 || bulkDeleting}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition hover:bg-muted disabled:opacity-50"
+              >
+                {fullyFiltered.length > 0 && fullyFiltered.every((t) => selectedIds.includes(t.id)) ? (
+                  <><CheckSquare className="h-3.5 w-3.5 text-[var(--neon-magenta)]" /> Keine</>
+                ) : (
+                  <><SquareIcon className="h-3.5 w-3.5" /> Alle</>
+                )}
+              </button>
+              {selectedIds.length > 0 && (
+                <span className="rounded-full bg-[var(--neon-magenta)]/15 px-2.5 py-1 text-[10px] font-bold text-[var(--neon-magenta)]">
+                  {selectedIds.length} ausgewählt
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={deleteSelected}
+                  disabled={bulkDeleting}
+                  className="flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-red-500 transition hover:bg-red-500/25 disabled:opacity-50"
+                >
+                  {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  {bulkDeleting ? "Löschen…" : "Löschen"}
+                </button>
+              )}
+              <button
+                onClick={() => setFiltersOpen((o) => !o)}
+                className="flex items-center gap-1 rounded-full border border-border bg-card px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest lg:hidden"
+              >
               {filtersOpen ? <X className="h-3 w-3" /> : <Filter className="h-3 w-3" />}
               {filtersOpen ? "Filter zu" : "Filter"}
             </button>
           </div>
+        </div>
 
           {tracks.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-border bg-card/40 p-12 text-center">
