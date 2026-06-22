@@ -95,6 +95,12 @@ type Actions = {
   runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId) => Promise<void>;
   /** Snapshot of current stem-gains for the UI. */
   getStemGains: (side: DeckSide) => Record<StemId, number>;
+  /** Live RMS levels per stem (0..1) — for VU meters. */
+  getStemLevels: (side: DeckSide) => Record<StemId, number>;
+  /** Pure scorer for the pending transition between two decks. */
+  getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
+  /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
+  smartMix: (from: DeckSide, to: DeckSide) => Promise<RecipeId | null>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
   attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
   /** Drop back to pseudo-stems on a deck. */
