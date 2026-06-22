@@ -980,8 +980,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
   setPitch(side, p) {
     set((s) => ({ [side]: { ...s[side], pitch: p } } as Partial<BusState>));
-    const d = deck[side];
-    if (d.el) d.el.playbackRate = p;
+    setDeckRate(side, p);
     recomputeEffective(side);
   },
   setCrossfader(v) {
