@@ -1,164 +1,84 @@
-## Ziel
+## Goal
 
-1. **Harmonische Auto-Anpassung beider Decks** — beide Songs nähern sich aktiv an (Tempo & Tonart), statt nur einseitig. Drei abwechslungsreiche Strategien wählbar oder per Auto.
-2. **Cockpit-Upgrade**: Virtuosen-UI mit „Next-Move"-Vorschau, Live-Mix-Score, Skill-Progression, mehr sichtbaren Instrumenten.
-3. **Live-Recording-Komponente**: Echtzeit-Wellenform + Pre-FX-Kette (Pitch, Reverb, Delay, Autotune, Distortion) — überall wiederverwendbar.
+Replace the current crossfade-leaning transition engine with a **stem-first engine**. Every transition rides 4 independent buses (vocals, drums, bass, other) on each deck. Crossfader becomes a fallback safety net, not the mechanism.
 
----
+## What changes
 
-## Teil A — Harmonische Mutual-Sync Engine
+### 1. Stem-first audio graph (`twinDeckBus.ts`, `realStemPlayer.ts`, `stemSplit.ts`)
+- Real-stem mode becomes the **canonical** path. When 4 buffers are attached:
+  - MediaElement output to the deck gain is muted (already exists, harden it).
+  - Pseudo `stems.input` is muted (already exists, harden it).
+  - The 4 `BufferSourceNode`s feed `stems.gains[stem]` directly → recipes operate on real audio.
+- Pseudo split stays as fallback only. Source of truth for the deck "mode" is exposed:
+  - `stemsMode: "pseudo" | "loading" | "real"` (exists) — UI labels strictly tied to this.
+  - A transition is labeled **Real** only when BOTH decks report `stemsMode === "real"`.
 
-### A1. Drei Adaption-Strategien (`src/lib/audio/harmonicSync.ts`)
+### 2. Six transition recipes (`transitionRecipes.ts`)
+Rewrite the recipe table to the exact six requested, all beat-aligned via `waitForNextBeat`, and all stem-only (no master crossfade):
 
-Aktuelle Engine schiebt nur das einkommende Deck Richtung Outgoing. Neu: drei Profi-Moves, vom Planner pro Übergang gewählt — oder vom User per Picker im Cockpit erzwingbar.
+1. **vocalOutDrumsIn** — outgoing vocals duck → silence, incoming drums fade in on the bar, then everything else swaps.
+2. **bassSwap** — bass swap on the downbeat (hard cut on bass bus), everything else crossfaded slowly.
+3. **drumBridge** — outgoing collapses to drums-only for 2 bars, incoming drums layered, then incoming reveals melody + bass.
+4. **acapellaIntro** — outgoing reduced to vocals only, incoming starts drums + bass under it, then incoming vocals replace outgoing.
+5. **instrumentalBed** — outgoing vocals out, outgoing other/bass form a bed, incoming full mix fades in.
+6. **dropSwitch** — both decks ride to the next downbeat, swap bass + drums simultaneously on the drop, melody/vocals crossfade behind.
 
-**1. „Meet-In-The-Middle" (Tempo-Bend)**
-Beide Decks treffen sich am Mittel-BPM. Outgoing rampt über die letzten 8 Bars sanft von `bpmFrom → midBpm`, Incoming startet bei `midBpm` und gleitet über die ersten 8 Bars nach Crossfade auf seinen `bpmTo`. Erzielt durch `playbackRate`-Automatisierung mit Cubic-Ease, immer geclamped auf ±10 % damit kein Chipmunk-Effekt entsteht. Funktioniert bei BPM-Δ bis ~12 %.
+Automatic conflict-mute helper: when both decks have vocals active during the swap window, the outgoing vocals are force-ducked to 0 within 100 ms.
+Drums/rhythm stability: a min-floor (≥ 0.25) on at least one drums bus through the middle 50 % of the recipe.
 
-**2. „Pitch-Lock Pre-Shift" (Key-Match)**
-Über `soundtouchjs` (bereits installiert) wird offline ein 32-Takt-Snippet des Incoming-Tracks vor-prozessiert: gleichzeitig auf `bpmFrom` UND auf die Tonart des Outgoing-Tracks (semitonbasierter Pitch-Shift via `shiftKey`-Delta). Das Snippet wird in einen zweiten AudioBufferSourceNode geladen, ersetzt für die Übergangsdauer den Live-Stream. Danach Crossfade zurück in den nativen Stream → Hörer merkt keinen Sprung. Erweitert das bestehende `bridgeBuilder`-Pattern um Pitch-Shift.
+### 3. Pre-transition beat & key alignment
+Wrap every recipe with a single `prepareTransition(from, to)`:
+- `syncTempo` (exists) → playback-rate match (half/double-time aware).
+- `beatAlign` (exists) → align next downbeats.
+- Compute BPM delta % and key compatibility (`camelotCompatible`).
+- Returns a `TransitionQuality` object (see #5).
 
-**3. „Tonal Pedal-Drone"**
-Bei harten Key-Wechseln (>4 Semitones) generiert die Engine einen sanft hereinblendenden Drone-Pad (3 Oscillatoren = root + Quinte + Oktave) auf der **gemeinsamen Note** beider Tonarten (oder Common-Tone-Pivot per Tonart-Theorie-Tabelle). Der Drone überdeckt den Tonart-Sprung tonal für 8–12 Bars, dann ausfade. Outgoing/Incoming behalten native BPM bei. Brutalst kreativ — wirkt wie ein bewusstes „Breakdown".
+### 4. Smart Mix button + UI (`StemMixer.tsx`)
+- Add a **Moises-style Smart Mix** primary button: picks the best recipe from BPM delta, key compat, vocal overlap, and stem mode; runs `prepareTransition` then the recipe.
+- Replace the existing recipe `<select>` with the 6 new recipes (keep Auto).
+- Header pill shows aggregated mode: **Real** (both decks real), **Hybrid** (one real), **Pseudo** (none).
+- Per-deck card now shows:
+  - **4 live VU meters** (vocals / drums / bass / other) driven by an AnalyserNode tapped off each stem `gains[stem]`.
+  - **4 vertical sliders** (already there) — keep, but values shown next to live meter.
+- **Quality scoring panel** below the button:
+  - `score 0–100`, color-coded.
+  - Sub-scores: BPM match, key compat, energy delta, vocal-conflict risk.
+- **Warnings**:
+  - If `|bpmDelta| > 8 %` or key not Camelot-compatible → red banner with the offending number + suggestion (e.g. "Pitch Deck B by −2 semitones" or "Use Drum Bridge to hide tempo gap").
 
-**4. „Half/Double-Time Lock"** *(Bonus, vorhanden, wird erweitert)*
-Bei BPM-Δ > 25 % wird Incoming auf ×½ oder ×2 gelockt; Kick fällt weiter auf den Beat → keine Time-Stretch nötig.
+### 5. New module `src/lib/audio/transitionQuality.ts`
+Pure function: `scoreTransition({fromTrack, toTrack, fromRate, toRate, stemsMode}) → { score, bpmScore, keyScore, energyScore, vocalConflict, warnings[], recommendedRecipe }`. Used by both the score panel and the Smart Mix auto-pick.
 
-Auswahlheuristik im `mixPlanner` (erweitert):
-- BPM-Δ ≤ 4 % UND Key kompatibel → **Meet-In-The-Middle** (sanftester Übergang).
-- BPM-Δ ≤ 12 % UND Key inkompatibel → **Pitch-Lock Pre-Shift**.
-- Key-Δ > 4 Semitones ODER Genre-Bridge → **Tonal Pedal-Drone**.
-- BPM-Δ > 25 % → **Half/Double-Time Lock** zusätzlich vor jedem anderen Modus.
+### 6. New module `src/lib/audio/stemMeter.ts`
+Tiny helper attaching a `AnalyserNode` to each `stems.gains[stem]` and returning a `getLevels(): Record<StemId, number>` (RMS 0..1). `StemMixer.tsx` polls at 30 fps.
 
-### A2. Mutual-Tempo-Automation in `twinDeckBus.ts`
+### 7. Mute-conflict + rhythm-stable safety pass (`twinDeckBus.ts`)
+Inside `runStemRecipe`:
+- Before recipe runs: detect vocal overlap (both `vocals` > 0.2) → schedule auto-duck on outgoing.
+- Throughout: enforce drums floor by clamping any `setGain("drums", v)` below 0.25 during phase 2–3 to 0.25 on at least one side.
 
-Neue Funktion `mutualTempoRamp(from, to, midBpm, durationMs)`:
-- Schedule sample-genaue `playbackRate`-Linear-Ramps für `from.el` und `to.el` über `setTargetAtTime`-Äquivalent in JS (rAF-Loop).
-- Nach Übergang: `from.playbackRate` → original (oder Track endet), `to.playbackRate` → 1.
+### 8. Strictly correct "Real vs Pseudo" labeling
+- Single source: `getTransitionMode(state) → "real" | "hybrid" | "pseudo"` computed from `A.stemsMode` + `B.stemsMode`.
+- Used by the Smart Mix button label, the per-deck badges, and the post-transition toast.
 
-### A3. Persistierung der Adaption-Wahl pro Übergang
+## Files
 
-Im `lastTransitionNote` zusätzlich `strategy` und `keyShiftSemis` mitspeichern → wird im Cockpit angezeigt und fließt in den Mix-Score ein (siehe B2).
+**Edit**
+- `src/lib/audio/twinDeckBus.ts` — harden real-stem routing mute, add `prepareTransition`, conflict-mute, rhythm-floor, expose `getTransitionMode`, expose stem-level meters.
+- `src/lib/audio/transitionRecipes.ts` — replace 5 recipes with the 6 requested; tighten `pickRecipe`.
+- `src/components/cockpit/StemMixer.tsx` — Smart Mix button, meters, quality panel, warning banner, mode pill.
+- `src/lib/audio/realStemPlayer.ts` — ensure pseudo mute on attach + restore on detach (already partially there).
 
----
+**New**
+- `src/lib/audio/transitionQuality.ts` — pure scoring + recommendation.
+- `src/lib/audio/stemMeter.ts` — per-stem RMS analyser helper.
 
-## Teil B — Cockpit Virtuosen-Upgrade
+**No DB / no server changes.** Stems pipeline (HF Space, `track_stems` table, `stems.functions.ts`, `useTrackStems`) stays as is.
 
-### B1. „Next-Move"-Karte (`src/components/cockpit/NextMoveCard.tsx`)
+## Acceptance
 
-Über den Decks, immer sichtbar wenn Auto-DJ läuft:
-- Großer Countdown-Ring (SVG-Stroke-Dasharray) bis nächster Trigger.
-- Modus-Badge: „Bass-Swap • Meet-In-Middle • 8 bars".
-- BPM- und Key-Zielwerte mit Pfeilen: `124 BPM → 122 ← 120` (Treffpunkt-Visualisierung).
-- Vocal-Status-Icon (clean / clash) am Ziel-Cue.
-- Animierter Energie-Pfeil (steigend ↗ / haltend → / fallend ↘).
-
-### B2. Live „Mix-Score" Meter (`src/lib/audio/mixQuality.ts` + `MixScoreDial.tsx`)
-
-Pro 250 ms berechneter Echtzeit-Score 0–100 während Crossfade-Phase:
-- **Phase-Coherence** (40 %): Cross-Correlation L/R beider Decks über AnalyserNode-FFT → wie „phasig" der Mix ist.
-- **Bass-Clash-Penalty** (25 %): Summe der LF-Energie (<150 Hz) aus beiden Decks; >Threshold = Strafe (Bass-Mud).
-- **Beat-Drift** (20 %): zeitliche Distanz zwischen letztem Downbeat beider Decks.
-- **Key-Compat** (15 %): Camelot-Match nach allen Pitch-Shifts (`effectiveKey`).
-
-UI: pulsierende kreisförmige Dial-Anzeige mit Farbring (rot < 50, gelb < 75, grün ≥ 75), darunter Mini-Sparkline der letzten 30 s.
-
-### B3. Skill-Progression (`dj_skill` Tabelle + `SkillBadge.tsx`)
-
-Migration:
-```sql
-CREATE TABLE public.dj_skill (
-  user_id uuid PRIMARY KEY REFERENCES auth.users ON DELETE CASCADE,
-  total_mixes int NOT NULL DEFAULT 0,
-  best_score int NOT NULL DEFAULT 0,
-  avg_score numeric NOT NULL DEFAULT 0,
-  badge text NOT NULL DEFAULT 'rookie', -- rookie|bronze|silver|gold|platinum|diamond
-  perfect_count int NOT NULL DEFAULT 0,
-  last_mixed_at timestamptz
-);
--- + GRANTs + RLS scoped to auth.uid()
-```
-- Bei jedem fertigen Crossfade: avg-Score persistiert → Schwellen erhöhen Badge (5/25/100/250/500/1000 Mixe + min Avg-Score).
-- Cockpit-Header zeigt Badge mit subtiler Animation bei Aufstieg + Toast „🏆 Silver DJ unlocked!".
-
-### B4. Sichtbarere Instrumente
-
-Erweiterungen am bestehenden `TwinDeck.tsx`:
-- **CDJ-Style Jog-Wheel pro Deck**: existierendes Turntable bekommt rotierenden Waveform-Ring (canvas) der den aktuellen Audio-Ausschnitt zeigt.
-- **3-Band-EQ-Knöpfe** (sichtbar machen — Engine hat sie schon): drei vertikale Mini-Knobs Lo/Mid/Hi pro Deck, mit Glow.
-- **Spektrum-Analyzer pro Deck**: kleine 64-Band-FFT-Bar (Canvas, rAF) aus existierendem AnalyserNode.
-- **Beat-Radar**: zwei pulsierende konzentrische Kreise zwischen den Decks, die sich farblich vereinen sobald sync drift < 30 ms.
-
-### B5. „Lernende Engine"
-
-Lokale Heuristik (kein ML-Service nötig): pro User wird `localStorage`-Mapping `(fromBpm-Bucket, toBpm-Bucket, keyDelta) → preferredStrategy + avgScore` geführt. Bei künftigen Übergängen mit ähnlichen Buckets bevorzugt der Planner Strategien mit dem höchsten historischen Score. → fühlt sich an wie „der DJ wird besser, je länger man spielt".
-
----
-
-## Teil C — Live-Recording mit Wellenform + Pre-FX
-
-### C1. Wiederverwendbare Komponente `src/components/recording/MicRecorder.tsx`
-
-```text
-┌──────────────────────────────────────────────┐
-│ ●REC 00:23   ▁▂▄▆█▇▆▅▄▃▂▁  scrolling wave   │
-├──────────────────────────────────────────────┤
-│ Pitch [−7 ──●── +7]   Reverb [0 ──●── 100]   │
-│ Delay [0 ──●── 100]   AutoSnap [Off/Maj/Min] │
-│ Tone  [0 ──●── 100]   Distort [0 ──●── 100]  │
-│                       [ 🎧 Monitor ] [ ⏺ ]    │
-└──────────────────────────────────────────────┘
-```
-
-- `MediaStream` → `MediaStreamAudioSourceNode` → Pitch-Shift → AutoSnap → Distort (Waveshaper) → Delay → Reverb (Convolver) → AnalyserNode → `MediaStreamAudioDestinationNode` → `MediaRecorder`.
-- **Pitch-Shift**: `soundtouchjs` läuft online via `ScriptProcessorNode`-Adapter (bzw. `AudioWorklet` wo verfügbar). Fallback bei niedriger Performance: `playbackRate`-Trick auf Monitor-Out only.
-- **AutoSnap (Tune)**: bestehender `pitch.ts` snappt erkannte Frequenz auf Skalenton, mappt zu Cents-Korrektur die der Pitch-Shifter live anwendet.
-- **Live-Wellenform**: scrollende Canvas-Visualisierung aus AnalyserNode `getFloatTimeDomainData` à 60 fps (Pre-Roll + Recording).
-- **Monitor-Toggle**: routet zusätzlich auf `ctx.destination` (Headphone Recommended Toast).
-- **Output**: Blob (webm/opus) + `peaks`-Array für sofortige Vorschau.
-
-### C2. Einsatzorte
-
-Drop-in-Replacement in:
-- **Loops** (statt aktueller nackter `MediaRecorder`-Logik) → User sieht Wellenform + kann mit Pitch/Reverb experimentieren bevor die Loop in den Set fließt.
-- **Karaoke**, **Autotune**, **Studio**, **Choir** — wo aktuell `getUserMedia` ohne Visualisierung läuft.
-
-Bestehender Aufnahme-Code bleibt erhalten, nur das UI/Mic-Routing wird durch die neue Komponente ersetzt — gleiche Output-API (`onRecordingComplete(blob)`) damit Aufrufer unverändert bleiben.
-
----
-
-## Dateien
-
-**Neu:**
-- `src/lib/audio/harmonicSync.ts` — drei Adaption-Strategien
-- `src/lib/audio/mixQuality.ts` — Live-Score-Rechner
-- `src/components/cockpit/NextMoveCard.tsx`
-- `src/components/cockpit/MixScoreDial.tsx`
-- `src/components/cockpit/SkillBadge.tsx`
-- `src/components/cockpit/DeckSpectrum.tsx` — FFT-Bar
-- `src/components/cockpit/DeckEqKnobs.tsx`
-- `src/components/recording/MicRecorder.tsx`
-- `src/lib/audio/recording/fxChain.ts` — Web-Audio Pre-FX Graph + soundtouch worklet adapter
-
-**Geändert:**
-- `src/lib/audio/twinDeckBus.ts` — neue `mutualTempoRamp`, Drone-Player, Pre-Shift-Snippet-Hook + Score-Hook
-- `src/lib/audio/mixPlanner.ts` — wählt eine der drei neuen Strategien
-- `src/components/cockpit/TwinDeck.tsx` — bindet NextMoveCard, MixScoreDial, SkillBadge, DeckSpectrum, EqKnobs, Beat-Radar ein
-- `src/components/cockpit/DeckLiveHud.tsx` — zeigt aktuelle Strategie + Pitch-Lock-Status
-- `src/routes/_authenticated/loops.tsx` — Recording über `<MicRecorder/>`
-- `src/routes/_authenticated/karaoke.tsx`, `studio.tsx`, `autotune.tsx`, `choir.tsx` — gleicher Drop-in
-- `src/lib/db/queries.ts` — `djSkillOptions`
-
-**Migration:**
-- `dj_skill` Tabelle anlegen (Schema oben) inkl. GRANTs, RLS, Trigger für `last_mixed_at`.
-
----
-
-## Akzeptanzkriterien
-
-1. Im Cockpit kann ich pro Übergang die Strategie sehen UND optional erzwingen („Meet-In-Middle / Pitch-Lock / Pedal-Drone / Auto").
-2. Bei aktiver Transition rampen beide Decks gleichzeitig im Tempo (sichtbar in Live-HUD-BPM-Anzeigen), nicht nur eins.
-3. „Next-Move"-Karte zeigt mit Countdown-Ring, was in den nächsten X Sekunden passiert, inkl. BPM-/Key-Treffpunkt.
-4. Während Crossfade pulsiert der Mix-Score-Dial live; nach Abschluss steigt die DJ-Skill-Stat sichtbar.
-5. Im Loop Creator (und in Karaoke/Studio) sehe ich während der Mic-Aufnahme eine flüssige Wellenform UND kann Pitch/Reverb/Delay live verändern; die gespeicherte Datei klingt mit FX.
-6. Nach 5 Übergängen merkt sich der Planner pro BPM-/Key-Bucket den besten Strategie-Score und bevorzugt ihn — verifizierbar via `localStorage`-Inhalt.
+- Clicking **Smart Mix** with two analyzed tracks runs an audible, beat-locked stem transition (not a master crossfade).
+- Per-deck 4 live meters move with the music.
+- Badge says **Real** only when both decks have 4 attached AudioBuffers.
+- BPM > 8 % off or incompatible key → visible red warning + recommended recipe.
+- Quality score updates whenever a deck/pitch changes.

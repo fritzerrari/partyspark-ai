@@ -14,6 +14,8 @@ import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync
 import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
 import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
+import { scoreTransition, type TransitionQuality } from "./transitionQuality";
+import { createStemMeter, type StemMeter } from "./stemMeter";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
@@ -93,6 +95,12 @@ type Actions = {
   runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId) => Promise<void>;
   /** Snapshot of current stem-gains for the UI. */
   getStemGains: (side: DeckSide) => Record<StemId, number>;
+  /** Live RMS levels per stem (0..1) — for VU meters. */
+  getStemLevels: (side: DeckSide) => Record<StemId, number>;
+  /** Pure scorer for the pending transition between two decks. */
+  getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
+  /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
+  smartMix: (from: DeckSide, to: DeckSide) => Promise<RecipeId | null>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
   attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
   /** Drop back to pseudo-stems on a deck. */
@@ -113,9 +121,10 @@ const deck: Record<DeckSide, {
   analyser: AnalyserNode | null;
   stems: StemSplit | null;
   realStems: RealStemPlayer | null;
+  stemMeter: StemMeter | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
@@ -209,6 +218,8 @@ function wireDeck(side: DeckSide) {
       d.stems.output.connect(d.gain);
       d.gain.connect(d.analyser);
       d.analyser.connect(masterGain);
+      // Per-stem meters: tap an AnalyserNode off each stem gain node.
+      d.stemMeter = createStemMeter(ctx, d.stems.gains);
     } catch {
       /* already wired */
     }
@@ -945,6 +956,27 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       vocals: s.gains.vocals.gain.value,
       other: s.gains.other.gain.value,
     };
+  },
+  getStemLevels(side) {
+    const m = deck[side].stemMeter;
+    if (!m) return { drums: 0, bass: 0, vocals: 0, other: 0 };
+    return m.getLevels();
+  },
+  getTransitionQuality(from, to) {
+    const st = get();
+    return scoreTransition({
+      fromTrack: st[from].track,
+      toTrack: st[to].track,
+      fromRate: deck[from].el?.playbackRate ?? st[from].pitch ?? 1,
+      toRate: deck[to].el?.playbackRate ?? st[to].pitch ?? 1,
+      fromMode: st[from].stemsMode,
+      toMode: st[to].stemsMode,
+    });
+  },
+  async smartMix(from, to) {
+    const q = get().getTransitionQuality(from, to);
+    await get().runStemRecipe(from, to, q.recommendedRecipe);
+    return q.recommendedRecipe;
   },
   async runStemRecipe(from, to, id) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
