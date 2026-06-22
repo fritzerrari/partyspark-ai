@@ -273,6 +273,22 @@ export function StemMixer() {
             Empfehlung: <span className="text-[var(--neon-amber)]">{RECIPES.find((r) => r.id === quality.recommendedRecipe)?.label}</span>
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-stage-foreground/60">
+          <span className="rounded bg-white/5 px-1.5 py-0.5">
+            Länge: <span className="font-mono text-stage-foreground">{quality.bars} bars</span>
+          </span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5">
+            Teaser: <span className="font-mono text-stage-foreground capitalize">{quality.teaserStem}</span>
+          </span>
+          <span className={cn(
+            "rounded px-1.5 py-0.5 font-mono uppercase",
+            quality.aggression === "emergency" ? "bg-red-500/15 text-red-300"
+            : quality.aggression === "performance" ? "bg-[var(--neon-amber)]/15 text-[var(--neon-amber)]"
+            : "bg-emerald-500/15 text-emerald-300",
+          )}>
+            {quality.aggression}
+          </span>
+        </div>
         <div className="grid grid-cols-4 gap-1 text-[9px] text-stage-foreground/70">
           <SubScore label="BPM" v={quality.bpmScore} />
           <SubScore label="Key" v={quality.keyScore} />
@@ -296,9 +312,11 @@ export function StemMixer() {
       </div>
 
       <p className="text-[9px] text-stage-foreground/50">
-        Real-Modus nutzt echte Demucs-Stems pro Deck. Pseudo-Modus rechnet Stems aus
-        dem Spektrum — gleiche Recipes, geringere Trennschärfe. Transitions sind immer
-        beat-synchron auf den Downbeat geclockt.
+        Transitions laufen als bar-genaue Stem-Choreografie: erst Teaser eines
+        einzelnen Parts des neuen Tracks, dann Groove-Layer, Stripdown, Bass/Drum-Switch
+        auf dem Downbeat, dann Reveal. Kein linearer Crossfade. Real-Modus nutzt
+        echte Demucs-Stems pro Deck; Pseudo trennt nur per Spektrum und klingt
+        deshalb weniger sauber.
       </p>
     </div>
   );
