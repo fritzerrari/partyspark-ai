@@ -879,8 +879,17 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
 
   async transition(from, to, opts) {
+    // UNIFIED: all manual transition triggers route through Smart Mix so the
+    // upper deck buttons and the StemMixer use the SAME engine. The legacy
+    // `runTransition()` path stays in the codebase for the genre-bridge /
+    // pitch-lock flows that pre-render a bridge snippet, but is only used
+    // when the user explicitly forces a non-auto mode.
     const hint = opts?.mode ?? get().transitionMode;
-    await runTransition(from, to, hint);
+    if (hint && hint !== "auto" && hint !== "random") {
+      await runTransition(from, to, hint);
+      return;
+    }
+    await get().smartMix(from, to);
   },
 
   setPool(tracks) { set({ pool: tracks }); poolCursor = 0; },
