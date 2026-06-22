@@ -417,6 +417,24 @@ function animateCrossfader(toValue: number, durationMs: number) {
   rafId = requestAnimationFrame(step);
 }
 
+/** Smoothly glide an HTMLMediaElement.playbackRate (no AudioParam available). */
+const gliderTimers = new WeakMap<HTMLMediaElement, number>();
+function glidePlaybackRate(el: HTMLMediaElement, target: number, durationMs: number) {
+  const prev = gliderTimers.get(el);
+  if (prev) cancelAnimationFrame(prev);
+  const from = el.playbackRate || 1;
+  const t0 = performance.now();
+  const step = (now: number) => {
+    const p = Math.min(1, (now - t0) / Math.max(50, durationMs));
+    // ease-in-out cubic for a musical bend
+    const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    try { el.playbackRate = from + (target - from) * ease; } catch { /* noop */ }
+    if (p < 1) gliderTimers.set(el, requestAnimationFrame(step));
+    else gliderTimers.delete(el);
+  };
+  gliderTimers.set(el, requestAnimationFrame(step));
+}
+
 let autoTimerInterval: number | null = null;
 let poolCursor = 0;
 const recentlyPlayedIds: string[] = [];
