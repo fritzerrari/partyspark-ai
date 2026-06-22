@@ -118,6 +118,7 @@ let sourceNodeB: MediaElementAudioSourceNode | null = null;
 let filterNodeB: BiquadFilterNode | null = null;
 let gainA: GainNode | null = null;
 let gainB: GainNode | null = null;
+let stretchB: import("./liveStretch").LiveStretchNode | null = null;
 let autoSchedTimer: number | null = null;
 let transitionInFlight = false;
 
@@ -195,6 +196,12 @@ function ensureDeckB() {
     audioElB = new Audio();
     audioElB.crossOrigin = "anonymous";
     audioElB.preload = "auto";
+    // Mirror any rate change into the pitch-preserving stretch node so the
+    // incoming track keeps its musical key during BPM-sync.
+    audioElB.addEventListener("ratechange", () => {
+      const r = audioElB?.playbackRate ?? 1;
+      if (stretchB) stretchB.setRate(r);
+    });
   }
   if (!audioCtx) return;
   if (sourceNodeB || !postGain) return;
@@ -205,9 +212,30 @@ function ensureDeckB() {
     filterNodeB.frequency.value = 22000;
     gainB = audioCtx.createGain();
     gainB.gain.value = 0;
+    // Source → filter → [stretch worklet (lazy)] → gain → postGain
+    const passthrough = audioCtx.createGain();
     sourceNodeB.connect(filterNodeB);
-    filterNodeB.connect(gainB);
+    filterNodeB.connect(passthrough);
+    passthrough.connect(gainB);
     gainB.connect(postGain);
+    // Lazily attach the SoundTouch worklet so Deck B preserves pitch when
+    // playbackRate is changed for BPM sync. Falls back to direct pass-through
+    // if the worklet can't be loaded.
+    void (async () => {
+      try {
+        const { createLiveStretch } = await import("./liveStretch");
+        const st = await createLiveStretch(audioCtx!);
+        if (!st || !filterNodeB || !gainB) return;
+        filterNodeB.disconnect(passthrough);
+        passthrough.disconnect();
+        filterNodeB.connect(st.node);
+        st.node.connect(gainB);
+        stretchB = st;
+        if (audioElB) stretchB.setRate(audioElB.playbackRate || 1);
+      } catch (err) {
+        console.warn("[engine] could not attach Deck-B stretch node", err);
+      }
+    })();
   } catch {
     /* second source may throw — ignore */
   }
@@ -541,7 +569,7 @@ export const useEngine = create<State & Actions>((set, get) => ({
       try {
         const { planMix } = await import("./mixPlanner");
         const plan = planMix(
-          { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy },
+          { bpm: state.current.bpm, camelot: state.current.camelot, beatGrid: state.current.beatGrid, cues: state.current.cues, durationSec: state.durationSec, energy: state.current.energy, vocalMap: state.current.vocalMap },
           { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
           state.positionSec,
           { forceMode: state.transitionMode },
@@ -593,7 +621,7 @@ export const useEngine = create<State & Actions>((set, get) => ({
       try {
         const { planMix } = await import("./mixPlanner");
         const plan = planMix(
-          { bpm: st.current!.bpm, camelot: st.current!.camelot, beatGrid: st.current!.beatGrid, cues: st.current!.cues, durationSec: st.durationSec, energy: st.current!.energy },
+          { bpm: st.current!.bpm, camelot: st.current!.camelot, beatGrid: st.current!.beatGrid, cues: st.current!.cues, durationSec: st.durationSec, energy: st.current!.energy, vocalMap: st.current!.vocalMap },
           { bpm: next.bpm, camelot: next.camelot, cues: next.cues, durationSec: next.durationSec, energy: next.energy },
           st.positionSec,
           { forceMode: st.transitionMode },

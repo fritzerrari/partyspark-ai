@@ -20,6 +20,7 @@ import {
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { createStemMeter, type StemMeter } from "./stemMeter";
+import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
@@ -162,9 +163,13 @@ const deck: Record<DeckSide, {
   stems: StemSplit | null;
   realStems: RealStemPlayer | null;
   stemMeter: StemMeter | null;
+  /** Pitch-preserving live time-stretch node (SoundTouch worklet). */
+  stretch: LiveStretchNode | null;
+  /** Bypass node used while the async stretch node is being built. */
+  stretchPlaceholder: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
 };
 let masterGain: GainNode | null = null;
 let rafId: number | null = null;
@@ -230,6 +235,12 @@ function wireDeck(side: DeckSide) {
     d.el.addEventListener("ended", () => {
       useTwinDeck.setState((s) => ({ [side]: { ...s[side], isPlaying: false } } as Partial<BusState>));
     });
+    // Whenever the HTMLMediaElement's playbackRate changes (from anywhere),
+    // mirror it into the pitch-preserving stretch node so vocals retain key.
+    d.el.addEventListener("ratechange", () => {
+      const r = d.el?.playbackRate ?? 1;
+      if (d.stretch) d.stretch.setRate(r);
+    });
   }
   if (!d.src && d.el) {
     try {
@@ -251,16 +262,41 @@ function wireDeck(side: DeckSide) {
       d.analyser.smoothingTimeConstant = 0.6;
       // Insert pseudo-stem split between the filter chain and the final deck gain.
       d.stems = createStemSplit(ctx);
+      // Insert a placeholder gain that we later swap to a SoundTouch worklet node
+      // (pitch-preserving live time-stretch). Until the worklet is registered the
+      // placeholder passes audio through unchanged.
+      d.stretchPlaceholder = ctx.createGain();
+      d.stretchPlaceholder.gain.value = 1;
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
-      d.filter.connect(d.stems.input);
+      d.filter.connect(d.stretchPlaceholder);
+      d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
+      // Lazily attach SoundTouch worklet for pitch-preserving stretch. Once it
+      // resolves, we splice it in front of the stem split and dispose the placeholder.
+      void (async () => {
+        const stretch = await createLiveStretch(ctx!);
+        if (!stretch || !d.filter || !d.stems || !d.stretchPlaceholder) return;
+        try {
+          d.filter.disconnect(d.stretchPlaceholder);
+          d.stretchPlaceholder.disconnect();
+          d.filter.connect(stretch.node);
+          stretch.node.connect(d.stems.input);
+          d.stretch = stretch;
+          d.stretchPlaceholder = null;
+          // Apply the current playback rate so pitch is preserved from the start.
+          const rate = d.el?.playbackRate ?? 1;
+          stretch.setRate(rate);
+        } catch (err) {
+          console.warn("[twinDeckBus] could not splice stretch node", err);
+        }
+      })();
     } catch {
       /* already wired */
     }
@@ -318,6 +354,18 @@ function tempoRatio(fromBpm: number, toBpm: number): number {
   return fromBpm / best;
 }
 
+/** Set a deck's playback rate AND keep its pitch at the original key by
+ *  driving the SoundTouch worklet at the same rate. Use this everywhere
+ *  instead of writing `el.playbackRate` directly. */
+function setDeckRate(side: DeckSide, rate: number) {
+  const d = deck[side];
+  const r = Math.max(0.5, Math.min(2, rate || 1));
+  if (d.el) {
+    try { d.el.playbackRate = r; } catch { /* noop */ }
+  }
+  if (d.stretch) d.stretch.setRate(r);
+}
+
 /** Sync incoming deck's playbackRate so its perceived BPM matches outgoing. */
 function syncTempo(from: DeckSide, to: DeckSide): number {
   const st = useTwinDeck.getState();
@@ -326,8 +374,11 @@ function syncTempo(from: DeckSide, to: DeckSide): number {
   const fromRate = deck[from].el?.playbackRate ?? 1;
   if (!fb || !tb) return 1;
   const ratio = tempoRatio(fb * fromRate, tb);
-  const clamped = Math.max(0.88, Math.min(1.12, ratio));
-  if (deck[to].el) deck[to].el.playbackRate = clamped;
+  // Tight clamp: ±6 % is the comfortable range where time-stretch stays
+  // transparent. Beyond that the picker should choose a non-blend transition
+  // (echo-out, drop-cut) rather than mangle the audio.
+  const clamped = Math.max(0.94, Math.min(1.06, ratio));
+  setDeckRate(to, clamped);
   useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: clamped } } as Partial<BusState>));
   recomputeEffective(to);
   return clamped;
@@ -428,7 +479,11 @@ function glidePlaybackRate(el: HTMLMediaElement, target: number, durationMs: num
     const p = Math.min(1, (now - t0) / Math.max(50, durationMs));
     // ease-in-out cubic for a musical bend
     const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-    try { el.playbackRate = from + (target - from) * ease; } catch { /* noop */ }
+    const next = from + (target - from) * ease;
+    try { el.playbackRate = next; } catch { /* noop */ }
+    // Mirror the live rate into the pitch-preserving stretch node, if any.
+    const side: DeckSide | null = deck.A.el === el ? "A" : deck.B.el === el ? "B" : null;
+    if (side && deck[side].stretch) deck[side].stretch!.setRate(next);
     if (p < 1) gliderTimers.set(el, requestAnimationFrame(step));
     else gliderTimers.delete(el);
   };
@@ -517,7 +572,7 @@ async function persistAnalysis(trackId: string, a: import("./analyze").TrackAnal
 
 function pickActualMode(hint: TransitionModeHint, from: EngineTrack | null, to: EngineTrack | null, posSec: number): { mode: TransitionMode; crossfadeSec: number; note: string; startAtSecOfNext: number; bpmRatio: number } {
   const plan = planMix(
-    { bpm: from?.bpm, camelot: from?.camelot, beatGrid: from?.beatGrid, cues: from?.cues, durationSec: from?.durationSec, energy: from?.energy },
+    { bpm: from?.bpm, camelot: from?.camelot, beatGrid: from?.beatGrid, cues: from?.cues, durationSec: from?.durationSec, energy: from?.energy, vocalMap: from?.vocalMap },
     { bpm: to?.bpm, camelot: to?.camelot, beatGrid: to?.beatGrid, cues: to?.cues, durationSec: to?.durationSec, energy: to?.energy },
     posSec,
     { forceMode: hint },
@@ -664,7 +719,7 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
       await new Promise((r) => setTimeout(r, reveal * 1000));
       // Phase C — REVEAL: bridge fades, real incoming starts at its native tempo+key.
       if (toDeck.el) {
-        toDeck.el.playbackRate = 1;
+        setDeckRate(to, 1);
         useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
         try { if (plan.startAtSecOfNext > 0.5) toDeck.el.currentTime = plan.startAtSecOfNext; } catch { /* noop */ }
         if (toDeck.el.paused) { try { await toDeck.el.play(); } catch { /* noop */ } }
@@ -706,7 +761,7 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         rampGain(toDeck.gain, toUserVol, xf);
         const r = await ramp;
         // restore outgoing rate (it's about to pause anyway)
-        try { if (fromDeck.el) fromDeck.el.playbackRate = 1; } catch { /* noop */ }
+        try { setDeckRate(from, 1); } catch { /* noop */ }
         useTwinDeck.setState((s) => ({
           [to]: { ...s[to], pitch: 1 },
         } as Partial<BusState>));
@@ -878,7 +933,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       camelot: track.camelot ?? keyToCamelot(track.musicalKey ?? null),
     };
     d.el.src = enriched.url;
-    d.el.playbackRate = get()[side].pitch;
+    setDeckRate(side, get()[side].pitch);
     set((s) => ({ [side]: {
       ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0,
       isPlaying: false, bridgeReady: false, bridgeNotes: null,
@@ -931,8 +986,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   },
   setPitch(side, p) {
     set((s) => ({ [side]: { ...s[side], pitch: p } } as Partial<BusState>));
-    const d = deck[side];
-    if (d.el) d.el.playbackRate = p;
+    setDeckRate(side, p);
     recomputeEffective(side);
   },
   setCrossfader(v) {
