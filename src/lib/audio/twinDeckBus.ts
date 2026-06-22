@@ -13,12 +13,25 @@ import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
 import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
 import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
+import {
+  runCleanRecipe, pickCleanRecipe, CLEAN_RECIPES,
+  type CleanRecipeId, type TransitionPhase,
+} from "./cleanDjTransitions";
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DeckSide = "A" | "B";
+
+/** Public DJ bus accessor (filter + 3-band EQ + gain) for transition engines. */
+export type DjBus = {
+  filter: BiquadFilterNode | null;
+  eqLow: BiquadFilterNode | null;
+  eqMid: BiquadFilterNode | null;
+  eqHigh: BiquadFilterNode | null;
+  gain: GainNode | null;
+};
 
 export type DeckState = {
   track: EngineTrack | null;
@@ -51,6 +64,10 @@ type BusState = {
   transitionMode: TransitionModeHint;
   transitionInFlight: boolean;
   lastTransitionNote: string | null;
+  /** Live phase of an in-flight transition, for UI status. */
+  transitionPhase: TransitionPhase | null;
+  /** Which engine is running ("real" or "clean") or null when idle. */
+  transitionEngine: "real" | "clean" | null;
   autoTimerOn: boolean;
   autoTimerSec: number;       // interval
   autoTimerCountdown: number; // seconds until next
@@ -100,7 +117,9 @@ type Actions = {
   /** Pure scorer for the pending transition between two decks. */
   getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
   /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
-  smartMix: (from: DeckSide, to: DeckSide) => Promise<RecipeId | null>;
+  smartMix: (from: DeckSide, to: DeckSide) => Promise<{ engine: "real" | "clean"; recipe: string } | null>;
+  /** Run a Clean DJ EQ-based transition (no fake stems). */
+  runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
   attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
   /** Drop back to pseudo-stems on a deck. */
