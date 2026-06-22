@@ -27,6 +27,18 @@ import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
 
 export type DeckSide = "A" | "B";
 
+/** Compact summary of the most recently executed transition plan (UI HUD). */
+export type LastPlanInfo = {
+  type: import("@/lib/intel/types").TransitionType;
+  bars: number;
+  score: number;
+  durationSec: number;
+  from: DeckSide;
+  to: DeckSide;
+  fallbackUsed: boolean;
+  at: number;
+};
+
 /** Public DJ bus accessor (filter + 3-band EQ + gain) for transition engines. */
 export type DjBus = {
   filter: BiquadFilterNode | null;
@@ -79,6 +91,8 @@ type BusState = {
   needsUserGesture: boolean;
   recording: boolean;
   lastRecordingUrl: string | null;
+  /** Summary of the last executed AI transition plan (for UI HUD). */
+  lastPlan: LastPlanInfo | null;
 };
 
 type Actions = {
