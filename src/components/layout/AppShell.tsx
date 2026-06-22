@@ -148,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={to}
                 to={to}
-                onClick={() => setMoreOpen(false)}
+                
                 className={cn(
                   "flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition",
                   accent
@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           })}
           <Link
             to="/settings"
-            onClick={() => setMoreOpen(false)}
+            
             className={cn(
               "flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-medium transition",
               isActive("/settings") ? "text-primary" : "text-muted-foreground",
