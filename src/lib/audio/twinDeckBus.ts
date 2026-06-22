@@ -348,6 +348,18 @@ function tempoRatio(fromBpm: number, toBpm: number): number {
   return fromBpm / best;
 }
 
+/** Set a deck's playback rate AND keep its pitch at the original key by
+ *  driving the SoundTouch worklet at the same rate. Use this everywhere
+ *  instead of writing `el.playbackRate` directly. */
+function setDeckRate(side: DeckSide, rate: number) {
+  const d = deck[side];
+  const r = Math.max(0.5, Math.min(2, rate || 1));
+  if (d.el) {
+    try { d.el.playbackRate = r; } catch { /* noop */ }
+  }
+  if (d.stretch) d.stretch.setRate(r);
+}
+
 /** Sync incoming deck's playbackRate so its perceived BPM matches outgoing. */
 function syncTempo(from: DeckSide, to: DeckSide): number {
   const st = useTwinDeck.getState();
@@ -356,8 +368,11 @@ function syncTempo(from: DeckSide, to: DeckSide): number {
   const fromRate = deck[from].el?.playbackRate ?? 1;
   if (!fb || !tb) return 1;
   const ratio = tempoRatio(fb * fromRate, tb);
-  const clamped = Math.max(0.88, Math.min(1.12, ratio));
-  if (deck[to].el) deck[to].el.playbackRate = clamped;
+  // Tight clamp: ±6 % is the comfortable range where time-stretch stays
+  // transparent. Beyond that the picker should choose a non-blend transition
+  // (echo-out, drop-cut) rather than mangle the audio.
+  const clamped = Math.max(0.94, Math.min(1.06, ratio));
+  setDeckRate(to, clamped);
   useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: clamped } } as Partial<BusState>));
   recomputeEffective(to);
   return clamped;
