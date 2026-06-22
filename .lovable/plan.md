@@ -1,72 +1,185 @@
-Das Projekt ist nicht verloren, aber die aktuelle Audio-Architektur ist in einem kaputten Zwischenzustand: es gibt tatsächlich zwei konkurrierende Systeme. Oben im Deck läuft noch ein alter Transition-Pfad, darunter der Moises-/Stem-Mixer. Zusätzlich erzeugen Pseudo-Stems und Filter-/EQ-Routings zu viel Klangverfärbung. Ich würde deshalb nicht weiter einzelne Rezepte „verbessern“, sondern die Transition-Schicht konsolidieren.
+## Ziel
 
-## Zielbild
+Wir verabschieden uns vom Konzept "DJ-Mixer mit AI-Effekten". Stattdessen bauen wir eine **AI Music Intelligence Platform**, in der jede Transition aus einem vorher berechneten, deterministischen **Transition Plan (JSON)** ausgeführt wird. Das löst die Hauptursache der bisherigen Probleme: blinde Fades ohne musikalisches Verständnis, doppelte Engines, Pseudo-Stems die als echte Stems behandelt werden, und nicht beat-synchrone Choreografie.
 
-Ein einziges DJ-System:
+Inspiration: kckDeepak/AI-DJ-Mixing-System (Analyse → Plan → Render). Keine Code-Kopie, nur Architektur.
+
+## Bestehende Probleme (aus Audit), die der Plan adressiert
+
+- Zwei konkurrierende Engines (`engine.ts` + `twinDeckBus.ts`) → eine Engine.
+- Pseudo-Stems werden mit voller Verstärkung additiv auf den Dry-Path gelegt → klingt wie EQ-Pumping. Recipes laufen sogar im Pseudo-Modus.
+- `setTimeout`-basierte Choreografie → off-beat Glitches.
+- `applyCrossfader` überschreibt während Transitions die AudioParam-Ramps.
+- `resetFilter` setzt `filter.type` nicht zurück → stiller Deck-State nach `loopRoll`.
+- BPM/Key-Analyse mit Oktav-Fehlern und schlechtem First-Beat-Anchor.
+
+## Architektur (5 Layer)
 
 ```text
-Track laden
-→ Audio analysieren: BPM, Beatgrid, Key, Energy, Cues, Vocal-Map
-→ falls echte Stems vorhanden: Real Stem Performance
-→ falls keine echten Stems: Clean DJ Mode auf dem unveränderten Originalsignal
-→ Smart Mix entscheidet Rezept, Länge, Risiko und Timing
+Upload → [L1 Music Analysis] → [L2 Stem Analysis (Demucs)] → Track Profile (JSON)
+                                                                  │
+            Playlist + zwei Track Profile ──► [L3 Mixability Engine] ──► Score + Empfehlung
+                                                                  │
+                                          [L4 Transition Planner] ──► Transition Plan (JSON)
+                                                                  │
+                                          [L5 Execution Engine] ──► Audio Output / Mix Export
 ```
 
-Wichtig: Kein Modus darf den laufenden Song dauerhaft durch pseudo-getrennte Filterbänder schicken. Der Originaltrack muss neutral, laut und erkennbar bleiben.
+### Layer 1: Music Analysis (`src/lib/intel/analysis/`)
 
-## Plan
+Erweitert `analyze.ts`. Liefert pro Track ein `TrackProfile`:
 
-1. **Zwei Systeme zu einem machen**
-   - Die alten A→B/B→A-Buttons im oberen Mixer nicht mehr den alten `transition()`-Pfad ausführen lassen.
-   - Alle manuellen Mix-, Smart-Mix- und Auto-DJ-Auslöser auf eine einzige Smart-Mix-Orchestrierung routen.
-   - Den alten Transition-Stil-Selector entfernen oder klar als Legacy deaktivieren, damit es nicht mehr „Deck-Fade oben / Moises unten“ gibt.
+- BPM (mit Oktav-Korrektur: ½×, 1×, 2× testen, an Grid anlegen)
+- Beatgrid (Downbeats + Beats, AudioContext-Zeit)
+- Key (Camelot, Chroma über 3–4 Oktaven, nicht nur C4)
+- Phrase-Marker (8/16/32-Takt)
+- Intro/Outro, Drops, Breakdowns
+- Energy-Curve (RMS + Spektral-Flux, normiert 0–1, pro Sekunde)
+- Vocal-Density-Map (pro Sekunde 0–1, aus Spectral-Centroid + ML-Heuristik bzw. später aus Demucs-Vocal-Stem)
 
-2. **Audioqualität zuerst: neutraler Hauptpfad**
-   - Standard-Wiedergabe strikt sauber halten: `source → deck gain → analyser → master`.
-   - Pseudo-Stem-Filter nicht mehr im Hauptsignal oder als additive Overlay-Slider verwenden.
-   - Pseudo Mode bleibt ehrlich: keine falschen Stem-Slider, keine „Real“-Benennung, keine Klangzerstörung.
-   - EQ/Filter nur temporär während Clean-DJ-Transitions aktivieren und danach garantiert resetten.
+### Layer 2: Stem Analysis (`src/lib/intel/stems/`)
 
-3. **Real-Stems wirklich separat behandeln**
-   - „Real“ nur erlauben, wenn alle vier getrennten Audiobuffer pro Deck aktiv sind: vocals, drums, bass, other.
-   - Stem-Meter direkt an den echten Stem-Buffern messen, nicht an Pseudo-Bändern.
-   - Beim Umschalten auf Real-Stems den Original-MediaElement-Pfad sauber muten und beim Zurückschalten sauber wieder öffnen.
-   - Gain-Staging/Lautheit begrenzen, damit vier Stems zusammen nicht clippen oder dünn/zerstört klingen.
+- Wrapper um bestehende `stems.functions.ts` (Demucs via HF).
+- Persistiert vocals/drums/bass/other URLs + Dauer im Track-Profil.
+- `stemsAvailable: boolean` Flag im Profil.
+- Pseudo-Modus: **kein** "Fake-Stem" mehr. Stattdessen nur 3-Band-EQ-Slots (Low/Mid/High) für Clean-DJ. Klar getrennt vom echten Stem-Pfad.
 
-4. **Analysepflicht vor dem Mix**
-   - Vor jedem Smart Mix prüfen: BPM, Beatgrid, Key/Camelot, Cues, Energy und Vocal-Map vorhanden?
-   - Falls Analyse fehlt: erst analysieren, dann Mix freigeben.
-   - UI zeigt klar: „Analyse läuft“, „Mix bereit“, „BPM/Key riskant“, „Stems fehlen“.
+### Layer 3: Mixability Engine (`src/lib/intel/mixability.ts`)
 
-5. **Neue Transition-Entscheidung statt blindem Fade**
-   - Smart Mix wählt nicht nur ein Rezept, sondern eine Strategie:
-     - guter BPM/Key-Match: langer 16–32-Bar Blend
-     - Vocal-Konflikt: keine gleichzeitigen Vocals, erst Drums/Instrumental rein
-     - großer BPM/Key-Unterschied: kurzer Drop Cut, Drum Bridge oder Echo Cut
-     - Energie-Sprung: Build-up und Drop-Switch
-   - Clean DJ Mode nutzt nur Originalsignal + temporären EQ/Bass-Swap/Filter/kurze Teases, keine Fake-Stem-Isolation.
-   - Real Stem Mode nutzt echte Stem-Fades: einzelne Drums, Vocal-Hooks, Bass-Swap, Melody-Bed, Vocal-Mute.
+Reiner Funktionsblock, keine Audio-Side-Effects. Input: 2 `TrackProfile`. Output:
 
-6. **Timing und Downbeats stabilisieren**
-   - Transition-Events an Beatgrid/AudioContext-Zeit ausrichten statt über verstreute `setTimeout`-Phasen.
-   - Incoming-Track an Cue/Intro/Drop sinnvoll positionieren, nicht zufällig mitten im Song.
-   - Tempo-Anpassung begrenzen, damit Songs nicht unkenntlich werden; bei zu großer Differenz lieber Cut/Bridge statt hartes Time-Stretching.
+```ts
+interface MixabilityReport {
+  overall: number;          // 0–100
+  bpm: { ratio: number; needsTempoShift: number; score: number };
+  key: { camelotDelta: number; relation: "match"|"adjacent"|"relative"|"clash"; score: number };
+  energy: { delta: number; direction: "up"|"flat"|"down"; score: number };
+  vocalClash: { overlapSeconds: number; score: number };
+  stems: { both: boolean; score: number };
+  warnings: string[];
+}
+```
 
-7. **UI neu ordnen**
-   - Aus dem separaten StemMixer wird ein integrierter „Smart Mix“-Bereich im Hauptmixer.
-   - Nur ein großer Button: **Moises-style Smart Mix**.
-   - Pro Deck klarer Status: **Original / Analysiert / Pseudo Mode / Real Stems ready**.
-   - Manuelle Stem-Slider nur aktivieren, wenn echte Stems vorhanden sind; sonst anzeigen, dass Clean DJ Mode aktiv ist.
-   - Live-Phase anzeigen: Cue → Tease → Layer → Strip → Switch → Reveal.
+### Layer 4: Transition Planner (`src/lib/intel/planner.ts`)
 
-8. **Sicherheitsnetz gegen schlechte Mixes**
-   - Warnung und schlechter Score bei zu großem BPM-/Key-Mismatch.
-   - Keine langen Blends bei inkompatiblen Songs.
-   - Automatisches Zurücksetzen aller EQs, Filter, Gains und Stem-Gains nach jeder Transition, auch bei Fehlern.
+Wählt deterministisch einen von acht Transition-Typen anhand `MixabilityReport`:
 
-## Erwartetes Ergebnis
+- `vocalOut` – Outgoing-Vocals raus, Drum/Instrumental halten
+- `drumBridge` – nur Drums beider Tracks für N Bars
+- `bassSwap` – Bass A↘ + Bass B↗ auf Phrase-Grenze
+- `instrumentalBed` – Instrumental B unter Vocals A
+- `echoExit` – Delay-Tail auf A, dann B
+- `dropSwitch` – harter Cut auf Drop B
+- `acapellaIntro` – Vocals B über Outro A
+- `energyRamp` – Filter/EQ-Build mit Tempo-Glide
 
-- Songs klingen im normalen Playback wieder wie das Original.
-- Ohne echte Stems gibt es ehrliche, saubere DJ-Transitions statt zerstörter Fake-Stems.
-- Mit echten Stems gibt es echte Moises-artige Stem-Performances.
-- Es gibt nur noch ein Mix-System, eine Logik und einen klaren Smart-Mix-Workflow.
+Liefert ein **Transition Plan JSON**, AudioContext-Zeit-basiert:
+
+```ts
+interface TransitionPlan {
+  id: string;
+  type: TransitionType;
+  fromTrackId: string; toTrackId: string;
+  startAtCtxTime: number; durationSec: number;
+  tempoGlide?: { fromBpm: number; toBpm: number; bars: number };
+  keyShiftSemitones?: number;
+  events: TransitionEvent[];   // sample-akkurat, alle Zeiten in ctxTime
+  qualityScore: number;        // 0–100, aus MixabilityReport abgeleitet
+  fallbackUsed: boolean;       // true wenn Pseudo-Mode
+}
+type TransitionEvent =
+  | { t: number; kind: "gain"; target: "deckA"|"deckB"|"stem"; stem?: Stem; to: number; ramp: "lin"|"exp" }
+  | { t: number; kind: "filter"; deck: "A"|"B"; filterType: "lowpass"|"highpass"; freq: number; ramp: "lin"|"exp" }
+  | { t: number; kind: "eq"; deck: "A"|"B"; band: "low"|"mid"|"high"; gainDb: number }
+  | { t: number; kind: "tempo"; deck: "A"|"B"; rate: number }
+  | { t: number; kind: "cut";  deck: "A"|"B"; action: "play"|"pause"|"seek"; seekTo?: number };
+```
+
+Plan ist **vor** dem Mix vollständig bekannt → testbar, exportierbar, anzeigbar.
+
+### Layer 5: Execution Engine (`src/lib/audio/twinDeckBus.ts`, refactored)
+
+- `engine.ts` wird stillgelegt; alle Callsites auf `useTwinDeck` migrieren.
+- `executePlan(plan: TransitionPlan)` ersetzt `runTransition`/`runCleanRecipe`/`runStemRecipe`.
+- Alle Events werden **einmal** über `AudioParam.linearRampToValueAtTime` / `setValueAtTime` mit `ctx.currentTime + t` geplant. Kein `setTimeout` für Musik-Timing mehr.
+- `applyCrossfader` ist während `transitionInFlight=true` no-op (Audit Fix).
+- `resetFilter` setzt `type='lowpass'` + 22 kHz (Audit Fix).
+- Real-Stems-Pfad nur wenn beide Decks `stemsAvailable && stemsMode==='real'`. Sonst Clean-DJ via EQ/Filter auf dem Dry-Path. **Keine Pseudo-Stem-Recipes mehr.**
+- Smart Mix, Echo Transition, Bass Swap, Drum Bridge, Vocal Out, Drop Switch = ausschließlich Plan-Templates aus Layer 4. Manuelle Mix-Buttons rufen Planner mit erzwungenem Typ auf.
+
+### Auto-DJ ("Create Perfect Party Mix")
+
+`src/lib/intel/autodj.ts`:
+
+1. Erwartet Playlist (Track-IDs mit Profilen).
+2. Greedy-Order: sucht Reihenfolge mit höchstem Durchschnitts-`MixabilityReport.overall` und sanfter Energy-Kurve.
+3. Erzeugt für jedes Paar einen `TransitionPlan`.
+4. Liefert `MixSet = { tracks, plans }`.
+5. Optional `renderMixToMp3(mixSet)` via OfflineAudioContext + `lamejs` → Download.
+
+### Datenpersistenz
+
+Neue Lovable-Cloud Tabelle `track_profiles` (1 Zeile pro Track):
+
+```text
+id uuid pk, user_id uuid, source_url text, duration_sec numeric,
+bpm numeric, beatgrid jsonb, key text, camelot text,
+energy_curve jsonb, vocal_map jsonb, phrases jsonb,
+stems_available bool, stem_urls jsonb, profile jsonb, updated_at timestamptz
+```
+
+RLS: per `user_id = auth.uid()`, GRANTs für `authenticated` + `service_role`.
+
+Optional `mix_sets` Tabelle für gespeicherte Auto-DJ-Sets (Plan-JSON + Reihenfolge).
+
+## Umsetzung in Phasen (UI bleibt unangetastet bis Phase 5)
+
+1. **Phase 1 – Datenmodell & Analyse**
+   - `TrackProfile`-Typ + Zod-Schema in `src/lib/intel/types.ts`.
+   - `analyzeTrack()` erweitert `analyze.ts` (Oktav-Fix, Multi-Oktav-Chroma, Energy + Vocal-Map).
+   - Cloud-Tabelle `track_profiles` + Serverfunktion `saveTrackProfile`/`getTrackProfile`.
+
+2. **Phase 2 – Mixability & Planner**
+   - `mixability.ts`, `planner.ts` mit den 8 Transition-Templates, jeweils als reine Plan-Generatoren.
+   - Unit-Tests für Score-Funktion und Plan-Form (keine Audio-IO).
+
+3. **Phase 3 – Execution-Refactor**
+   - `executePlan` in `twinDeckBus.ts`, Audit-Fixes (Crossfader-Suspend, resetFilter-Type, stems-mode-Guard, `cancelScheduledValues` vor `setValueAtTime`).
+   - Alte `runTransition`/`runCleanRecipe`/`runStemRecipe` Pfade entfernen.
+   - `engine.ts` stilllegen.
+
+4. **Phase 4 – Stems**
+   - Demucs-Ergebnis ins Profil persistieren.
+   - Real-Stem-Player nur über `executePlan` ansteuern.
+   - Pseudo-Stem-Slider im UI deaktivieren bzw. als "EQ Bands" relabeln.
+
+5. **Phase 5 – UI-Anbindung (minimal-invasiv)**
+   - Smart-Mix-Button → `planner.plan(...) → executePlan(...)`.
+   - Manuelle Buttons (Bass Swap, Drum Bridge, Vocal Out, Drop Switch, Echo Exit) → planner mit forciertem Typ.
+   - `TransitionQualityHUD`: zeigt Score + gewählten Typ + Phase-Timeline aus dem Plan.
+
+6. **Phase 6 – Auto-DJ & Export (optional)**
+   - "Create Perfect Party Mix"-Flow.
+   - MP3-Export via OfflineAudioContext.
+
+## Technische Details (für Entwickler)
+
+- **Keine** Imports von `.server.ts` in `*.functions.ts` Top-Level (Worker-Bundle-Schutz).
+- Analyse läuft client-seitig in einem Web Worker (kein Server-Round-Trip für DecodeAudioData), Ergebnis wird via `createServerFn` persistiert.
+- Demucs bleibt serverseitig via bestehende `stems.functions.ts` + HF.
+- Sample-akkurate Choreografie ausschließlich über `AudioParam` Scheduling auf `ctx.currentTime`.
+- `applyCrossfader` während `transitionInFlight` no-op; nach Plan-Ende Crossfader auf finalen Wert snappen.
+- Pseudo-Stem-Code-Pfad in `stemSplit.ts` wird auf reinen 3-Band-EQ reduziert; additive Bandpasses entfernt.
+
+## Was sich für den Nutzer ändert
+
+- Vor jedem Mix: sichtbarer **Transition-Plan + Score**, kein Blindfade mehr.
+- Stem-Slider arbeiten nur, wenn echte Stems da sind; sonst klare EQ-Bedienung statt heimlichem Spectral-Bleeding.
+- Auto-DJ-Modus für ganze Playlists mit MP3-Export.
+- Keine UI-Umbauten bis Phase 5 — bestehende Cockpit-Optik bleibt.
+
+## Nicht im Scope
+
+- Komplettes UI-Redesign.
+- Neue ML-Modelle jenseits Demucs.
+- Live-Mikrofon-Routing-Änderungen.

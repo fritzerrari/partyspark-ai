@@ -37,6 +37,29 @@ function rms(arr: Float32Array, start: number, len: number): number {
   return Math.sqrt(s / Math.max(1, end - start));
 }
 
+/** Pick the most musical BPM octave: try ½×, 1×, 2× and prefer the value
+ *  closest to a 110 BPM "house default", which dramatically reduces the
+ *  classic half/double-time mis-reads from naive autocorrelation. */
+function correctBpmOctave(raw: number): number {
+  if (!raw || !isFinite(raw)) return 120;
+  const candidates = [raw / 2, raw, raw * 2].filter((c) => c >= 70 && c <= 180);
+  if (!candidates.length) {
+    // Force into [70, 180] by doubling/halving repeatedly
+    let x = raw;
+    while (x < 70) x *= 2;
+    while (x > 180) x /= 2;
+    return x;
+  }
+  // Prefer the candidate nearest the "musical sweet spot" 100..130
+  let best = candidates[0];
+  let bestScore = Infinity;
+  for (const c of candidates) {
+    const score = Math.abs(c - 115);
+    if (score < bestScore) { bestScore = score; best = c; }
+  }
+  return best;
+}
+
 /** Find first significant onset to anchor the beat grid. */
 function findFirstBeat(env: number[], fps: number, bpm: number): number {
   const beatSamp = Math.round((60 / bpm) * fps);
@@ -63,29 +86,32 @@ function buildBeatGrid(durationSec: number, bpm: number, firstBeat: number): num
 function detectKey(buf: AudioBuffer): { key: string; camelot: string; pitchClass: number; mode: "maj" | "min" } {
   const sr = buf.sampleRate;
   const ch = buf.getChannelData(0);
-  // Sample at 11025 Hz mono to keep FFT-free chroma cheap; we use Goertzel for 12 PCs over 5 octaves.
+  // Goertzel chroma summed across 4 octaves (C2..B5) so sub-bass driven
+  // mixes don't anchor the key to whatever instrument sits in C4..B4.
   const chroma = new Float32Array(12);
-  // Use 12 reference frequencies in mid octave; for each, sum energy via simple autocorrelation per frame.
   const win = 4096;
   const hop = 4096;
+  const octaves = [36, 48, 60, 72]; // MIDI roots: C2, C3, C4, C5
   for (let pc = 0; pc < 12; pc++) {
-    // base freq = A4=440 * 2^((midi-69)/12); pick midi = 60 + pc (C4..B4)
-    const f = 440 * Math.pow(2, ((60 + pc) - 69) / 12);
-    const k = Math.round((win * f) / sr);
-    const w0 = (2 * Math.PI * k) / win;
-    const coeff = 2 * Math.cos(w0);
     let total = 0;
     let frames = 0;
-    for (let pos = 0; pos + win < ch.length; pos += hop) {
-      let s1 = 0, s2 = 0;
-      for (let n = 0; n < win; n++) {
-        const s0 = ch[pos + n] + coeff * s1 - s2;
-        s2 = s1; s1 = s0;
+    for (const root of octaves) {
+      const f = 440 * Math.pow(2, ((root + pc) - 69) / 12);
+      const k = Math.round((win * f) / sr);
+      if (k <= 0 || k >= win / 2) continue;
+      const w0 = (2 * Math.PI * k) / win;
+      const coeff = 2 * Math.cos(w0);
+      for (let pos = 0; pos + win < ch.length; pos += hop) {
+        let s1 = 0, s2 = 0;
+        for (let n = 0; n < win; n++) {
+          const s0 = ch[pos + n] + coeff * s1 - s2;
+          s2 = s1; s1 = s0;
+        }
+        const power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
+        total += Math.max(0, power);
+        frames++;
+        if (frames > 240) break;
       }
-      const power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
-      total += Math.max(0, power);
-      frames++;
-      if (frames > 60) break; // cap analysis to first ~30s for speed
     }
     chroma[pc] = total / Math.max(1, frames);
   }
@@ -183,7 +209,8 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
   const yieldUI = () => new Promise<void>((r) => setTimeout(r, 0));
 
   onProgress?.("BPM", 10);
-  const bpm = Math.max(70, Math.min(180, estimateBPM(buf) || 120));
+  const raw = estimateBPM(buf) || 120;
+  const bpm = correctBpmOctave(raw);
   await yieldUI();
 
   onProgress?.("Energy", 30);
