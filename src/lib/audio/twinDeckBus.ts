@@ -1111,6 +1111,44 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     }
   },
 
+  async attachRealStems(side, urls) {
+    ensureCtx(); wireDeck(side);
+    if (!ctx) return;
+    const d = deck[side];
+    if (!d.el || !d.stems) return;
+    set((s) => ({ [side]: { ...s[side], stemsMode: "loading" } } as Partial<BusState>));
+    try {
+      // Free any previous real player.
+      if (d.realStems) { d.realStems.dispose(); d.realStems = null; }
+      const buffers = await loadRealStems(ctx, urls);
+      const player = createRealStemPlayer(ctx, d.el, d.stems, buffers);
+      d.realStems = player;
+      // Mute pseudo path so we don't double-mix.
+      try {
+        const inputGain = (d.stems.input as GainNode).gain;
+        inputGain.cancelScheduledValues(ctx.currentTime);
+        inputGain.setValueAtTime(0, ctx.currentTime);
+      } catch { /* noop */ }
+      if (!d.el.paused) player.start();
+      set((s) => ({ [side]: { ...s[side], stemsMode: "real" } } as Partial<BusState>));
+    } catch (e) {
+      console.warn("attachRealStems failed", e);
+      set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
+    }
+  },
+  detachRealStems(side) {
+    const d = deck[side];
+    if (d.realStems) { d.realStems.dispose(); d.realStems = null; }
+    if (d.stems && ctx) {
+      try {
+        const inputGain = (d.stems.input as GainNode).gain;
+        inputGain.cancelScheduledValues(ctx.currentTime);
+        inputGain.setValueAtTime(1, ctx.currentTime);
+      } catch { /* noop */ }
+    }
+    set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
+  },
+
   dispose() {
     stopAutoTimer();
     if (rafId) cancelAnimationFrame(rafId);
