@@ -235,6 +235,12 @@ function wireDeck(side: DeckSide) {
     d.el.addEventListener("ended", () => {
       useTwinDeck.setState((s) => ({ [side]: { ...s[side], isPlaying: false } } as Partial<BusState>));
     });
+    // Whenever the HTMLMediaElement's playbackRate changes (from anywhere),
+    // mirror it into the pitch-preserving stretch node so vocals retain key.
+    d.el.addEventListener("ratechange", () => {
+      const r = d.el?.playbackRate ?? 1;
+      if (d.stretch) d.stretch.setRate(r);
+    });
   }
   if (!d.src && d.el) {
     try {
