@@ -64,11 +64,11 @@ function Settings() {
         )}
       </Card>
 
-      <Card title="Auto DJ Engine" subtitle="How PartyPilot moves between songs.">
+      <Card title="Auto-Mix Engine" subtitle="How PartyPilot moves between songs.">
         <Row>
           <div>
-            <Label>Auto DJ</Label>
-            <p className="text-xs text-muted-foreground">Let PartyPilot pick the next track automatically.</p>
+            <Label>Auto-Mix</Label>
+            <p className="text-xs text-muted-foreground">Let PartyPilot pick the next track automatically in party mode.</p>
           </div>
           <Switch checked={s.autodj_enabled} onCheckedChange={(v) => update({ autodj_enabled: v })} />
         </Row>
