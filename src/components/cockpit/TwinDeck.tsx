@@ -112,10 +112,10 @@ export function TwinDeck({ tracks }: Props) {
           />
         </div>
 
-        {/* Smart Mix engine status */}
+        {/* Auto-DJ engine status */}
         <div className="rounded-md border border-[var(--neon-amber)]/30 bg-black/30 p-2 space-y-1">
           <div className="flex items-center justify-between text-[9px] uppercase tracking-widest text-stage-foreground/70">
-            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-[var(--neon-amber)]" /> Smart Mix Engine</span>
+            <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-[var(--neon-amber)]" /> Auto-DJ Engine</span>
             {inFlight && (
               <span className="rounded bg-[var(--neon-cyan)]/15 px-1.5 py-0.5 text-[var(--neon-cyan)] animate-pulse">
                 {engine === "real" ? "Real" : "Clean"} · {phase ?? "…"}
@@ -126,12 +126,12 @@ export function TwinDeck({ tracks }: Props) {
             <NeonButton onClick={() => { void smartMix("A", "B"); }}
               variant="active" size="sm"
               disabled={!A.track || !B.track || inFlight}>
-              <Wand2 className="h-3 w-3" /> A → B
+              <Wand2 className="h-3 w-3" /> Mix A → B
             </NeonButton>
             <NeonButton onClick={() => { void smartMix("B", "A"); }}
               variant="danger" size="sm"
               disabled={!A.track || !B.track || inFlight}>
-              <Wand2 className="h-3 w-3" /> B → A
+              <Wand2 className="h-3 w-3" /> Mix B → A
             </NeonButton>
           </div>
           <p className="text-[8px] text-stage-foreground/50 leading-tight">
