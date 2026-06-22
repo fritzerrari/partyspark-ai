@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Upload, Music2, Heart, Play, Loader2, Search, Wand2,
   CheckSquare, Square as SquareIcon, Filter, X, ArrowRight,
-  Disc3, Sparkles, AudioLines,
+  Disc3, Sparkles, AudioLines, Trash2, CheckCircle2,
 } from "lucide-react";
 import { tracksListOptions } from "@/lib/db/queries";
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +43,7 @@ function Library() {
   const [onlyFavs, setOnlyFavs] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loadingDeck, setLoadingDeck] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const engine = useEngine();
   const loadDeck = useTwinDeck((s) => s.loadDeck);
 
@@ -163,6 +164,25 @@ function Library() {
   async function favorite(t: (typeof tracks)[number]) {
     await supabase.from("tracks").update({ is_favorite: !t.is_favorite }).eq("id", t.id);
     qc.invalidateQueries({ queryKey: ["tracks"] });
+  }
+
+  async function deleteTrack(t: (typeof tracks)[number]) {
+    if (!confirm(`"${t.title}" wirklich löschen?`)) return;
+    setDeletingId(t.id);
+    try {
+      if (t.storage_path) {
+        await supabase.storage.from("tracks").remove([t.storage_path]);
+      }
+      const { error } = await supabase.from("tracks").delete().eq("id", t.id);
+      if (error) throw error;
+      setSelectedIds((s) => s.filter((x) => x !== t.id));
+      qc.invalidateQueries({ queryKey: ["tracks"] });
+      toast.success("Track gelöscht");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Löschen fehlgeschlagen");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   const filtered = tracks.filter((t) =>
