@@ -118,6 +118,7 @@ let sourceNodeB: MediaElementAudioSourceNode | null = null;
 let filterNodeB: BiquadFilterNode | null = null;
 let gainA: GainNode | null = null;
 let gainB: GainNode | null = null;
+let stretchB: import("./liveStretch").LiveStretchNode | null = null;
 let autoSchedTimer: number | null = null;
 let transitionInFlight = false;
 
