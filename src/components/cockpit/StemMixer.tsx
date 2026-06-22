@@ -3,7 +3,7 @@ import { useTwinDeck, type DeckSide } from "@/lib/audio/twinDeckBus";
 import { RECIPES, type RecipeId } from "@/lib/audio/transitionRecipes";
 import type { StemId } from "@/lib/audio/stemSplit";
 import { cn } from "@/lib/utils";
-import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2 } from "lucide-react";
+import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2, AlertTriangle, Zap } from "lucide-react";
 import { useTrackStems } from "@/hooks/useTrackStems";
 import { toast } from "sonner";
 
