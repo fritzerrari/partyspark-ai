@@ -1207,6 +1207,9 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     } catch (e) {
       console.warn("stem recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
+    } finally {
+      // Safety net: ensure neither deck remains with a frozen EQ/filter state.
+      try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
     }
   },
 
