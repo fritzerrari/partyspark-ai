@@ -14,9 +14,11 @@ import { FxPadGrid } from "@/components/cockpit/FxPadGrid";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
-import { Sparkles, Square, Disc, Mic } from "lucide-react";
+import { Sparkles, Square, Disc, Mic, MonitorPlay } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
+import { TrackDropZone } from "@/components/upload/TrackDropZone";
+import { startVisualBridge } from "@/lib/audio/visualBridge";
 
 export const Route = createFileRoute("/_authenticated/cockpit")({
   head: () => ({ meta: [{ title: "DJ Cockpit — PartyPilot AI" }] }),
@@ -34,6 +36,22 @@ function Cockpit() {
   const recording = useTwinDeck((s) => s.recording);
   const startRecording = useTwinDeck((s) => s.startRecording);
   const stopRecording = useTwinDeck((s) => s.stopRecording);
+
+  useEffect(() => {
+    const stop = startVisualBridge();
+    return () => { stop(); };
+  }, []);
+
+  function openVisualizer() {
+    startVisualBridge();
+    const w = window.open(
+      "/visualizer",
+      "partypilot-visualizer",
+      "noopener=no,width=1280,height=720",
+    );
+    if (!w) toast.error("Popup geblockt – bitte Popups für diese Seite erlauben.");
+    else toast.success("Visualizer öffnet sich – ziehe das Fenster auf den Beamer & drücke F11.");
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -128,6 +146,12 @@ function Cockpit() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
+              onClick={openVisualizer}
+              className="min-h-[44px] rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold uppercase tracking-widest text-stage-foreground transition-all hover:bg-white/20 active:scale-95 flex items-center justify-center gap-2"
+            >
+              <MonitorPlay className="h-3 w-3" /> Beamer
+            </button>
+            <button
               onClick={handleAutoDj}
               disabled={tracks.length < 2}
               className={
@@ -179,6 +203,8 @@ function Cockpit() {
       <div className="fixed bottom-4 left-4 right-4 z-40 rounded-full border border-white/15 bg-black/80 px-3 py-2 text-center text-[10px] uppercase tracking-widest text-stage-foreground/80 backdrop-blur sm:hidden">
         <Mic className="mr-1 inline h-3 w-3 text-[var(--neon-magenta)]" /> Mikro & Pads ↓ · Auto-DJ ↑
       </div>
+
+      <TrackDropZone onUploaded={() => { /* tracks reload happens via cockpit refetch on next mount */ }} />
     </div>
   );
 }
