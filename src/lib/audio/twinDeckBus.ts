@@ -256,16 +256,41 @@ function wireDeck(side: DeckSide) {
       d.analyser.smoothingTimeConstant = 0.6;
       // Insert pseudo-stem split between the filter chain and the final deck gain.
       d.stems = createStemSplit(ctx);
+      // Insert a placeholder gain that we later swap to a SoundTouch worklet node
+      // (pitch-preserving live time-stretch). Until the worklet is registered the
+      // placeholder passes audio through unchanged.
+      d.stretchPlaceholder = ctx.createGain();
+      d.stretchPlaceholder.gain.value = 1;
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
-      d.filter.connect(d.stems.input);
+      d.filter.connect(d.stretchPlaceholder);
+      d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
+      // Lazily attach SoundTouch worklet for pitch-preserving stretch. Once it
+      // resolves, we splice it in front of the stem split and dispose the placeholder.
+      void (async () => {
+        const stretch = await createLiveStretch(ctx!);
+        if (!stretch || !d.filter || !d.stems || !d.stretchPlaceholder) return;
+        try {
+          d.filter.disconnect(d.stretchPlaceholder);
+          d.stretchPlaceholder.disconnect();
+          d.filter.connect(stretch.node);
+          stretch.node.connect(d.stems.input);
+          d.stretch = stretch;
+          d.stretchPlaceholder = null;
+          // Apply the current playback rate so pitch is preserved from the start.
+          const rate = d.el?.playbackRate ?? 1;
+          stretch.setRate(rate);
+        } catch (err) {
+          console.warn("[twinDeckBus] could not splice stretch node", err);
+        }
+      })();
     } catch {
       /* already wired */
     }
