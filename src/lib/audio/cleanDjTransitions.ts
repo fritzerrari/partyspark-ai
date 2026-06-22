@@ -80,8 +80,14 @@ function rampFreq(f: BiquadFilterNode | null, hz: number, sec: number, ctx: Audi
   f.frequency.setValueAtTime(f.frequency.value, now);
   f.frequency.exponentialRampToValueAtTime(Math.max(40, hz), now + Math.max(0.04, sec));
 }
+function setFilterType(f: BiquadFilterNode | null, type: BiquadFilterType, ctx: AudioContext) {
+  if (!f) return;
+  f.type = type;
+  if (type === "highpass") f.frequency.setValueAtTime(Math.max(40, f.frequency.value), ctx.currentTime);
+}
 function resetFilter(f: BiquadFilterNode | null, ctx: AudioContext) {
   if (!f) return;
+  f.type = "lowpass";
   f.frequency.cancelScheduledValues(ctx.currentTime);
   f.frequency.setValueAtTime(22000, ctx.currentTime);
 }
@@ -148,6 +154,8 @@ async function djEqSwap(c: CleanRecipeCtx) {
 async function filterBuild(c: CleanRecipeCtx) {
   const { ctx, from, to } = c;
   c.onPhase?.("cue");
+  setFilterType(to.filter, "highpass", ctx);
+  rampFreq(to.filter, 900, 0.08, ctx);
   rampEq(to.eqLow, -18, 0.1, ctx);
   rampGain(to.gain, 0, 0.1, ctx);
 
@@ -172,6 +180,7 @@ async function filterBuild(c: CleanRecipeCtx) {
   c.onPhase?.("switch");
   if (c.waitForBeat) await c.waitForBeat();
   rampFreq(from.filter, 120, c.secPerBar * 1.5, ctx);
+  rampFreq(to.filter, 80, c.secPerBar * 0.5, ctx);
   rampEq(to.eqLow, 0, 0.1, ctx);
   rampGain(to.gain, c.toUserVol, c.secPerBar * 1, ctx);
   rampGain(from.gain, 0, c.secPerBar * 1.5, ctx);
@@ -191,6 +200,7 @@ async function filterBuild(c: CleanRecipeCtx) {
 async function hookTease(c: CleanRecipeCtx) {
   const { ctx, from, to } = c;
   c.onPhase?.("cue");
+  setFilterType(to.filter, "highpass", ctx);
   rampGain(to.gain, 0, 0.1, ctx);
   rampEq(to.eqLow, -24, 0.1, ctx);
   rampEq(to.eqMid, -6, 0.1, ctx);
