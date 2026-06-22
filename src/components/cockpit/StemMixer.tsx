@@ -193,9 +193,8 @@ export function StemMixer() {
     }
     const used = await smartMix(fromSide, toSide);
     if (used) {
-      const label = RECIPES.find((r) => r.id === used)?.label ?? used;
-      const modeLabel = quality.mode === "real" ? "Real ✓" : quality.mode === "hybrid" ? "Hybrid" : "Pseudo";
-      toast.success(`Smart Mix · ${label} · ${modeLabel}`);
+      const engineLabel = used.engine === "real" ? "Real Stem Performance" : "Clean DJ Transition";
+      toast.success(`Smart Mix · ${engineLabel} · ${used.recipe}`);
     }
   }
 
