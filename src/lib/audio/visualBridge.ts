@@ -31,7 +31,7 @@ export function startVisualBridge(): () => void {
   // Poll lazily inside the loop so the bridge becomes live the moment audio
   // starts — no permanent silent fail if started before any deck plays.
   let analyser: AnalyserNode | null = getMasterAnalyser();
-  let data: Uint8Array = analyser ? new Uint8Array(analyser.frequencyBinCount) : new Uint8Array(0);
+  let data = new Uint8Array(new ArrayBuffer(analyser ? analyser.frequencyBinCount : 0));
   let binsPerBand = analyser ? Math.max(1, Math.floor(analyser.frequencyBinCount / BANDS)) : 1;
   let last = 0;
   function tick(t: number) {
@@ -40,7 +40,7 @@ export function startVisualBridge(): () => void {
     if (!analyser) {
       analyser = getMasterAnalyser();
       if (!analyser) return;
-      data = new Uint8Array(analyser.frequencyBinCount);
+      data = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
       binsPerBand = Math.max(1, Math.floor(analyser.frequencyBinCount / BANDS));
     }
     if (t - last < 33) return; // ~30fps
