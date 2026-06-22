@@ -704,6 +704,59 @@ export type Database = {
           },
         ]
       }
+      track_stems: {
+        Row: {
+          bass_path: string | null
+          created_at: string
+          drums_path: string | null
+          error: string | null
+          event_id: string | null
+          model: string
+          other_path: string | null
+          progress: number
+          status: string
+          track_id: string
+          updated_at: string
+          vocals_path: string | null
+        }
+        Insert: {
+          bass_path?: string | null
+          created_at?: string
+          drums_path?: string | null
+          error?: string | null
+          event_id?: string | null
+          model?: string
+          other_path?: string | null
+          progress?: number
+          status?: string
+          track_id: string
+          updated_at?: string
+          vocals_path?: string | null
+        }
+        Update: {
+          bass_path?: string | null
+          created_at?: string
+          drums_path?: string | null
+          error?: string | null
+          event_id?: string | null
+          model?: string
+          other_path?: string | null
+          progress?: number
+          status?: string
+          track_id?: string
+          updated_at?: string
+          vocals_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "track_stems_track_id_fkey"
+            columns: ["track_id"]
+            isOneToOne: true
+            referencedRelation: "tracks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tracks: {
         Row: {
           analyzed_at: string | null
