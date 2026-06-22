@@ -17,7 +17,6 @@ import { useTwinDeck } from "@/lib/audio/twinDeckBus";
 import { Sparkles, Square, Disc, Mic, MonitorPlay } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
-import { TrackDropZone } from "@/components/upload/TrackDropZone";
 import { startVisualBridge } from "@/lib/audio/visualBridge";
 
 export const Route = createFileRoute("/_authenticated/cockpit")({
@@ -204,7 +203,6 @@ function Cockpit() {
         <Mic className="mr-1 inline h-3 w-3 text-[var(--neon-magenta)]" /> Mikro & Pads ↓ · Auto-DJ ↑
       </div>
 
-      <TrackDropZone />
     </div>
   );
 }
