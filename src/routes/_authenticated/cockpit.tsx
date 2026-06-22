@@ -204,7 +204,7 @@ function Cockpit() {
         <Mic className="mr-1 inline h-3 w-3 text-[var(--neon-magenta)]" /> Mikro & Pads ↓ · Auto-DJ ↑
       </div>
 
-      <TrackDropZone onUploaded={() => { /* tracks reload happens via cockpit refetch on next mount */ }} />
+      <TrackDropZone />
     </div>
   );
 }
