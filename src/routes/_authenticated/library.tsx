@@ -35,7 +35,16 @@ function Library() {
   const [analyzingSet, setAnalyzingSet] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [bpmMin, setBpmMin] = useState(60);
+  const [bpmMax, setBpmMax] = useState(180);
+  const [energyMin, setEnergyMin] = useState(0);
+  const [keyFilter, setKeyFilter] = useState<Set<string>>(new Set());
+  const [onlyAnalyzed, setOnlyAnalyzed] = useState(false);
+  const [onlyFavs, setOnlyFavs] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [loadingDeck, setLoadingDeck] = useState<string | null>(null);
   const engine = useEngine();
+  const loadDeck = useTwinDeck((s) => s.loadDeck);
 
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
