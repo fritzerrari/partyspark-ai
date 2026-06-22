@@ -162,14 +162,35 @@ export function planMix(
 
   const crossfadeSec = bars * beatSec;
 
-  // Snap trigger to next beat for tightness
-  const triggerSnapped = current.beatGrid?.length
-    ? nextBeatAfter(current.beatGrid, triggerAtSecOfCurrent)
+  // Snap trigger to the next PHRASE (8-bar = 32-beat) boundary so vocals
+  // are not cut mid-word and the transition lands on a musical "page turn".
+  // Falls back to the next beat if no grid is available.
+  let triggerSnapped = current.beatGrid?.length
+    ? nextPhraseAfter(current.beatGrid, triggerAtSecOfCurrent)
     : triggerAtSecOfCurrent;
+  let phraseSnapped = current.beatGrid?.length ? true : false;
+
+  // VOCAL-GATE — if the outgoing track is mid-vocal at the trigger, defer the
+  // transition to the next vocal gap. Recipes that ride EQ/filter on top of
+  // vocals (any blend mode) get pushed; cut/genreBridge/pedalDrone don't need it.
+  let vocalDeferSec = 0;
+  const blends: TransitionMode[] = [
+    "crossfade", "filterSweep", "echoTail", "reverbWash", "bassSwap",
+    "loopRoll", "doubleDrop", "meetMiddle", "pitchLock",
+  ];
+  if (current.vocalMap?.length && blends.includes(mode)) {
+    const safe = nextVocalGap(current.vocalMap, triggerSnapped, crossfadeSec);
+    if (safe != null && safe > triggerSnapped) {
+      vocalDeferSec = +(safe - triggerSnapped).toFixed(2);
+      triggerSnapped = safe;
+    }
+  }
 
   // Clamp playback-rate ratio so musical pitch doesn't get destroyed
   const rawRatio = nxtBpm / curBpm;
-  const bpmRatio = Math.max(0.92, Math.min(1.08, rawRatio));
+  // Tighter clamp so the time-stretch worklet stays transparent (±6 %).
+  // Bigger BPM gaps should drive non-blend transitions instead.
+  const bpmRatio = Math.max(0.94, Math.min(1.06, rawRatio));
 
   return {
     mode,
@@ -177,6 +198,49 @@ export function planMix(
     startAtSecOfNext,
     triggerAtSecOfCurrent: triggerSnapped,
     bpmRatio,
-    notes,
+    notes: vocalDeferSec > 0 ? `${notes} · +${vocalDeferSec.toFixed(1)}s warten auf Vocal-Lücke` : notes,
+    phraseSnapped,
+    vocalDeferSec,
   };
+}
+
+/** Snap forward to the next 32-beat (8-bar) phrase boundary on a beat grid. */
+function nextPhraseAfter(grid: number[], t: number): number {
+  if (!grid.length) return t;
+  // Find the first beat index at or after t.
+  let idx = grid.findIndex((b) => b >= t + 0.02);
+  if (idx < 0) return grid[grid.length - 1];
+  // Round UP to the next multiple of 32 beats so we land on a phrase head.
+  const aligned = Math.ceil(idx / 32) * 32;
+  return grid[Math.min(aligned, grid.length - 1)];
+}
+
+/** Find the next moment ≥ t where vocals are quiet for at least `windowSec`. */
+function nextVocalGap(
+  vocalMap: { t: number; voiced: number }[],
+  t: number,
+  windowSec: number,
+): number | null {
+  const THRESH = 0.45;
+  // If we're already in a gap, keep t.
+  const startIdx = vocalMap.findIndex((s) => s.t >= t);
+  if (startIdx < 0) return null;
+  const here = vocalMap[startIdx];
+  if (here.voiced < THRESH) return t;
+  // Limit how far we will push — at most ~20 s; otherwise we miss the outro.
+  const limit = t + Math.min(20, windowSec * 1.5);
+  for (let i = startIdx; i < vocalMap.length; i++) {
+    const s = vocalMap[i];
+    if (s.t > limit) return null;
+    if (s.voiced < THRESH) {
+      // Require a short sustained gap (≥ 1.2 s) so we don't snap into a breath.
+      const need = s.t + 1.2;
+      let ok = true;
+      for (let j = i + 1; j < vocalMap.length && vocalMap[j].t <= need; j++) {
+        if (vocalMap[j].voiced >= THRESH) { ok = false; i = j; break; }
+      }
+      if (ok) return s.t;
+    }
+  }
+  return null;
 }
