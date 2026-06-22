@@ -363,17 +363,13 @@ export async function renderMixToMp3(
   const mp3 = encodeMp3(buf, opts.kbps ?? 192, (p) => {
     opts.onProgress?.({ stage: "encode", pct: 50 + p * 0.5 });
   });
-  return new Blob(mp3, { type: "audio/mpeg" });
+  return new Blob(mp3 as unknown as BlobPart[], { type: "audio/mpeg" });
 }
 
 function encodeMp3(buf: AudioBuffer, kbps: number, onProgress?: (pct: number) => void): Uint8Array[] {
-  // Dynamic import so server bundles don't pull lamejs.
-  // (autodj.ts is client-only — this stays sync after module init.)
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const lamejs = require("@breezystack/lamejs") as typeof import("@breezystack/lamejs");
   const numCh = Math.min(2, buf.numberOfChannels);
   const sampleRate = buf.sampleRate;
-  const encoder = new lamejs.Mp3Encoder(numCh, sampleRate, kbps);
+  const encoder = new Mp3Encoder(numCh, sampleRate, kbps);
   const left = floatToInt16(buf.getChannelData(0));
   const right = numCh > 1 ? floatToInt16(buf.getChannelData(1)) : left;
   const chunkSize = 1152;
