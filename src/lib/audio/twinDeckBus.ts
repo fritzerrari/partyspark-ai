@@ -473,7 +473,11 @@ function glidePlaybackRate(el: HTMLMediaElement, target: number, durationMs: num
     const p = Math.min(1, (now - t0) / Math.max(50, durationMs));
     // ease-in-out cubic for a musical bend
     const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-    try { el.playbackRate = from + (target - from) * ease; } catch { /* noop */ }
+    const next = from + (target - from) * ease;
+    try { el.playbackRate = next; } catch { /* noop */ }
+    // Mirror the live rate into the pitch-preserving stretch node, if any.
+    const side: DeckSide | null = deck.A.el === el ? "A" : deck.B.el === el ? "B" : null;
+    if (side && deck[side].stretch) deck[side].stretch!.setRate(next);
     if (p < 1) gliderTimers.set(el, requestAnimationFrame(step));
     else gliderTimers.delete(el);
   };
