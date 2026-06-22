@@ -33,35 +33,47 @@ import { Button } from "@/components/ui/button";
 import { TransportBar } from "@/components/player/TransportBar";
 import { ModuleDock } from "@/components/dashboard/ModuleDock";
 
-// Primary nav for desktop sidebar (and mostly mobile bottom bar).
+// Primary nav — the 3-step journey: Library → Party → Cockpit, plus Home.
 const NAV = [
-  { to: "/dashboard", label: "Home", icon: Home },
-  { to: "/library", label: "Library", icon: Music2 },
-  { to: "/parties/new", label: "Party", icon: PartyPopper, accent: true },
-  { to: "/fx", label: "FX", icon: Volume2 },
+  { to: "/dashboard", label: "Home", icon: Home, hint: "Übersicht" },
+  { to: "/library", label: "1 · Library", icon: Music2, hint: "Tracks hochladen & verwalten" },
+  { to: "/parties/new", label: "2 · Party", icon: PartyPopper, accent: true, hint: "Event anlegen" },
+  { to: "/cockpit", label: "3 · Cockpit", icon: Disc3, hint: "Mixen, singen, aufnehmen" },
 ] as const;
 
-// Secondary nav (More menu on mobile, sidebar on desktop).
-const SECONDARY = [
-  { to: "/cockpit", label: "DJ Cockpit", icon: Disc3 },
-  { to: "/studio-bench", label: "Studio Bench", icon: Sparkles },
-  { to: "/wizard", label: "Studio-Wizard", icon: Compass },
-  { to: "/soundpool", label: "Soundpool", icon: Layers },
-  { to: "/loops", label: "Loop Creator", icon: Repeat },
-  { to: "/karaoke", label: "Karaoke", icon: Mic },
-  { to: "/studio", label: "Studio", icon: Layers },
-  { to: "/battle", label: "Battle", icon: Trophy },
-  { to: "/lyric-writer", label: "Lyric-Writer", icon: PenLine },
-  { to: "/choir", label: "Choir", icon: Music4 },
-  { to: "/sound-designer", label: "Sound FX", icon: AudioWaveform },
-  { to: "/crowd", label: "Crowd", icon: Users },
-  { to: "/remix", label: "Remix", icon: Wand2 },
-  { to: "/party-host", label: "Party Host", icon: Bot },
-  { to: "/moments", label: "Moments", icon: CalendarHeart },
-  { to: "/autotune", label: "Autotune", icon: Mic },
-  { to: "/ai-lab", label: "AI Lab", icon: Sparkles },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
-] as const;
+// Grouped advanced tools (collapsible on desktop, two sections on mobile).
+type NavItem = { to: string; label: string; icon: typeof Home; hint?: string };
+const GROUPS: { id: string; label: string; items: readonly NavItem[] }[] = [
+  {
+    id: "studio",
+    label: "Studio · Erstellen",
+    items: [
+      { to: "/studio-bench", label: "Studio Bench", icon: Sparkles, hint: "Projekt-Workbench" },
+      { to: "/wizard", label: "Studio-Wizard", icon: Compass, hint: "Geführter Song-Builder" },
+      { to: "/soundpool", label: "Soundpool", icon: Layers },
+      { to: "/loops", label: "Loop Creator", icon: Repeat },
+      { to: "/lyric-writer", label: "Lyric-Writer", icon: PenLine },
+      { to: "/choir", label: "Choir", icon: Music4 },
+      { to: "/sound-designer", label: "Sound FX", icon: AudioWaveform },
+      { to: "/remix", label: "Remix", icon: Wand2 },
+      { to: "/autotune", label: "Autotune", icon: Mic },
+      { to: "/ai-lab", label: "AI Lab", icon: Sparkles },
+    ],
+  },
+  {
+    id: "live",
+    label: "Live · Spielen",
+    items: [
+      { to: "/karaoke", label: "Karaoke", icon: Mic },
+      { to: "/fx", label: "FX-Pads", icon: Volume2 },
+      { to: "/battle", label: "Battle", icon: Trophy },
+      { to: "/crowd", label: "Crowd", icon: Users },
+      { to: "/party-host", label: "Party Host", icon: Bot },
+      { to: "/moments", label: "Moments", icon: CalendarHeart },
+    ],
+  },
+];
+const SECONDARY: readonly NavItem[] = GROUPS.flatMap((g) => g.items);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -77,6 +89,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const isActive = (to: string) =>
     pathname === to || pathname.startsWith(to + "/");
+
+  const linkClass = (to: string) =>
+    cn(
+      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+      isActive(to)
+        ? "bg-primary-soft text-primary"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+    );
 
   return (
     <div className="min-h-[100dvh] brand-gradient">
@@ -110,28 +130,56 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
 
           <nav className="flex flex-col gap-1">
-            {[
-              ...NAV.filter((n) => !("accent" in n && n.accent)),
-              ...SECONDARY,
-              ...(isAdmin
-                ? [{ to: "/admin/fx-review", label: "FX Review", icon: ShieldCheck } as const]
-                : []),
-            ].map(
-              ({ to, label, icon: Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                    isActive(to)
-                      ? "bg-primary-soft text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+              Dein Pfad
+            </p>
+            {NAV.map(({ to, label, icon: Icon, hint }) => (
+              <Link key={to} to={to} className={linkClass(to)}>
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{label}</span>
+                  {hint && (
+                    <span className="truncate text-[10px] font-normal text-muted-foreground/70">
+                      {hint}
+                    </span>
                   )}
+                </span>
+              </Link>
+            ))}
+
+            {GROUPS.map((group) => {
+              const groupActive = group.items.some((i) => isActive(i.to));
+              return (
+                <details
+                  key={group.id}
+                  open={groupActive}
+                  className="mt-2 group"
                 >
-                  <Icon className="h-4 w-4" /> {label}
+                  <summary className="cursor-pointer list-none rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 hover:text-foreground">
+                    <span className="inline-block transition-transform group-open:rotate-90">›</span>{" "}
+                    {group.label}
+                  </summary>
+                  <div className="mt-1 flex flex-col gap-1 pl-1">
+                    {group.items.map(({ to, label, icon: Icon }) => (
+                      <Link key={to} to={to} className={linkClass(to)}>
+                        <Icon className="h-4 w-4 shrink-0" /> {label}
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+
+            <div className="mt-2 border-t border-border pt-2">
+              <Link to="/settings" className={linkClass("/settings")}>
+                <SettingsIcon className="h-4 w-4 shrink-0" /> Settings
+              </Link>
+              {isAdmin && (
+                <Link to="/admin/fx-review" className={linkClass("/admin/fx-review")}>
+                  <ShieldCheck className="h-4 w-4 shrink-0" /> FX Review
                 </Link>
-              ),
-            )}
+              )}
+            </div>
           </nav>
 
           <div className="mt-auto border-t border-border pt-3">
@@ -211,21 +259,38 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="fixed inset-0 z-30 bg-foreground/30 backdrop-blur-sm lg:hidden"
           />
           <div className="fixed inset-x-0 bottom-[68px] z-40 mx-3 mb-[max(env(safe-area-inset-bottom),0.5rem)] rounded-3xl border border-border bg-card p-3 shadow-stage lg:hidden">
-            <div className="grid grid-cols-2 gap-2">
-              {SECONDARY.map(({ to, label, icon: Icon }) => (
-                <Link
-                  key={to}
-                  to={to}
-                  onClick={() => setMoreOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 text-sm font-medium",
-                    isActive(to) ? "border-primary text-primary" : "text-foreground",
-                  )}
-                >
-                  <Icon className="h-4 w-4" /> {label}
-                </Link>
-              ))}
-            </div>
+            {GROUPS.map((group) => (
+              <div key={group.id} className="mb-3 last:mb-0">
+                <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                  {group.label}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {group.items.map(({ to, label, icon: Icon }) => (
+                    <Link
+                      key={to}
+                      to={to}
+                      onClick={() => setMoreOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2.5 text-xs font-medium",
+                        isActive(to) ? "border-primary text-primary" : "text-foreground",
+                      )}
+                    >
+                      <Icon className="h-4 w-4" /> {label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <Link
+              to="/settings"
+              onClick={() => setMoreOpen(false)}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-2.5 text-xs font-medium",
+                isActive("/settings") ? "border-primary text-primary" : "text-foreground",
+              )}
+            >
+              <SettingsIcon className="h-4 w-4" /> Settings
+            </Link>
             <button
               type="button"
               onClick={handleSignOut}
