@@ -167,15 +167,47 @@ export function StemMixer() {
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
   const runStemRecipe = useTwinDeck((s) => s.runStemRecipe);
+  const smartMix = useTwinDeck((s) => s.smartMix);
+  const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
   const [recipe, setRecipe] = useState<RecipeId | "auto">("auto");
 
   const fromSide: DeckSide = crossfader < 0.5 ? "A" : "B";
   const toSide: DeckSide = fromSide === "A" ? "B" : "A";
 
+  // Re-score whenever a deck/pitch/mode changes.
+  const [quality, setQuality] = useState(() => getTransitionQuality(fromSide, toSide));
+  useEffect(() => {
+    const id = window.setInterval(() => setQuality(getTransitionQuality(fromSide, toSide)), 400);
+    return () => clearInterval(id);
+  }, [fromSide, toSide, getTransitionQuality]);
+
   async function fire() {
     await runStemRecipe(fromSide, toSide, recipe === "auto" ? undefined : recipe);
   }
+
+  async function fireSmart() {
+    if (!A.track || !B.track) {
+      toast.error("Beide Decks brauchen einen Track.");
+      return;
+    }
+    const used = await smartMix(fromSide, toSide);
+    if (used) {
+      const label = RECIPES.find((r) => r.id === used)?.label ?? used;
+      const modeLabel = quality.mode === "real" ? "Real ✓" : quality.mode === "hybrid" ? "Hybrid" : "Pseudo";
+      toast.success(`Smart Mix · ${label} · ${modeLabel}`);
+    }
+  }
+
+  const modePill = quality.mode === "real"
+    ? { label: "Real Stems", color: "bg-emerald-400/15 text-emerald-300 border-emerald-400/40" }
+    : quality.mode === "hybrid"
+      ? { label: "Hybrid", color: "bg-cyan-400/15 text-cyan-300 border-cyan-400/40" }
+      : { label: "Pseudo Mode", color: "bg-amber-400/15 text-amber-300 border-amber-400/40" };
+
+  const scoreColor = quality.score >= 75 ? "text-emerald-300"
+    : quality.score >= 50 ? "text-amber-300"
+    : "text-red-300";
 
   return (
     <div className="neon-surface rounded-2xl p-3 sm:p-4 space-y-3">
@@ -183,7 +215,10 @@ export function StemMixer() {
         <div className="flex items-center gap-2">
           <Sparkles className="h-3.5 w-3.5 text-[var(--neon-amber)]" />
           <span className="text-[10px] uppercase tracking-[0.2em] text-stage-foreground/70">
-            Stem Mixer & Transition Recipes
+            Moises-Style Stem Mixer
+          </span>
+          <span className={cn("rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-widest", modePill.color)}>
+            {modePill.label}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -210,7 +245,49 @@ export function StemMixer() {
           >
             {inFlight ? "läuft…" : `Mix ${fromSide} → ${toSide}`}
           </button>
+          <button
+            onClick={fireSmart}
+            disabled={inFlight || !A.track || !B.track}
+            className={cn(
+              "flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-widest",
+              inFlight
+                ? "border-white/10 text-stage-foreground/40"
+                : "border-[var(--neon-cyan)] bg-[var(--neon-cyan)]/20 text-[var(--neon-cyan)] hover:bg-[var(--neon-cyan)]/30",
+            )}
+            title="Wählt das beste Rezept anhand BPM, Key, Vocals & Energie und fährt es beat-synchron"
+          >
+            <Zap className="h-3 w-3" /> Smart Mix
+          </button>
         </div>
+      </div>
+
+      {/* Quality + warnings */}
+      <div className="rounded-xl border border-white/10 bg-black/40 p-2 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] uppercase tracking-widest text-stage-foreground/60">Mix-Score</span>
+            <span className={cn("font-mono text-base font-bold", scoreColor)}>{quality.score}</span>
+            <span className="text-[9px] text-stage-foreground/40">/ 100</span>
+          </div>
+          <span className="text-[9px] text-stage-foreground/60">
+            Empfehlung: <span className="text-[var(--neon-amber)]">{RECIPES.find((r) => r.id === quality.recommendedRecipe)?.label}</span>
+          </span>
+        </div>
+        <div className="grid grid-cols-4 gap-1 text-[9px] text-stage-foreground/70">
+          <SubScore label="BPM" v={quality.bpmScore} />
+          <SubScore label="Key" v={quality.keyScore} />
+          <SubScore label="Energie" v={quality.energyScore} />
+          <SubScore label="Vox-Clear" v={quality.vocalConflict} />
+        </div>
+        {quality.warnings.length > 0 && (
+          <div className="space-y-1">
+            {quality.warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-1 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-1 text-[9px] text-red-300">
+                <AlertTriangle className="mt-0.5 h-2.5 w-2.5 flex-shrink-0" /> {w}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3">
@@ -219,9 +296,20 @@ export function StemMixer() {
       </div>
 
       <p className="text-[9px] text-stage-foreground/50">
-        Hinweis: Stems werden in Echtzeit aus dem Spektrum gerechnet (Drums = Transients,
-        Bass &lt;220 Hz, Vocals = Mid-Presence, Melody = restliche Mitten). Echte Source-Separation per Demucs kommt in Phase 2.
+        Real-Modus nutzt echte Demucs-Stems pro Deck. Pseudo-Modus rechnet Stems aus
+        dem Spektrum — gleiche Recipes, geringere Trennschärfe. Transitions sind immer
+        beat-synchron auf den Downbeat geclockt.
       </p>
+    </div>
+  );
+}
+
+function SubScore({ label, v }: { label: string; v: number }) {
+  const c = v >= 75 ? "text-emerald-300" : v >= 50 ? "text-amber-300" : "text-red-300";
+  return (
+    <div className="flex items-center justify-between rounded bg-white/5 px-1.5 py-0.5">
+      <span className="text-stage-foreground/60">{label}</span>
+      <span className={cn("font-mono font-bold", c)}>{v}</span>
     </div>
   );
 }
