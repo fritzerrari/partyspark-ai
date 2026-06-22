@@ -334,6 +334,28 @@ export function StemMixer() {
         )}
       </div>
 
+      {/* Last executed AI plan summary */}
+      {lastPlan && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--neon-cyan)]/30 bg-black/40 px-2 py-1.5 text-[9px] uppercase tracking-widest text-stage-foreground/70">
+          <span className="text-[var(--neon-cyan)]">Letzter Plan</span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">
+            {lastPlan.from} → {lastPlan.to}
+          </span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">{lastPlan.type}</span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">{lastPlan.bars} bars</span>
+          <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono normal-case">{lastPlan.durationSec.toFixed(1)}s</span>
+          <span className={cn(
+            "rounded px-1.5 py-0.5 font-mono normal-case",
+            lastPlan.score >= 75 ? "bg-emerald-500/15 text-emerald-300"
+            : lastPlan.score >= 50 ? "bg-amber-500/15 text-amber-300"
+            : "bg-red-500/15 text-red-300",
+          )}>Score {lastPlan.score}</span>
+          {lastPlan.fallbackUsed && (
+            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono normal-case text-amber-300">Clean Fallback</span>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-3">
         <DeckStemColumn side="A" deckTitle={A.track?.title ?? "—"} />
         <DeckStemColumn side="B" deckTitle={B.track?.title ?? "—"} />
