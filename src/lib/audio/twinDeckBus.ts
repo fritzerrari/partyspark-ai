@@ -572,7 +572,7 @@ async function persistAnalysis(trackId: string, a: import("./analyze").TrackAnal
 
 function pickActualMode(hint: TransitionModeHint, from: EngineTrack | null, to: EngineTrack | null, posSec: number): { mode: TransitionMode; crossfadeSec: number; note: string; startAtSecOfNext: number; bpmRatio: number } {
   const plan = planMix(
-    { bpm: from?.bpm, camelot: from?.camelot, beatGrid: from?.beatGrid, cues: from?.cues, durationSec: from?.durationSec, energy: from?.energy },
+    { bpm: from?.bpm, camelot: from?.camelot, beatGrid: from?.beatGrid, cues: from?.cues, durationSec: from?.durationSec, energy: from?.energy, vocalMap: from?.vocalMap },
     { bpm: to?.bpm, camelot: to?.camelot, beatGrid: to?.beatGrid, cues: to?.cues, durationSec: to?.durationSec, energy: to?.energy },
     posSec,
     { forceMode: hint },
