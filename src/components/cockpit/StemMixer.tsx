@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTwinDeck, type DeckSide } from "@/lib/audio/twinDeckBus";
-import { RECIPES } from "@/lib/audio/transitionRecipes";
+import { decideTransition } from "@/lib/audio/transitionDecision";
 import type { StemId } from "@/lib/audio/stemSplit";
 import { cn } from "@/lib/utils";
 import { Drum, Music2, Mic2, Piano, Sparkles, Wand2, Loader2, AlertTriangle, Zap, Lock } from "lucide-react";
@@ -111,7 +111,7 @@ function DeckStemColumn({ side, deckTitle }: { side: DeckSide; deckTitle: string
               }}
               disabled={generate.isPending || stems?.status === "processing"}
               className="flex items-center gap-1 rounded border border-[var(--neon-amber)]/60 bg-[var(--neon-amber)]/10 px-1.5 py-0.5 text-[9px] text-[var(--neon-amber)] hover:bg-[var(--neon-amber)]/20 disabled:opacity-50"
-              title="Echte Demucs-Stems per HuggingFace Space generieren"
+              title="Echte Stems für dieses Deck generieren"
             >
               {generate.isPending || stems?.status === "processing"
                 ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
@@ -187,7 +187,7 @@ export function StemMixer() {
   const A = useTwinDeck((s) => s.A);
   const B = useTwinDeck((s) => s.B);
   const crossfader = useTwinDeck((s) => s.crossfader);
-  const smartMixPlan = useTwinDeck((s) => s.smartMixPlan);
+  const smartMix = useTwinDeck((s) => s.smartMix);
   const lastPlan = useTwinDeck((s) => s.lastPlan);
   const getTransitionQuality = useTwinDeck((s) => s.getTransitionQuality);
   const inFlight = useTwinDeck((s) => s.transitionInFlight);
@@ -199,6 +199,12 @@ export function StemMixer() {
 
   // Re-score whenever a deck/pitch/mode changes.
   const [quality, setQuality] = useState(() => getTransitionQuality(fromSide, toSide));
+  const decision = decideTransition({
+    fromTrack: fromSide === "A" ? A.track : B.track,
+    toTrack: toSide === "A" ? A.track : B.track,
+    fromMode: fromSide === "A" ? A.stemsMode : B.stemsMode,
+    toMode: toSide === "A" ? A.stemsMode : B.stemsMode,
+  });
   useEffect(() => {
     const id = window.setInterval(() => setQuality(getTransitionQuality(fromSide, toSide)), 400);
     return () => clearInterval(id);
@@ -209,10 +215,10 @@ export function StemMixer() {
       toast.error("Beide Decks brauchen einen Track.");
       return;
     }
-    const plan = await smartMixPlan(fromSide, toSide);
-    if (plan) {
-      const engineLabel = plan.fallbackUsed ? "Clean DJ Transition" : "AI Plan";
-      toast.success(`${engineLabel} · ${plan.type} · ${plan.bars} bars · Score ${plan.qualityScore}`);
+    const result = await smartMix(fromSide, toSide);
+    if (result) {
+      const d = result.decision;
+      toast.success(`${d.engine === "real" ? "Real Stems" : "Clean DJ"} · ${d.recipeLabel} · ${d.bars} bars · Score ${d.score}`);
     }
   }
 
@@ -298,7 +304,7 @@ export function StemMixer() {
             <span className="text-[9px] text-stage-foreground/40">/ 100</span>
           </div>
           <span className="text-[9px] text-stage-foreground/60">
-            Empfehlung: <span className="text-[var(--neon-amber)]">{RECIPES.find((r) => r.id === quality.recommendedRecipe)?.label}</span>
+            Empfehlung: <span className="text-[var(--neon-amber)]">{decision.recipeLabel}</span>
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 text-[9px] text-stage-foreground/60">
@@ -365,8 +371,8 @@ export function StemMixer() {
         Ohne echte Stems läuft eine <b className="text-stage-foreground/80">Clean DJ Transition</b>:
         bar-genaue EQ-/Filter-Moves auf dem Originalsignal — Bass-Swap, Filter Build,
         Hook Tease, Drum-Top Blend, Drop Cut oder Echo Out. Das Originallied bleibt
-        klar erkennbar. Sobald für <b>beide</b> Decks echte Demucs-Stems geladen sind,
-        wechselt Smart Mix automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
+        klar erkennbar. Sobald für <b>beide</b> Decks echte Stems geladen sind,
+        wechselt Auto-DJ automatisch auf die <b className="text-stage-foreground/80">Real Stem Performance</b>:
         Vocals, Drums, Bass und Melody werden unabhängig choreografiert (Teaser →
         Layer → Strip → Downbeat Switch → Reveal).
       </p>

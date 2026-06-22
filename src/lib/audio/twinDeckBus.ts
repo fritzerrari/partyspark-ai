@@ -19,6 +19,7 @@ import {
 } from "./cleanDjTransitions";
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
+import { decideTransition, type TransitionDecision } from "./transitionDecision";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +39,14 @@ export type LastPlanInfo = {
   to: DeckSide;
   fallbackUsed: boolean;
   at: number;
+};
+
+export type UpcomingMixInfo = TransitionDecision & {
+  from: DeckSide;
+  to: DeckSide;
+  fromTitle?: string;
+  toTitle?: string;
+  triggerInSec: number | null;
 };
 
 /** Public DJ bus accessor (filter + 3-band EQ + gain) for transition engines. */
@@ -94,6 +103,8 @@ type BusState = {
   lastRecordingUrl: string | null;
   /** Summary of the last executed AI transition plan (for UI HUD). */
   lastPlan: LastPlanInfo | null;
+  /** Current automatic decision for the next live transition. */
+  upcomingMix: UpcomingMixInfo | null;
 };
 
 type Actions = {
@@ -127,7 +138,7 @@ type Actions = {
   /** Reset a deck's stem split to neutral (all = 1). */
   resetStems: (side: DeckSide) => void;
   /** Run a stem-based transition recipe between two decks. */
-  runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId, opts?: { bars?: number; teaserStem?: StemId; aggression?: "smooth" | "performance" | "emergency" }) => Promise<void>;
+  runStemRecipe: (from: DeckSide, to: DeckSide, id?: RecipeId, opts?: { bars?: number; teaserStem?: StemId; aggression?: "smooth" | "performance" | "emergency"; decision?: TransitionDecision }) => Promise<void>;
   /** Snapshot of current stem-gains for the UI. */
   getStemGains: (side: DeckSide) => Record<StemId, number>;
   /** Live RMS levels per stem (0..1) — for VU meters. */
@@ -135,9 +146,9 @@ type Actions = {
   /** Pure scorer for the pending transition between two decks. */
   getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
   /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
-  smartMix: (from: DeckSide, to: DeckSide) => Promise<{ engine: "real" | "clean"; recipe: string } | null>;
+  smartMix: (from: DeckSide, to: DeckSide) => Promise<{ engine: "real" | "clean"; recipe: string; decision: TransitionDecision } | null>;
   /** Run a Clean DJ EQ-based transition (no fake stems). */
-  runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number }) => Promise<void>;
+  runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number; decision?: TransitionDecision }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
   attachRealStems: (side: DeckSide, urls: RealStemUrls) => Promise<void>;
   /** Drop back to pseudo-stems on a deck. */
@@ -514,6 +525,39 @@ function pickNextTrack(state: BusState): EngineTrack | null {
   return t;
 }
 
+function decisionNote(decision: TransitionDecision): string {
+  const bpm = `${(decision.bpmDeltaPct * 100).toFixed(1)}% BPM`;
+  const sync = decision.syncAllowed && decision.syncRate !== 1
+    ? ` · Sync ×${decision.syncRate.toFixed(3)}`
+    : " · kein Stretch";
+  return `${decision.engine === "real" ? "Real Stems" : "Clean DJ"} · ${decision.recipeLabel} · Score ${decision.score} · ${bpm}${sync}`;
+}
+
+function setUpcomingMix(from: DeckSide, to: DeckSide, triggerInSec: number | null = null): TransitionDecision | null {
+  const st = useTwinDeck.getState();
+  if (!st[from].track || !st[to].track) {
+    useTwinDeck.setState({ upcomingMix: null });
+    return null;
+  }
+  const decision = decideTransition({
+    fromTrack: st[from].track,
+    toTrack: st[to].track,
+    fromMode: st[from].stemsMode,
+    toMode: st[to].stemsMode,
+  });
+  useTwinDeck.setState({
+    upcomingMix: {
+      ...decision,
+      from,
+      to,
+      fromTitle: st[from].track?.title,
+      toTitle: st[to].track?.title,
+      triggerInSec: triggerInSec ?? (st.autoTimerOn ? st.autoTimerCountdown : null),
+    },
+  });
+  return decision;
+}
+
 function startAutoTimer() {
   if (autoTimerInterval != null) return;
   // tick every second to update countdown; fire transition when 0
@@ -537,6 +581,7 @@ function startAutoTimer() {
           await useTwinDeck.getState().loadDeck(to, next);
           // Wait a tick for analysis to start; force-ensure analyzed before mix
           await useTwinDeck.getState().ensureAnalysis(to).catch(() => {});
+          setUpcomingMix(from, to, cd);
           recentlyPlayedIds.push(next.id);
           if (recentlyPlayedIds.length > 16) recentlyPlayedIds.shift();
           await useTwinDeck.getState().transition(from, to);
@@ -902,6 +947,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   recording: false,
   lastRecordingUrl: null,
   lastPlan: null,
+  upcomingMix: null,
 
   init() {
     ensureCtx(); wireDeck("A"); wireDeck("B");
@@ -933,10 +979,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       camelot: track.camelot ?? keyToCamelot(track.musicalKey ?? null),
     };
     d.el.src = enriched.url;
-    setDeckRate(side, get()[side].pitch);
+    setDeckRate(side, 1);
     set((s) => ({ [side]: {
       ...s[side], track: enriched, position: 0, duration: enriched.durationSec ?? 0,
-      isPlaying: false, bridgeReady: false, bridgeNotes: null,
+      isPlaying: false, pitch: 1, bridgeReady: false, bridgeNotes: null,
     } } as Partial<BusState>));
     bridgeBuffers[side] = null;
     applyCrossfader(get());
@@ -947,9 +993,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     }
     // If the other deck is playing, pre-sync this deck's tempo so it's already beat-matched.
     const other: DeckSide = side === "A" ? "B" : "A";
-    if (get()[other].isPlaying && get()[other].track?.bpm && get()[side].track?.bpm) {
-      syncTempo(other, side);
-    }
+    if (get()[other].isPlaying && get()[other].track?.bpm && get()[side].track?.bpm) setUpcomingMix(other, side);
     // Pre-build the bridge snippet so cross-genre transitions are ready instantly.
     if (get()[other].track?.bpm) {
       void get().buildBridgeFor(side).catch(() => {});
@@ -1070,6 +1114,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     // Kick off analysis in background for both
     void get().ensureAnalysis("A");
     void get().ensureAnalysis("B");
+    setUpcomingMix(firstSide, otherSide, get().autoTimerSec);
     // Arm the auto-timer
     set({ autoTimerOn: true, autoTimerCountdown: get().autoTimerSec });
     startAutoTimer();
@@ -1155,28 +1200,38 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     if (toEl && toCues && toEl.currentTime < 0.5) {
       try { toEl.currentTime = Math.max(0, toCues.introEnd || toCues.firstDrop || 0); } catch { /* noop */ }
     }
-    const q = get().getTransitionQuality(from, to);
+    const latest = get();
+    const decision = decideTransition({
+      fromTrack: latest[from].track,
+      toTrack: latest[to].track,
+      fromMode: latest[from].stemsMode,
+      toMode: latest[to].stemsMode,
+    });
+    set({
+      upcomingMix: {
+        ...decision,
+        from,
+        to,
+        fromTitle: latest[from].track?.title,
+        toTitle: latest[to].track?.title,
+        triggerInSec: latest.autoTimerOn ? latest.autoTimerCountdown : null,
+      },
+    });
     // Only the Real-Stem engine should touch the stem buses; otherwise the
     // pseudo-band split would destroy the original audio. Anything that
     // isn't fully "real" routes to the Clean DJ engine, which rides
     // EQ/filter/gain on the dry deck signal.
-    if (q.mode === "real") {
-      await get().runStemRecipe(from, to, q.recommendedRecipe, {
-        bars: q.bars,
-        teaserStem: q.teaserStem,
-        aggression: q.aggression,
+    if (decision.engine === "real") {
+      await get().runStemRecipe(from, to, decision.recipe as RecipeId, {
+        bars: decision.bars,
+        teaserStem: decision.teaserStem,
+        aggression: decision.aggression,
+        decision,
       });
-      return { engine: "real", recipe: q.recommendedRecipe };
+      return { engine: "real", recipe: decision.recipe, decision };
     }
-    const cleanId = pickCleanRecipe({
-      bpmDeltaPct: q.bpmDeltaPct,
-      keyCompatible: q.keyCompatible,
-      fromHasVocals: (get()[from].track?.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
-      toHasVocals: (get()[to].track?.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
-      energyJump: (get()[to].track?.energy ?? 0.5) - (get()[from].track?.energy ?? 0.5),
-    });
-    await get().runCleanRecipe(from, to, cleanId, { bars: q.bars });
-    return { engine: "clean", recipe: cleanId };
+    await get().runCleanRecipe(from, to, decision.recipe as CleanRecipeId, { bars: decision.bars, decision });
+    return { engine: "clean", recipe: decision.recipe, decision };
   },
   async runCleanRecipe(from, to, id, opts) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
@@ -1202,7 +1257,11 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         try { await toDeck.el.play(); } catch { /* gesture */ }
       }
       if (ctx.state === "suspended") void ctx.resume();
-      const ratio = syncTempo(from, to);
+      const decision = opts?.decision ?? decideTransition({ fromTrack, toTrack, fromMode: st[from].stemsMode, toMode: st[to].stemsMode });
+      if (decision.syncAllowed) setDeckRate(to, decision.syncRate);
+      else setDeckRate(to, 1);
+      set((s) => ({ [to]: { ...s[to], pitch: decision.syncAllowed ? decision.syncRate : 1 } } as Partial<BusState>));
+      recomputeEffective(to);
       beatAlign(from, to);
       // Open outgoing to its user volume, incoming starts at 0.
       toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
@@ -1235,11 +1294,13 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         onPhase: (phase) => set({ transitionPhase: phase }),
       });
       try { fromDeck.el?.pause(); } catch { /* noop */ }
+      setDeckRate(to, 1);
+      set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
       recomputeEffective(to);
-      const ratioNote = ratio !== 1 ? ` · sync ×${ratio.toFixed(3)}` : "";
+      const ratioNote = decision.syncAllowed && decision.syncRate !== 1 ? ` · sync ×${decision.syncRate.toFixed(3)}` : " · no stretch";
       const label = CLEAN_RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId;
       set({
-        lastTransitionNote: `Clean DJ · ${label} · ${bars} bars${ratioNote}`,
+        lastTransitionNote: `${decisionNote({ ...decision, recipe: recipeId, recipeLabel: label })} · ${bars} bars${ratioNote}`,
         transitionInFlight: false,
         transitionPhase: null,
         transitionEngine: null,
@@ -1276,7 +1337,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         try { await toDeck.el.play(); } catch { /* user gesture */ }
       }
       if (ctx.state === "suspended") void ctx.resume();
-      const ratio = syncTempo(from, to);
+      const decision = opts?.decision ?? decideTransition({ fromTrack, toTrack, fromMode: st[from].stemsMode, toMode: st[to].stemsMode });
+      setDeckRate(to, 1);
+      set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
+      recomputeEffective(to);
       beatAlign(from, to);
       // Make sure deck volumes are open — recipe rides the stems, not the main gain.
       if (toDeck.gain) toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
@@ -1325,15 +1389,16 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       // reused, restore the deck gain to user volume.
       try { fromDeck.el?.pause(); } catch { /* noop */ }
       fromStems.reset();
+      setDeckRate(to, 1);
       // Incoming stems should all be at 1 by now; force it.
       toStems.setGain("drums", 1, 0.1);
       toStems.setGain("bass", 1, 0.1);
       toStems.setGain("vocals", 1, 0.1);
       toStems.setGain("other", 1, 0.1);
       recomputeEffective(to);
-      const ratioNote = ratio !== 1 ? ` · sync ×${ratio.toFixed(3)}` : "";
+      const ratioNote = " · no stretch";
       set({
-        lastTransitionNote: `${RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId} · ${bars} bars${ratioNote}`,
+        lastTransitionNote: `${decisionNote({ ...decision, recipe: recipeId, recipeLabel: RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId })} · ${bars} bars${ratioNote}`,
         transitionInFlight: false,
         transitionPhase: null,
         transitionEngine: null,

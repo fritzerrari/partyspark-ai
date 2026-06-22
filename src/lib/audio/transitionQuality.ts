@@ -5,6 +5,7 @@ import { camelotCompatible } from "./analyze";
 import type { RecipeId } from "./transitionRecipes";
 import { pickRecipe } from "./transitionRecipes";
 import type { StemId } from "./stemSplit";
+import { decideTransition } from "./transitionDecision";
 
 export type TransitionQuality = {
   /** 0..100 overall mix-quality score. */
@@ -41,6 +42,7 @@ export function scoreTransition(opts: {
   toMode: "pseudo" | "loading" | "real";
 }): TransitionQuality {
   const { fromTrack, toTrack, fromRate, toRate, fromMode, toMode } = opts;
+  const decision = decideTransition({ fromTrack, toTrack, fromMode, toMode });
   const warnings: string[] = [];
 
   const fb = (fromTrack?.bpm ?? 0) * (fromRate || 1);
@@ -88,7 +90,7 @@ export function scoreTransition(opts: {
     (bpmScore * 0.35 + keyScore * 0.3 + energyScore * 0.15 + vocalConflict * 0.2) * modeCap,
   );
 
-  const recommendedRecipe = pickRecipe({
+  const recommendedRecipe = decision.engine === "real" ? decision.recipe as RecipeId : pickRecipe({
     bpmDeltaPct,
     keyCompatible,
     fromHasVocals: fromVoc,
@@ -97,15 +99,8 @@ export function scoreTransition(opts: {
   });
 
   // ---- Performance choices (length / teaser / aggression) ----
-  const aggression: TransitionQuality["aggression"] =
-    bpmDeltaPct > 0.10 || !keyCompatible ? "emergency"
-    : energyJump > 0.2 || (fromVoc && toVoc) ? "performance"
-    : "smooth";
-
-  // Longer transitions when match is good, shorter when we're in emergency mode.
-  const bars = aggression === "emergency" ? 12
-             : aggression === "performance" ? 16
-             : 12;
+  const aggression = decision.aggression;
+  const bars = decision.bars;
 
   // Teaser stem: pick something that contrasts with what's currently dominant on outgoing.
   // - Both have vocals → tease incoming drums to flag the new track without vocal clash.
@@ -120,11 +115,14 @@ export function scoreTransition(opts: {
   else teaserStem = "other";
 
   if (mode === "pseudo") {
-    warnings.push("Pseudo-Stems aktiv — Trennschärfe begrenzt. Echte Stems pro Deck generieren für saubere Performance.");
+    warnings.push("Clean-DJ aktiv — Originalsignal bleibt unangetastet; echte Stems nur optional für Vocal-Out/Drum-Bridge.");
+  }
+  if (!decision.syncAllowed && decision.bpmDeltaPct > 0.025) {
+    warnings.push("Tempo wird nicht hart gestretcht — Auto-DJ wählt Cut/Echo/Bridge statt Verzerrung.");
   }
 
   return {
-    score, bpmScore, keyScore, energyScore, vocalConflict,
+    score: Math.min(score, decision.score), bpmScore, keyScore, energyScore, vocalConflict,
     bpmDeltaPct, bpmDelta, keyCompatible, warnings, recommendedRecipe, mode,
     bars, teaserStem, aggression,
   };
