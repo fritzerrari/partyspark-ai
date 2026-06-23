@@ -1317,7 +1317,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       vocalMap: live.vocalMap ?? null, cues: live.cues ?? null,
       durationSec: live.durationSec ?? deck[from].el?.duration ?? null,
     }, livePos);
-    const beatSec = 60 / (live.effectiveBpm ?? live.bpm);
+    const beatSec = 60 / (st[from].effectiveBpm ?? live.bpm);
     // Wir bauen einen 8/16-Takt Build-Up direkt VOR dem Outro-Slot.
     const targetBars = Math.min(16, Math.max(4, opts?.bars ?? 8));
     const targetSec = slot ? Math.max(livePos + targetBars * 4 * beatSec, slot.startSec)
@@ -1337,7 +1337,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     );
 
     // 4) Director rendert Teaser + Layer mit echten Werten aus der Analyse.
-    pushLog(`🎬 Phase 1 — Render (Key ${live.musicalKey ?? "?"} · ${Math.round(live.effectiveBpm ?? live.bpm)} BPM)`, "info");
+    pushLog(`🎬 Phase 1 — Render (Key ${live.musicalKey ?? "?"} · ${Math.round(st[from].effectiveBpm ?? live.bpm)} BPM)`, "info");
     const plan = await planDirector(live, incoming, {
       creativity: opts?.creativity,
       bars: layerBars,
