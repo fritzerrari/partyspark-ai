@@ -5,6 +5,7 @@ import { pushLog } from "@/lib/dj/copilotLog";
 import { makeBridgeBeatBlobUrl } from "@/lib/audio/bridgeBeat";
 import type { EngineTrack } from "@/lib/audio/engine";
 import type { CleanRecipeId } from "@/lib/audio/cleanDjTransitions";
+import { CHOREOGRAPHIES, renderDirectorPreview, planDirector } from "@/lib/dj/director";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -27,6 +28,12 @@ export function CockpitCenter() {
   const runCleanRecipe = useTwinDeck((s) => s.runCleanRecipe);
   const smartMix = useTwinDeck((s) => s.smartMix);
   const loadDeck = useTwinDeck((s) => s.loadDeck);
+  const runVirtuoso = useTwinDeck((s) => s.runVirtuoso);
+
+  const [virtuoso, setVirtuoso] = useState(true);
+  const [creativity, setCreativity] = useState(0.7);
+  const [choreoId, setChoreoId] = useState<string>("auto");
+  const [previewBusy, setPreviewBusy] = useState(false);
 
   const live: DeckSide = useMemo(() => {
     const aLoud = (1 - crossfader) * (aPlaying ? 1 : 0);
@@ -88,6 +95,38 @@ export function CockpitCenter() {
     } catch (err) {
       console.error(err);
       toast.error("Bridge konnte nicht erzeugt werden");
+    }
+  }
+
+  async function virtuosoMix() {
+    if (!liveTrack || !nextTrack) { toast.error("Beide Decks brauchen einen Track"); return; }
+    if (transitionInFlight) { toast("Übergang läuft bereits"); return; }
+    await runVirtuoso(live, other, {
+      creativity,
+      bars,
+      choreographyId: choreoId === "auto" ? undefined : choreoId,
+    });
+  }
+
+  async function previewDirector() {
+    if (!liveTrack || !nextTrack) { toast.error("Beide Decks brauchen einen Track"); return; }
+    setPreviewBusy(true);
+    try {
+      const plan = await planDirector(liveTrack, nextTrack, {
+        creativity,
+        bars: Math.min(8, bars),
+        choreographyId: choreoId === "auto" ? undefined : choreoId,
+      });
+      const pv = await renderDirectorPreview(plan);
+      if (!pv) { toast("Nichts zum Vorhören"); return; }
+      const a = new Audio(pv.url);
+      a.play().catch(() => {/* needs gesture but we are in a click handler */});
+      toast.success(`Preview ${pv.durationSec.toFixed(1)}s — ${plan.choreography.name}`);
+    } catch (e) {
+      console.error(e);
+      toast.error("Director-Preview fehlgeschlagen");
+    } finally {
+      setPreviewBusy(false);
     }
   }
 
@@ -182,6 +221,65 @@ export function CockpitCenter() {
             : "Lade einen Track ins Live-Deck"}
         </div>
       </button>
+
+      {/* Director — virtuose Übergänge */}
+      <div className="space-y-2 rounded-xl border border-[var(--neon-magenta)]/40 bg-[color-mix(in_oklab,var(--neon-magenta)_8%,transparent)] p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold text-stage-foreground">🎬 Director — virtuose Übergänge</div>
+            <div className="text-[10px] text-stage-foreground/60">Teaser + generierte Drums/Bass/Pluck in Live-Key & BPM</div>
+          </div>
+          <label className="flex items-center gap-1 text-[10px] text-stage-foreground/70">
+            <input type="checkbox" checked={virtuoso} onChange={(e) => setVirtuoso(e.target.checked)} className="accent-[var(--neon-magenta)]" />
+            an
+          </label>
+        </div>
+
+        {virtuoso && (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-widest text-stage-foreground/60">Kreativität</span>
+              <input
+                type="range" min={0} max={1} step={0.05} value={creativity}
+                onChange={(e) => setCreativity(parseFloat(e.target.value))}
+                className="flex-1 accent-[var(--neon-magenta)]"
+              />
+              <span className="font-mono text-[11px] text-stage-foreground">{Math.round(creativity * 100)}%</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-widest text-stage-foreground/60">Choreo</span>
+              <select
+                value={choreoId}
+                onChange={(e) => setChoreoId(e.target.value)}
+                className="flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-stage-foreground"
+              >
+                <option value="auto">🎲 Auto (würfelt)</option>
+                {CHOREOGRAPHIES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={virtuosoMix}
+                disabled={transitionInFlight || !liveTrack || !nextTrack}
+                className="rounded-lg border border-[var(--neon-magenta)] bg-[color-mix(in_oklab,var(--neon-magenta)_20%,transparent)] px-2 py-2 text-xs font-bold text-stage-foreground transition-all hover:bg-[color-mix(in_oklab,var(--neon-magenta)_35%,transparent)] disabled:opacity-40"
+              >
+                🎬 Virtuoso-Mix starten
+              </button>
+              <button
+                onClick={previewDirector}
+                disabled={previewBusy || !liveTrack || !nextTrack}
+                className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-bold text-stage-foreground transition-all hover:bg-white/10 disabled:opacity-40"
+              >
+                {previewBusy ? "Rendere…" : "🎧 Vorhören"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
