@@ -1368,20 +1368,20 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const layerEndCtxTime = revealCtxTime - barSec; // 1 Takt vor Reveal vollständig leise
     if (plan.layerBuffer && layerEndCtxTime > downbeatCtxTime + barSec) {
       get().playPreviewLayer(plan.layerBuffer, {
-        gain: 0.18,                       // sehr leise — Klebstoff, nicht Solist
-        fadeInSec: 2 * beatSec,
-        fadeOutSec: 2 * beatSec,
+        gain: 0.22,                       // Klebstoff: hörbar musikalisch, aber unter dem Deck
+        fadeInSec: 4 * beatSec,           // 1 Takt Fade-In (musikalisch)
+        fadeOutSec: 4 * beatSec,          // 1 Takt Fade-Out
+        highpassHz: 80,                   // hält die Sub-Range frei für den laufenden Track
         startAtCtxTime: downbeatCtxTime,
         stopAtCtxTime: layerEndCtxTime,
       });
     }
     if (plan.teaser) {
-      // Teaser kurz vor dem Reveal — ein einziges Vorhören, kein Loop.
       const teaserDur = plan.teaser.buffer.duration;
-      const teaserEnd = revealCtxTime - beatSec * 0.5;
+      const teaserEnd = revealCtxTime - beatSec * 0.25;
       const teaserStart = Math.max(downbeatCtxTime + barSec, teaserEnd - Math.min(teaserDur, 2 * barSec));
       get().playPreviewLayer(plan.teaser.buffer, {
-        gain: 0.16, fadeInSec: beatSec, fadeOutSec: beatSec, highpassHz: 420,
+        gain: 0.20, fadeInSec: 2 * beatSec, fadeOutSec: 2 * beatSec, highpassHz: 350,
         startAtCtxTime: teaserStart,
         stopAtCtxTime: teaserEnd,
       });
