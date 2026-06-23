@@ -1254,7 +1254,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const fadeOut = Math.max(0.05, opts?.fadeOutSec ?? 0.8);
     const peak = Math.max(0, Math.min(1, opts?.gain ?? 0.55));
     const dur = buffer.duration;
-    const t0 = ctx.currentTime + 0.02;
+    const t0 = Math.max(ctx.currentTime + 0.02, opts?.startAtCtxTime ?? 0);
     gain.gain.setValueAtTime(0.0001, t0);
     gain.gain.exponentialRampToValueAtTime(peak, t0 + fadeIn);
     gain.gain.setValueAtTime(peak, t0 + Math.max(fadeIn, dur - fadeOut));
