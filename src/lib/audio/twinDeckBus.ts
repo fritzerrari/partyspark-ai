@@ -153,7 +153,7 @@ type Actions = {
   /** Plan + play the Director (teaser + generated layers) BEFORE running smartMix. */
   runVirtuoso: (from: DeckSide, to: DeckSide, opts?: { creativity?: number; bars?: number; choreographyId?: string; skipSmartMix?: boolean }) => Promise<DirectorPlan | null>;
   /** Schedule an AudioBuffer (rendered teaser/layer) on the master bus with a fade. */
-  playPreviewLayer: (buffer: AudioBuffer, opts?: { gain?: number; fadeInSec?: number; fadeOutSec?: number; highpassHz?: number; startAtCtxTime?: number }) => void;
+  playPreviewLayer: (buffer: AudioBuffer, opts?: { gain?: number; fadeInSec?: number; fadeOutSec?: number; highpassHz?: number; startAtCtxTime?: number; stopAtCtxTime?: number }) => void;
   /** Run a Clean DJ EQ-based transition (no fake stems). */
   runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number; decision?: TransitionDecision }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
@@ -1253,12 +1253,15 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const fadeIn = Math.max(0.001, opts?.fadeInSec ?? 0.4);
     const fadeOut = Math.max(0.05, opts?.fadeOutSec ?? 0.8);
     const peak = Math.max(0, Math.min(1, opts?.gain ?? 0.55));
-    const dur = buffer.duration;
     const t0 = Math.max(ctx.currentTime + 0.02, opts?.startAtCtxTime ?? 0);
+    // Hartes Ende: entweder Buffer-Länge ODER stopAtCtxTime, je nachdem was früher kommt.
+    const naturalEnd = t0 + buffer.duration;
+    const tEnd = opts?.stopAtCtxTime ? Math.min(naturalEnd, Math.max(t0 + 0.2, opts.stopAtCtxTime)) : naturalEnd;
+    const playDur = tEnd - t0;
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(peak, t0 + fadeIn);
-    gain.gain.setValueAtTime(peak, t0 + Math.max(fadeIn, dur - fadeOut));
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + Math.min(fadeIn, playDur * 0.4));
+    gain.gain.setValueAtTime(peak, Math.max(t0 + fadeIn, tEnd - fadeOut));
+    gain.gain.exponentialRampToValueAtTime(0.0001, tEnd);
     let outNode: AudioNode = gain;
     if (opts?.highpassHz && opts.highpassHz > 20) {
       const hp = ctx.createBiquadFilter();
@@ -1272,6 +1275,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     src.buffer = buffer;
     src.connect(gain);
     src.start(t0);
+    try { src.stop(tEnd + 0.05); } catch { /* noop */ }
     src.onended = () => { try { src.disconnect(); gain.disconnect(); if (outNode !== gain) outNode.disconnect(); } catch { /* noop */ } };
   },
   async runVirtuoso(from, to, opts) {
@@ -1318,21 +1322,23 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       durationSec: live.durationSec ?? deck[from].el?.duration ?? null,
     }, livePos);
     const beatSec = 60 / (st[from].effectiveBpm ?? live.bpm);
-    // Wir bauen einen 8/16-Takt Build-Up direkt VOR dem Outro-Slot.
-    const targetBars = Math.min(16, Math.max(4, opts?.bars ?? 8));
-    const targetSec = slot ? Math.max(livePos + targetBars * 4 * beatSec, slot.startSec)
-                            : livePos + targetBars * 4 * beatSec;
+    const barSec = 4 * beatSec;
+    // Maximal 4 Takte Vorlauf — kurze, musikalische Bridge statt ewiger Synth-Bett-Loop.
+    const targetBars = Math.min(4, Math.max(2, opts?.bars ?? 4));
+    const targetSec = slot ? Math.max(livePos + targetBars * barSec, slot.startSec)
+                            : livePos + targetBars * barSec;
     // Snap das Layer-Start auf den nächsten Downbeat im Live-Grid.
     const grid = live.beatGrid;
     const downbeats: number[] = [];
     for (let i = 0; i < grid.length; i += 4) downbeats.push(grid[i]);
     const nextDownbeat = downbeats.find((d) => d >= livePos + 0.15) ?? (livePos + beatSec);
     const layerLeadSec = Math.max(2, targetSec - nextDownbeat);
-    const layerBars = Math.max(2, Math.round(layerLeadSec / (4 * beatSec)));
+    // Höchstens 4 Takte, mindestens 2 — Bridge soll musikalisch sein, nicht endlos.
+    const layerBars = Math.min(4, Math.max(2, Math.round(layerLeadSec / barSec)));
     pushLog(
       slot
-        ? `🎯 Outro-Slot @ ${slot.startSec.toFixed(1)}s (${slot.label}, Score ${slot.score}) · ${layerBars} Takte Build-Up`
-        : `🎯 kein Outro-Slot — Build-Up ${layerBars} Takte ab nächstem Downbeat`,
+        ? `🎯 Outro-Slot @ ${slot.startSec.toFixed(1)}s (${slot.label}, Score ${slot.score}) · ${layerBars} Takte Bridge`
+        : `🎯 kein Outro-Slot — Bridge ${layerBars} Takte ab nächstem Downbeat`,
       "info",
     );
 
@@ -1345,21 +1351,30 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     });
 
     // 5) Phasenfest planen: alles auf den Downbeat im AudioContext-Clock anlegen.
+    // Layer & Teaser MÜSSEN spätestens 1 Takt vor dem Reveal ausgefadet sein, sonst
+    // bluten sie in den neuen Track. Daher hartes stopAtCtxTime auf targetSec - 1 Takt.
     const ctxNow = ctx.currentTime;
     const downbeatCtxTime = ctxNow + Math.max(0.05, nextDownbeat - livePos);
-    if (plan.layerBuffer) {
+    const revealCtxTime = ctxNow + Math.max(downbeatCtxTime - ctxNow + 0.2, targetSec - livePos);
+    const layerEndCtxTime = revealCtxTime - barSec; // 1 Takt vor Reveal vollständig leise
+    if (plan.layerBuffer && layerEndCtxTime > downbeatCtxTime + barSec) {
       get().playPreviewLayer(plan.layerBuffer, {
-        gain: 0.28, fadeInSec: 4 * beatSec, fadeOutSec: 2 * beatSec,
+        gain: 0.18,                       // sehr leise — Klebstoff, nicht Solist
+        fadeInSec: 2 * beatSec,
+        fadeOutSec: 2 * beatSec,
         startAtCtxTime: downbeatCtxTime,
+        stopAtCtxTime: layerEndCtxTime,
       });
     }
     if (plan.teaser) {
-      // Teaser kommt ein paar Takte SPÄTER (klassisches Pro-DJ Vorhören), nur Hochpass.
-      const teaserOffsetBars = Math.max(2, Math.floor(layerBars / 2));
-      const teaserCtxTime = downbeatCtxTime + teaserOffsetBars * 4 * beatSec;
+      // Teaser kurz vor dem Reveal — ein einziges Vorhören, kein Loop.
+      const teaserDur = plan.teaser.buffer.duration;
+      const teaserEnd = revealCtxTime - beatSec * 0.5;
+      const teaserStart = Math.max(downbeatCtxTime + barSec, teaserEnd - Math.min(teaserDur, 2 * barSec));
       get().playPreviewLayer(plan.teaser.buffer, {
-        gain: 0.22, fadeInSec: 2 * beatSec, fadeOutSec: 2 * beatSec, highpassHz: 380,
-        startAtCtxTime: teaserCtxTime,
+        gain: 0.16, fadeInSec: beatSec, fadeOutSec: beatSec, highpassHz: 420,
+        startAtCtxTime: teaserStart,
+        stopAtCtxTime: teaserEnd,
       });
     }
     pushLog(`🎬 Phase 2 — Transform (Layers gestartet auf Downbeat)`, "info");

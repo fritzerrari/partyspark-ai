@@ -20,11 +20,14 @@ export type Choreography = {
 };
 
 export const CHOREOGRAPHIES: Choreography[] = [
-  { id: "vocal-tease",   name: "Vocal-Tease + Drums",     layers: ["drums"],          drumStyle: "four-floor", teaser: true,  previewBars: 8 },
-  { id: "pluck-arp",     name: "Pluck-Arp + Bass-Walk",   layers: ["bass", "pluck"],  drumStyle: "halftime",   teaser: true,  previewBars: 8 },
-  { id: "pad-riser",     name: "Pad-Riser + Hook",        layers: ["pad"],            drumStyle: "four-floor", teaser: true,  previewBars: 8 },
-  { id: "drum-bridge",   name: "Drum-Bridge (kein Teaser)", layers: ["drums", "bass"],drumStyle: "breakbeat",  teaser: false, previewBars: 4 },
-  { id: "full-bandbed",  name: "Full Band-Bed",           layers: ["drums", "bass", "pluck", "pad"], drumStyle: "four-floor", teaser: true, previewBars: 8 },
+  // Harmonische "Klebstoff"-Layer — keine Drums, die mit dem laufenden Track kollidieren.
+  { id: "pad-glue",      name: "Pad-Glue",                layers: ["pad"],            drumStyle: "halftime",   teaser: true,  previewBars: 4 },
+  { id: "pluck-arp",     name: "Pluck-Arp",               layers: ["pluck"],          drumStyle: "halftime",   teaser: true,  previewBars: 4 },
+  { id: "bass-pad",      name: "Bass-Pad",                layers: ["bass", "pad"],    drumStyle: "halftime",   teaser: true,  previewBars: 4 },
+  // Nur als Notfall, wenn Keys inkompatibel: Halftime-Drums (kein Pad/Bass in falscher Tonart)
+  { id: "drum-bridge",   name: "Drum-Bridge (Key-Konflikt)", layers: ["drums"],       drumStyle: "halftime",   teaser: false, previewBars: 4 },
+  // Reiner Teaser ohne Layer — wenn der laufende Track schon voll ist.
+  { id: "teaser-only",   name: "Teaser-Only",             layers: [],                 drumStyle: "halftime",   teaser: true,  previewBars: 4 },
 ];
 
 const recentIds: string[] = [];
@@ -60,7 +63,7 @@ export async function planDirector(
     : pickChoreography(opts?.creativity);
   pushLog(`🎬 Director: ${choreo.name}`, "act");
 
-  const bars = opts?.bars ?? choreo.previewBars;
+  const bars = Math.min(4, opts?.bars ?? choreo.previewBars);
   const [teaser, layerBuffer] = await Promise.all([
     choreo.teaser
       ? buildTeaser(incoming, { bpm: live.bpm, musicalKey: live.musicalKey }, { bars: Math.min(bars, 4) }).catch((e) => { pushLog(`⚠ Teaser fehlgeschlagen: ${(e as Error).message}`, "warn"); return null; })
@@ -71,7 +74,7 @@ export async function planDirector(
           bars,
           key: live.musicalKey,
           drumStyle: choreo.drumStyle,
-          level: 0.55,
+          level: 0.30,
         }).catch((e) => { pushLog(`⚠ Layer fehlgeschlagen: ${(e as Error).message}`, "warn"); return null; })
       : Promise.resolve(null),
   ]);
