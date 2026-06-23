@@ -202,11 +202,13 @@ function Cockpit() {
       <TwinDeck tracks={tracks} />
 
       {/* Center / Playlist / Copilot — PartySpark-style cockpit row */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
-        <CockpitCenter />
-        <div className="grid gap-3 grid-rows-[1fr_1fr] min-h-[420px]">
-          <MixabilityPlaylist tracks={tracks} />
-          <CopilotLog />
+      <div className="rounded-3xl stage-gradient p-3 sm:p-4">
+        <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
+          <CockpitCenter />
+          <div className="grid gap-3 grid-rows-[1fr_1fr] min-h-[420px]">
+            <MixabilityPlaylist tracks={tracks} />
+            <CopilotLog />
+          </div>
         </div>
       </div>
 
