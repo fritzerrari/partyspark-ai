@@ -1253,12 +1253,15 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const fadeIn = Math.max(0.001, opts?.fadeInSec ?? 0.4);
     const fadeOut = Math.max(0.05, opts?.fadeOutSec ?? 0.8);
     const peak = Math.max(0, Math.min(1, opts?.gain ?? 0.55));
-    const dur = buffer.duration;
     const t0 = Math.max(ctx.currentTime + 0.02, opts?.startAtCtxTime ?? 0);
+    // Hartes Ende: entweder Buffer-Länge ODER stopAtCtxTime, je nachdem was früher kommt.
+    const naturalEnd = t0 + buffer.duration;
+    const tEnd = opts?.stopAtCtxTime ? Math.min(naturalEnd, Math.max(t0 + 0.2, opts.stopAtCtxTime)) : naturalEnd;
+    const playDur = tEnd - t0;
     gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(peak, t0 + fadeIn);
-    gain.gain.setValueAtTime(peak, t0 + Math.max(fadeIn, dur - fadeOut));
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + Math.min(fadeIn, playDur * 0.4));
+    gain.gain.setValueAtTime(peak, Math.max(t0 + fadeIn, tEnd - fadeOut));
+    gain.gain.exponentialRampToValueAtTime(0.0001, tEnd);
     let outNode: AudioNode = gain;
     if (opts?.highpassHz && opts.highpassHz > 20) {
       const hp = ctx.createBiquadFilter();
@@ -1272,6 +1275,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     src.buffer = buffer;
     src.connect(gain);
     src.start(t0);
+    try { src.stop(tEnd + 0.05); } catch { /* noop */ }
     src.onended = () => { try { src.disconnect(); gain.disconnect(); if (outNode !== gain) outNode.disconnect(); } catch { /* noop */ } };
   },
   async runVirtuoso(from, to, opts) {
