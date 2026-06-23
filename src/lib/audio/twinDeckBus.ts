@@ -27,6 +27,7 @@ import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
 import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
 import { pushLog } from "@/lib/dj/copilotLog";
+import { planDirector, type DirectorPlan } from "@/lib/dj/director";
 
 export type DeckSide = "A" | "B";
 
@@ -148,6 +149,10 @@ type Actions = {
   getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
   /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
   smartMix: (from: DeckSide, to: DeckSide) => Promise<{ engine: "real" | "clean"; recipe: string; decision: TransitionDecision } | null>;
+  /** Plan + play the Director (teaser + generated layers) BEFORE running smartMix. */
+  runVirtuoso: (from: DeckSide, to: DeckSide, opts?: { creativity?: number; bars?: number; choreographyId?: string; skipSmartMix?: boolean }) => Promise<DirectorPlan | null>;
+  /** Schedule an AudioBuffer (rendered teaser/layer) on the master bus with a fade. */
+  playPreviewLayer: (buffer: AudioBuffer, opts?: { gain?: number; fadeInSec?: number; fadeOutSec?: number; highpassHz?: number }) => void;
   /** Run a Clean DJ EQ-based transition (no fake stems). */
   runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number; decision?: TransitionDecision }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
@@ -1238,6 +1243,71 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     pushLog(`🎛 Clean-DJ: ${decision.recipe} · ${decision.bars} Takte (Score ${decision.score})`, "act");
     if (decision.reasons.length) pushLog(`↳ ${decision.reasons.join(" · ")}`, "info");
     return { engine: "clean", recipe: decision.recipe, decision };
+  },
+  playPreviewLayer(buffer, opts) {
+    ensureCtx();
+    if (!ctx || !masterGain) return;
+    if (ctx.state === "suspended") void ctx.resume();
+    const gain = ctx.createGain();
+    const fadeIn = Math.max(0.001, opts?.fadeInSec ?? 0.4);
+    const fadeOut = Math.max(0.05, opts?.fadeOutSec ?? 0.8);
+    const peak = Math.max(0, Math.min(1, opts?.gain ?? 0.55));
+    const dur = buffer.duration;
+    const t0 = ctx.currentTime + 0.02;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(peak, t0 + fadeIn);
+    gain.gain.setValueAtTime(peak, t0 + Math.max(fadeIn, dur - fadeOut));
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    let outNode: AudioNode = gain;
+    if (opts?.highpassHz && opts.highpassHz > 20) {
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = opts.highpassHz;
+      gain.connect(hp);
+      outNode = hp;
+    }
+    outNode.connect(masterGain);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(gain);
+    src.start(t0);
+    src.onended = () => { try { src.disconnect(); gain.disconnect(); if (outNode !== gain) outNode.disconnect(); } catch { /* noop */ } };
+  },
+  async runVirtuoso(from, to, opts) {
+    const st = get();
+    const live = st[from].track;
+    const incoming = st[to].track;
+    if (!live || !incoming || !live.bpm) {
+      pushLog("⚠ Director: beide Decks brauchen Track + BPM", "warn");
+      return null;
+    }
+    if (st.transitionInFlight) {
+      pushLog("⚠ Director: Übergang läuft bereits", "warn");
+      return null;
+    }
+    pushLog(`🎬 Phase 1 — Preview (${from} → ${to})`, "info");
+    const plan = await planDirector(live, incoming, {
+      creativity: opts?.creativity,
+      bars: opts?.bars,
+      choreographyId: opts?.choreographyId,
+    });
+    // Play teaser first (highpass-filtered "vorhören"), then layers slightly louder.
+    if (plan.teaser) {
+      get().playPreviewLayer(plan.teaser.buffer, { gain: 0.35, fadeInSec: 0.6, fadeOutSec: 1.2, highpassHz: 350 });
+    }
+    if (plan.layerBuffer) {
+      get().playPreviewLayer(plan.layerBuffer, { gain: 0.45, fadeInSec: 0.6, fadeOutSec: 1.2 });
+    }
+    const beatSec = 60 / live.bpm;
+    const previewBars = plan.choreography.previewBars;
+    const waitMs = Math.max(2000, previewBars * 4 * beatSec * 1000 * 0.65);
+    pushLog(`🎬 Phase 2 — Transform in ${Math.round(waitMs / 1000)}s`, "info");
+    if (!opts?.skipSmartMix) {
+      await new Promise((r) => setTimeout(r, waitMs));
+      pushLog(`🎬 Phase 3 — Reveal`, "act");
+      await get().smartMix(from, to);
+    }
+    return plan;
   },
   async runCleanRecipe(from, to, id, opts) {
     ensureCtx(); wireDeck("A"); wireDeck("B");
