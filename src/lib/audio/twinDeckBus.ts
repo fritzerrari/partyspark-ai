@@ -1275,36 +1275,99 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     src.onended = () => { try { src.disconnect(); gain.disconnect(); if (outNode !== gain) outNode.disconnect(); } catch { /* noop */ } };
   },
   async runVirtuoso(from, to, opts) {
-    const st = get();
-    const live = st[from].track;
-    const incoming = st[to].track;
-    if (!live || !incoming || !live.bpm) {
-      pushLog("⚠ Director: beide Decks brauchen Track + BPM", "warn");
+    ensureCtx();
+    if (!ctx) return null;
+    let st = get();
+    if (!st[from].track || !st[to].track) {
+      pushLog("⚠ Director: beide Decks brauchen einen Track", "warn");
       return null;
     }
     if (st.transitionInFlight) {
       pushLog("⚠ Director: Übergang läuft bereits", "warn");
       return null;
     }
-    pushLog(`🎬 Phase 1 — Preview (${from} → ${to})`, "info");
+
+    // 1) FORCE analyse both decks before doing anything generative.
+    pushLog(`🔬 Analyse läuft (Deck ${from} & ${to})…`, "info");
+    await Promise.all([
+      get().ensureAnalysis(from).catch(() => {}),
+      get().ensureAnalysis(to).catch(() => {}),
+    ]);
+    st = get();
+    const live = st[from].track;
+    const incoming = st[to].track;
+    if (!live || !incoming || !live.bpm || !incoming.bpm) {
+      pushLog("⚠ Director: Analyse unvollständig (BPM fehlt)", "warn");
+      return null;
+    }
+    if (!live.beatGrid?.length) {
+      pushLog("⚠ Director: kein Beat-Grid auf Live-Deck — kann nicht phasenfest mixen", "warn");
+      return null;
+    }
+
+    // 2) Key-Kompat prüfen — bei harten Konflikten Choreografie auf Drum-Bridge zurückfallen.
+    const keyOk = !live.camelot || !incoming.camelot || camelotCompatible(live.camelot, incoming.camelot);
+    const forcedId = !keyOk && !opts?.choreographyId ? "drum-bridge" : opts?.choreographyId;
+    if (!keyOk) pushLog(`⚠ Keys inkompatibel (${live.camelot} → ${incoming.camelot}) — fallback Drum-Bridge`, "warn");
+
+    // 3) Finde Outro-Slot des LIVE-Decks ≥ aktueller Position. Daran wird der Reveal gehängt.
+    const livePos = deck[from].el?.currentTime ?? st[from].position ?? 0;
+    const slot = nextOutroSlot({
+      bpm: live.bpm, beatGrid: live.beatGrid, energyCurve: null,
+      vocalMap: live.vocalMap ?? null, cues: live.cues ?? null,
+      durationSec: live.durationSec ?? deck[from].el?.duration ?? null,
+    }, livePos);
+    const beatSec = 60 / (live.effectiveBpm ?? live.bpm);
+    // Wir bauen einen 8/16-Takt Build-Up direkt VOR dem Outro-Slot.
+    const targetBars = Math.min(16, Math.max(4, opts?.bars ?? 8));
+    const targetSec = slot ? Math.max(livePos + targetBars * 4 * beatSec, slot.startSec)
+                            : livePos + targetBars * 4 * beatSec;
+    // Snap das Layer-Start auf den nächsten Downbeat im Live-Grid.
+    const grid = live.beatGrid;
+    const downbeats: number[] = [];
+    for (let i = 0; i < grid.length; i += 4) downbeats.push(grid[i]);
+    const nextDownbeat = downbeats.find((d) => d >= livePos + 0.15) ?? (livePos + beatSec);
+    const layerLeadSec = Math.max(2, targetSec - nextDownbeat);
+    const layerBars = Math.max(2, Math.round(layerLeadSec / (4 * beatSec)));
+    pushLog(
+      slot
+        ? `🎯 Outro-Slot @ ${slot.startSec.toFixed(1)}s (${slot.label}, Score ${slot.score}) · ${layerBars} Takte Build-Up`
+        : `🎯 kein Outro-Slot — Build-Up ${layerBars} Takte ab nächstem Downbeat`,
+      "info",
+    );
+
+    // 4) Director rendert Teaser + Layer mit echten Werten aus der Analyse.
+    pushLog(`🎬 Phase 1 — Render (Key ${live.musicalKey ?? "?"} · ${Math.round(live.effectiveBpm ?? live.bpm)} BPM)`, "info");
     const plan = await planDirector(live, incoming, {
       creativity: opts?.creativity,
-      bars: opts?.bars,
-      choreographyId: opts?.choreographyId,
+      bars: layerBars,
+      choreographyId: forcedId,
     });
-    // Play teaser first (highpass-filtered "vorhören"), then layers slightly louder.
-    if (plan.teaser) {
-      get().playPreviewLayer(plan.teaser.buffer, { gain: 0.35, fadeInSec: 0.6, fadeOutSec: 1.2, highpassHz: 350 });
-    }
+
+    // 5) Phasenfest planen: alles auf den Downbeat im AudioContext-Clock anlegen.
+    const ctxNow = ctx.currentTime;
+    const downbeatCtxTime = ctxNow + Math.max(0.05, nextDownbeat - livePos);
     if (plan.layerBuffer) {
-      get().playPreviewLayer(plan.layerBuffer, { gain: 0.45, fadeInSec: 0.6, fadeOutSec: 1.2 });
+      get().playPreviewLayer(plan.layerBuffer, {
+        gain: 0.28, fadeInSec: 4 * beatSec, fadeOutSec: 2 * beatSec,
+        startAtCtxTime: downbeatCtxTime,
+      });
     }
-    const beatSec = 60 / live.bpm;
-    const previewBars = plan.choreography.previewBars;
-    const waitMs = Math.max(2000, previewBars * 4 * beatSec * 1000 * 0.65);
-    pushLog(`🎬 Phase 2 — Transform in ${Math.round(waitMs / 1000)}s`, "info");
+    if (plan.teaser) {
+      // Teaser kommt ein paar Takte SPÄTER (klassisches Pro-DJ Vorhören), nur Hochpass.
+      const teaserOffsetBars = Math.max(2, Math.floor(layerBars / 2));
+      const teaserCtxTime = downbeatCtxTime + teaserOffsetBars * 4 * beatSec;
+      get().playPreviewLayer(plan.teaser.buffer, {
+        gain: 0.22, fadeInSec: 2 * beatSec, fadeOutSec: 2 * beatSec, highpassHz: 380,
+        startAtCtxTime: teaserCtxTime,
+      });
+    }
+    pushLog(`🎬 Phase 2 — Transform (Layers gestartet auf Downbeat)`, "info");
+
+    // 6) Reveal exakt am Outro-Slot.
     if (!opts?.skipSmartMix) {
-      await new Promise((r) => setTimeout(r, waitMs));
+      const waitSec = Math.max(0.2, targetSec - livePos - 0.2);
+      await new Promise((r) => setTimeout(r, waitSec * 1000));
       pushLog(`🎬 Phase 3 — Reveal`, "act");
       await get().smartMix(from, to);
     }
