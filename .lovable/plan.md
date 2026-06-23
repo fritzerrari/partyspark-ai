@@ -1,73 +1,79 @@
-## Diagnose: Warum die Übergänge aktuell beide Songs zerstören
+## Ziel
+Den Prototyp `partyspark-v8.html` so in das bestehende `/cockpit` integrieren, dass der User **eine klare Oberfläche** hat statt der jetzigen Tab-Wüste — und dass die im Prototyp bewährten, **kurzen, hörbar sauberen** Übergänge die Engine treiben.
 
-Beim Code-Review der Live-Engine (`src/lib/audio/engine.ts`) habe ich die Ursachen gefunden:
+## Layout (ersetzt den oberen Bereich von `/cockpit`)
 
-1. **Chipmunk-Vocals**: `audioElB.playbackRate = plan.bpmRatio` ändert Speed UND Pitch zusammen. Bei 124→128 BPM klingt der Track ~5 % höher — das ist die "verzerrte" Stimme.
-2. **Stretch-Schäden**: Es gibt zwar `timestretch.ts` (SoundTouchJS), aber sie wird nur offline für Buffer benutzt, nicht in der Live-Engine. Live läuft alles über `playbackRate`.
-3. **Keine Phrase-Erkennung**: Transitions starten beim ersten "Beat", nicht am Phrasen-Boundary (8/16/32 Bars). Vocals werden mitten im Wort gecuttet.
-4. **Stems ungenutzt**: Auch wenn Real-Stems geladen sind, fallen wir auf EQ-Swaps zurück. Vocal-Out / Drum-Bridge / Acapella-Intro existieren nicht.
-5. **Auto-Pick zu simpel**: `engine.ts` schaltet pauschal auf "crossfade" bei Auto. Die intelligentere `pickCleanRecipe` (BPM/Key/Vocals/Energy) wird nicht gerufen.
-6. **Kein Vocal-Clash-Schutz**: Vocal-Maps werden analysiert, aber im Live-Mix nicht abgefragt.
+```text
+┌──────────────┬──────────────┬──────────────┬──────────┐
+│   DECK A     │   CENTER     │   DECK B     │ PLAYLIST │
+│ (vorhanden)  │ Harmony-Ring │ (vorhanden)  │ sortiert │
+│              │ Sync-Info    │              │ nach Fit │
+│              │ 4 Recipes    │              │ 🟢🟡🔴   │
+│              │ Bars-Slider  │              │          │
+│              │ Bridge-Beat  │              │          │
+│              │ Step-Seq     │              │          │
+├──────────────┴──────────────┴──────────────┤  COPILOT │
+│            CROSSFADER (A ←→ B)              │   LOG    │
+└─────────────────────────────────────────────┴──────────┘
+```
 
-## Ziel: Profi-AI-DJ-Verhalten
+Bestehende Tabs darunter (Stems, Karaoke, FX, Coach, Export) bleiben erhalten — als sekundäre Schublade.
 
-Beide Songs bleiben erkennbar. Pitch bleibt original. Übergänge passieren musikalisch (Phrase-Boundary, Vocal-Pausen). Stems werden genutzt, wenn vorhanden. Das System wählt automatisch die richtige Strategie.
+## Was neu kommt
 
-## Umsetzung in 5 Stufen
+### 1. Center-Panel — `CockpitCenter.tsx`
+- **Harmony-Ring**: SVG-Kreis, Farbe = Camelot-Distanz (grün = 0/1, gelb = 2, rot = ≥3), Mitte zeigt `A: 8B → B: 5B`.
+- **Sync-Info**: `124 → 128 BPM (+3.2 %)`, Warnung wenn > 8 % („Bridge empfohlen").
+- **4 Recipe-Buttons**: Bass Swap · Beatmatch · Echo Out · Filter Fade · Auto.
+- **Bars-Slider** 4–32 (default 16).
+- **Bridge-Beat-Karte**: erzeugt 4-Takt-Drumloop im Live-Tempo → lädt direkt auf das nicht-live Deck.
 
-### Stufe 1 — Pitch-Preservation (kritisch, sofort spürbar)
-- Live-Time-Stretch über Web-Audio `AudioWorkletNode` mit SoundTouchJS-Worklet (statt `playbackRate`).
-- Neuer Helper `src/lib/audio/liveStretch.ts`: erzeugt ein Worklet, das Deck B in Echtzeit auf Ziel-BPM zieht ohne Pitch-Shift.
-- `engine.ts`: Deck B nicht mehr per `audioElB.playbackRate`; stattdessen rate=1, Tempo-Korrektur im Worklet.
-- BPM-Annäherung gradual: statt sofort 124→128, in 8 Bars von 124→126 (Meet-in-the-Middle). Maximaler Live-Stretch ±6 %; darüber wechselt der Picker automatisch auf "Echo Exit" oder "Drop Cut".
+### 2. Step-Sequencer-Erweiterung
+Der vorhandene `StepSequencer` wandert ins Center (kompakt, 16 Steps, 4 Tracks: Kick/Snare/Hat/Clap). Neue Buttons: `→ A`, `→ B` rendern Pattern als AudioBuffer und laden es auf das Ziel-Deck.
 
-### Stufe 2 — Phrase-Aware Triggering
-- Phrase-Marker zur Analyse hinzufügen: Beat-Grid → 4-Bar/8-Bar/16-Bar/32-Bar Boundaries; Intro/Verse/Chorus/Drop/Outro werden aus `cues` + Energie-Hüllkurve abgeleitet (bereits vorhanden, nur nicht genutzt).
-- Trigger-Punkt im Auto-Scheduler: nächste 8-Bar-Phrase vor `outroStart`, nicht beliebige Sekunden-Schwelle.
-- Vocal-Gate: Wenn `vocalMap` zur Trigger-Zeit > 0.5, verschiebt der Scheduler auf den nächsten Vocal-Gap (oder wählt eine Vocal-schonende Recipe).
+### 3. Mixability-Playlist — `MixabilityPlaylist.tsx`
+Rechte Spalte (270 px). Listet alle `tracks`, sortiert nach `matchScore(liveTrack, candidate)`:
+- BPM-Distanz (octave-aware, mit 2×/0.5×-Folding)
+- Camelot-Distanz (`harmonicDist`)
+- Energie-Delta
+Anzeige: 🟢 score ≥ 70 · 🟡 ≥ 45 · 🔴 < 45, plus Klick → lädt auf nicht-live Deck.
 
-### Stufe 3 — Stem-basierte Recipes (wenn Stems da sind)
-- Neuer Pfad `src/lib/audio/stemRecipes.ts`:
-  - **Vocal Out**: Vocals A fade-out 2 bars vor Switch, Drums/Bass A bleiben.
-  - **Drum Bridge**: Beide nur Drums für 4 bars, dann Vocals B rein.
-  - **Bass Swap**: Bass A → Bass B exakt auf Downbeat, Rest sanft.
-  - **Acapella Intro**: Vocals B solo über letzte 4 bars A, dann full B.
-  - **Drop Switch**: Hard cut auf den Drop von B, A einen Beat vorher stumm.
-- `engine.ts` prüft, ob beide Tracks Real-Stems haben → Stem-Recipes; sonst → Clean-Recipes.
+### 4. Copilot-Log — `CopilotLog.tsx`
+Scrollender Log unterhalb der Playlist. Engine-Events (`smartMix`, Recipe-Wahl, Bridge-Vorschlag, Sync-Warnung) pushen in einen Zustand-Store, der hier gerendert wird. Bestehende `console.info`-Logs aus `twinDeckBus.ts` werden auf diesen Bus umgebogen.
 
-### Stufe 4 — Song-Teasing
-- `teaser.ts`: 2 oder 4 Bars vor der eigentlichen Transition spielt Deck B kurz mit Lowpass-Filter (~600 Hz) und niedrigem Gain. Schafft Anticipation.
-- Picker entscheidet ob Tease: bei kompatiblem Key + Energie-Sprung > 0.2.
+### 5. Vier Recipes als saubere, kurze Übergänge — `cleanRecipes.v2.ts`
+Port der Prototyp-Logik (`bassSwap`, `beatmatch`, `echoOut`, `filterFade`) gegen die bestehende Engine (`engine.ts` + `twinDeckBus.ts`). Wichtig:
+- **bar-anchored** (warten aufs nächste Downbeat statt willkürlicher Ramps),
+- **kein aggressives Time-Stretch** — bei > 8 % BPM-Delta Auto-Mix schlägt Bridge vor statt zu stretchen,
+- Default-Länge 16 Takte (vom Slider gesteuert).
+Die alten Stretch-getriebenen Pfade in `cleanDjTransitions.ts` bleiben für Edge-Cases als Fallback, sind aber nicht mehr Default.
 
-### Stufe 5 — Quality-Score & AI-Auto-Pick
-- `transitionQuality.ts` erweitern: BPM-, Key-, Energy-, Vocal-Clash-, Stem-Compat-Score (jeweils 0–1), Gesamtnote.
-- `pickRecipe()` als zentraler Entscheider: nimmt beide Tracks + Phrasen-Kontext, gibt Recipe + Score + Begründung zurück.
-- UI-Anzeige im Cockpit: "Auto: Vocal Out · Score 87 · 8A→9A · ΔBPM 2 %" — User sieht, warum welche Transition gewählt wird.
+## Technische Details
 
-## Technische Details (für mich)
+| Datei                                          | Aktion                                                 |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| `src/lib/dj/mixability.ts`                     | **neu** — `matchScore`, `harmonicDist`, `bpmFold`      |
+| `src/lib/audio/cleanRecipes.v2.ts`             | **neu** — die 4 bar-anchored Recipes                   |
+| `src/lib/audio/bridgeBeat.ts`                  | **neu** — `makeBridgeBeatBuffer(bpm, bars)`            |
+| `src/lib/dj/copilotLog.ts`                     | **neu** — zustand-Store, `pushLog(msg, kind)`          |
+| `src/components/cockpit/CockpitCenter.tsx`     | **neu** — Ring + Sync-Info + Recipes + Bridge + Slider |
+| `src/components/cockpit/MixabilityPlaylist.tsx`| **neu**                                                |
+| `src/components/cockpit/CopilotLog.tsx`        | **neu**                                                |
+| `src/components/cockpit/StepSequencer.tsx`     | erweitern: `→A` / `→B` Render-Buttons                  |
+| `src/lib/audio/twinDeckBus.ts`                 | Recipes-Quelle umstellen, Logs in `copilotLog` pushen  |
+| `src/routes/_authenticated/cockpit.tsx`        | Layout-Grid umbauen, Center+Playlist+Log einsetzen     |
 
-- **Worklet-Setup**: SoundTouchJS hat `soundtouchjs/dist/soundtouch-worklet.js` — als statisches Asset einbinden, via `audioCtx.audioWorklet.addModule()` laden, `AudioWorkletNode(audioCtx, 'soundtouch-processor')`, Parameter `tempo`, `pitch`, `rate`. Source = `MediaElementAudioSourceNode` aus `audioElB` → Worklet → bestehender Filter/Gain-Graph.
-- **Phrase-Detect**: bei Analyse-Pass `analyze.ts` zusätzliche Spalte `phrase_grid: number[]` (jede 8. Bar-Zeit) und `vocal_gaps: [start, end][]` (Lücken > 1.5 s, voiced < 0.3).
-- **Migration**: Neue Spalten in `tracks` (`phrase_grid jsonb`, `vocal_gaps jsonb`); kein Re-Upload nötig, Re-Analyse pro Track.
-- **Fallback-Reihenfolge im Picker**:
-  ```text
-  ΔBPM > 12 %                    → dropCut
-  Stems beidseits + Vocal-Clash → vocalOut
-  Stems beidseits + Energy ↑   → drumBridge
-  Stems nur B + B startet leise → acapellaIntro
-  Key inkompatibel              → echoOut
-  Key 8A→9A/8B kompatibel       → bassSwap / hookTease
-  sonst                         → djEqSwap
-  ```
-- **Quality-Anzeige im Cockpit**: Über `NextMoveCard` Begründung anzeigen ("Vocal-Clash erkannt → Vocal Out gewählt, Score 87").
+Der bestehende `TwinDeck` (Deck A/B mit EQ, Filter, FX-Pads, Hotcues, Waveforms) wird **nicht angefasst** — nur in das neue Grid eingehängt.
 
-## Was sich für dich ändert
+## Was NICHT Teil dieses Steps ist
+- Keine neuen Engine-Algos (Pitch-Detection, Stem-Split, Autotune) — der Prototyp nutzt dort eigene Implementierungen, die Lovable-Engine ist schon besser.
+- Keine UI-Redesigns der bestehenden Tabs (Stems, Karaoke, FX, Export, Coach).
+- Kein Port des Prototyp-CSS — wir bleiben bei Tailwind + den vorhandenen Neon-Tokens, optisch im selben Stil wie das jetzige Cockpit.
 
-- Vocals klingen nicht mehr "Chipmunk" oder "Robot" — Pitch bleibt original.
-- Songs werden an Phrase-Boundaries gewechselt, nicht mitten im Wort.
-- Wenn Stems vorhanden sind, läuft die Transition wie bei Pioneer/Serato-Stem-Mode.
-- Im Cockpit siehst du Auto-Pick + Score + Begründung — das vermittelt das Profi-DJ-Feeling.
-
-## Reichweite
-
-Dauer geschätzt: groß (5 Stufen, mehrere neue Audio-Module, DB-Migration, UI-Update). Ich kann auch nur Stufe 1+2 zuerst bauen (das eliminiert das Pitch-/Phrase-Problem) und Stufen 3-5 in folgender Runde. Sag mir kurz, ob ich **alles auf einmal** baue oder erst **Stufe 1+2** (Pitch + Phrase), damit du den Effekt schneller hörst.
+## Verifikation
+Nach dem Build:
+1. Zwei Tracks laden → Harmony-Ring zeigt Distanz/Farbe live.
+2. Klick **Auto-Mix** → Copilot-Log zeigt gewähltes Recipe + Bars; Übergang ist hörbar nach Recipe, nicht ein generischer Fade.
+3. BPM-Delta > 8 % → Bridge wird vorgeschlagen, Klick darauf erzeugt Drumloop und lädt es auf B.
+4. Playlist sortiert sich neu, sobald A → B promoted wird.
+5. Sequencer-Pattern via `→A` als Loop hörbar.

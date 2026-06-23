@@ -11,6 +11,9 @@ import { StepSequencer } from "@/components/cockpit/StepSequencer";
 import { CoachHud } from "@/components/cockpit/CoachHud";
 import { SingAlongPanel } from "@/components/cockpit/SingAlongPanel";
 import { FxPadGrid } from "@/components/cockpit/FxPadGrid";
+import { CockpitCenter } from "@/components/cockpit/CockpitCenter";
+import { MixabilityPlaylist } from "@/components/cockpit/MixabilityPlaylist";
+import { CopilotLog } from "@/components/cockpit/CopilotLog";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
@@ -197,6 +200,15 @@ function Cockpit() {
       </div>
 
       <TwinDeck tracks={tracks} />
+
+      {/* Center / Playlist / Copilot — PartySpark-style cockpit row */}
+      <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
+        <CockpitCenter />
+        <div className="grid gap-3 grid-rows-[1fr_1fr] min-h-[420px]">
+          <MixabilityPlaylist tracks={tracks} />
+          <CopilotLog />
+        </div>
+      </div>
 
       <Tabs defaultValue="autodj" className="w-full">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl bg-card/60 p-1.5 backdrop-blur">

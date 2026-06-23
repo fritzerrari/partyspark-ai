@@ -3,8 +3,11 @@ import { NeonButton } from "@/components/ui/NeonButton";
 import { Led } from "@/components/ui/LedIndicator";
 import { RotaryKnob } from "@/components/ui/RotaryKnob";
 import { useEngine } from "@/lib/audio/engine";
-import { Play, Square, Trash2 } from "lucide-react";
+import { Play, Square, Trash2, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTwinDeck, type DeckSide } from "@/lib/audio/twinDeckBus";
+import { pushLog } from "@/lib/dj/copilotLog";
+import { toast } from "sonner";
 
 type Voice = "kick" | "snare" | "hat" | "perc" | "bass" | "lead";
 const VOICES: { id: Voice; label: string; color: "cyan" | "magenta" | "amber" | "lime" }[] = [
@@ -88,6 +91,7 @@ export function StepSequencer() {
   const masterBpm = useEngine((s) => s.current?.bpm ?? null);
   const [bpm, setBpm] = useState(120);
   useEffect(() => { if (masterBpm) setBpm(Math.round(masterBpm)); }, [masterBpm]);
+  const loadDeck = useTwinDeck((s) => s.loadDeck);
 
   const [pattern, setPattern] = useState<Pattern>(emptyPattern());
   const [muted, setMuted] = useState<Record<Voice, boolean>>(
@@ -148,6 +152,103 @@ export function StepSequencer() {
     setStep(0);
   }, []);
 
+  const renderToDeck = useCallback(async (side: DeckSide) => {
+    const bars = 2; // 32 steps = 2 bars of 16th-step pattern when STEPS=16
+    const sr = 44100;
+    const stepSec = 60 / bpm / 4;
+    const loopDur = stepSec * STEPS * bars;
+    const Ctx = (window as unknown as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
+    if (!Ctx) { toast.error("Offline rendering nicht unterstützt"); return; }
+    const offline = new Ctx(2, Math.ceil(loopDur * sr), sr);
+    // Patch trigger() to route to offline.destination via a top-level gain.
+    const out = offline.createGain(); out.gain.value = vol; out.connect(offline.destination);
+    // Re-implement trigger inline against offline ctx to avoid touching `ctx.destination`.
+    const fire = (voice: Voice, time: number) => {
+      const g = offline.createGain(); g.gain.value = 1; g.connect(out);
+      if (voice === "kick") {
+        const o = offline.createOscillator(); o.type = "sine";
+        o.frequency.setValueAtTime(120, time); o.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+        const eg = offline.createGain(); eg.gain.setValueAtTime(1, time); eg.gain.exponentialRampToValueAtTime(0.001, time + 0.4);
+        o.connect(eg).connect(g); o.start(time); o.stop(time + 0.45);
+      } else if (voice === "snare") {
+        const buf = offline.createBuffer(1, sr * 0.2, sr);
+        const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1)*(1-i/d.length);
+        const n = offline.createBufferSource(); n.buffer = buf;
+        const hp = offline.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1800;
+        const eg = offline.createGain(); eg.gain.setValueAtTime(0.9, time); eg.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+        n.connect(hp).connect(eg).connect(g); n.start(time);
+      } else if (voice === "hat") {
+        const buf = offline.createBuffer(1, sr * 0.08, sr);
+        const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random()*2-1;
+        const n = offline.createBufferSource(); n.buffer = buf;
+        const hp = offline.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 7000;
+        const eg = offline.createGain(); eg.gain.setValueAtTime(0.5, time); eg.gain.exponentialRampToValueAtTime(0.001, time + 0.06);
+        n.connect(hp).connect(eg).connect(g); n.start(time);
+      } else if (voice === "perc") {
+        const o = offline.createOscillator(); o.type = "triangle";
+        o.frequency.setValueAtTime(800, time); o.frequency.exponentialRampToValueAtTime(200, time + 0.08);
+        const eg = offline.createGain(); eg.gain.setValueAtTime(0.7, time); eg.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+        o.connect(eg).connect(g); o.start(time); o.stop(time + 0.2);
+      } else if (voice === "bass") {
+        const o = offline.createOscillator(); o.type = "sawtooth"; o.frequency.setValueAtTime(55, time);
+        const lp = offline.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 400;
+        const eg = offline.createGain(); eg.gain.setValueAtTime(0.6, time); eg.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+        o.connect(lp).connect(eg).connect(g); o.start(time); o.stop(time + 0.32);
+      } else if (voice === "lead") {
+        const o = offline.createOscillator(); o.type = "square"; o.frequency.setValueAtTime(440, time);
+        const eg = offline.createGain(); eg.gain.setValueAtTime(0.25, time); eg.gain.exponentialRampToValueAtTime(0.001, time + 0.25);
+        o.connect(eg).connect(g); o.start(time); o.stop(time + 0.27);
+      }
+    };
+    for (let b = 0; b < bars; b++) {
+      for (let s = 0; s < STEPS; s++) {
+        const t = (b * STEPS + s) * stepSec;
+        for (const { id } of VOICES) {
+          if (mutedRef.current[id]) continue;
+          if (patternRef.current[id][s]) fire(id, t);
+        }
+      }
+    }
+    const buf = await offline.startRendering();
+    // Encode wav blob
+    const numCh = buf.numberOfChannels;
+    const len = buf.length * numCh * 2 + 44;
+    const ab = new ArrayBuffer(len);
+    const view = new DataView(ab);
+    const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o+i, s.charCodeAt(i)); };
+    w(0, "RIFF"); view.setUint32(4, len-8, true); w(8, "WAVE"); w(12, "fmt ");
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, numCh, true);
+    view.setUint32(24, sr, true); view.setUint32(28, sr*numCh*2, true);
+    view.setUint16(32, numCh*2, true); view.setUint16(34, 16, true);
+    w(36, "data"); view.setUint32(40, buf.length*numCh*2, true);
+    const chans: Float32Array[] = [];
+    for (let c = 0; c < numCh; c++) chans.push(buf.getChannelData(c));
+    let o = 44;
+    for (let i = 0; i < buf.length; i++) {
+      for (let c = 0; c < numCh; c++) {
+        const ss = Math.max(-1, Math.min(1, chans[c][i]));
+        view.setInt16(o, ss < 0 ? ss * 0x8000 : ss * 0x7fff, true); o += 2;
+      }
+    }
+    const url = URL.createObjectURL(new Blob([ab], { type: "audio/wav" }));
+    await loadDeck(side, {
+      id: `seq-${Date.now()}`,
+      title: `Sequencer @ ${bpm} BPM`,
+      artist: "PartyPilot",
+      url,
+      bpm,
+      camelot: null,
+      musicalKey: null,
+      durationSec: loopDur,
+      beatGrid: Array.from({ length: 4 * bars }, (_, i) => i * (60 / bpm)),
+      cues: { introEnd: 0, firstDrop: 0, outroStart: loopDur },
+      vocalMap: [],
+      energy: 0.6,
+    });
+    pushLog(`📥 Sequencer-Pattern → Deck ${side} (${bpm} BPM)`, "ok");
+    toast.success(`Pattern auf Deck ${side}`);
+  }, [bpm, vol, loadDeck]);
+
   useEffect(() => () => {
     if (intervalRef.current) window.clearInterval(intervalRef.current);
     ctxRef.current?.close();
@@ -179,6 +280,12 @@ export function StepSequencer() {
             <NeonButton onClick={stop} variant="danger" size="sm"><Square className="h-3 w-3" /> Stop</NeonButton>
           )}
           <NeonButton onClick={() => setPattern(emptyPattern())} variant="ghost" size="sm"><Trash2 className="h-3 w-3" /></NeonButton>
+          <NeonButton onClick={() => void renderToDeck("A")} variant="ghost" size="sm" title="Als Loop auf Deck A laden">
+            <Send className="h-3 w-3" /> A
+          </NeonButton>
+          <NeonButton onClick={() => void renderToDeck("B")} variant="ghost" size="sm" title="Als Loop auf Deck B laden">
+            <Send className="h-3 w-3" /> B
+          </NeonButton>
         </div>
       </div>
 
