@@ -1252,16 +1252,25 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const gain = ctx.createGain();
     const fadeIn = Math.max(0.001, opts?.fadeInSec ?? 0.4);
     const fadeOut = Math.max(0.05, opts?.fadeOutSec ?? 0.8);
-    const peak = Math.max(0, Math.min(1, opts?.gain ?? 0.55));
+    const peak = Math.max(0, Math.min(1, opts?.gain ?? 0.28));
     const t0 = Math.max(ctx.currentTime + 0.02, opts?.startAtCtxTime ?? 0);
-    // Hartes Ende: entweder Buffer-Länge ODER stopAtCtxTime, je nachdem was früher kommt.
     const naturalEnd = t0 + buffer.duration;
     const tEnd = opts?.stopAtCtxTime ? Math.min(naturalEnd, Math.max(t0 + 0.2, opts.stopAtCtxTime)) : naturalEnd;
     const playDur = tEnd - t0;
-    gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(peak, t0 + Math.min(fadeIn, playDur * 0.4));
-    gain.gain.setValueAtTime(peak, Math.max(t0 + fadeIn, tEnd - fadeOut));
-    gain.gain.exponentialRampToValueAtTime(0.0001, tEnd);
+    // Equal-power Fades via setValueCurveAtTime → klingen weich & musikalisch,
+    // keine Klick-Artefakte wie bei exponentialRamp aus 0.0001.
+    const safeFadeIn = Math.min(fadeIn, Math.max(0.05, playDur * 0.4));
+    const safeFadeOut = Math.min(fadeOut, Math.max(0.05, playDur * 0.45));
+    const N = 64;
+    const inCurve = new Float32Array(N);
+    for (let i = 0; i < N; i++) inCurve[i] = Math.sin((Math.PI / 2) * (i / (N - 1))) * peak;
+    const outCurve = new Float32Array(N);
+    for (let i = 0; i < N; i++) outCurve[i] = Math.cos((Math.PI / 2) * (i / (N - 1))) * peak;
+    gain.gain.setValueAtTime(0, t0);
+    try { gain.gain.setValueCurveAtTime(inCurve, t0, safeFadeIn); } catch { gain.gain.linearRampToValueAtTime(peak, t0 + safeFadeIn); }
+    const fadeOutStart = Math.max(t0 + safeFadeIn + 0.01, tEnd - safeFadeOut);
+    gain.gain.setValueAtTime(peak, fadeOutStart);
+    try { gain.gain.setValueCurveAtTime(outCurve, fadeOutStart, tEnd - fadeOutStart); } catch { gain.gain.linearRampToValueAtTime(0, tEnd); }
     let outNode: AudioNode = gain;
     if (opts?.highpassHz && opts.highpassHz > 20) {
       const hp = ctx.createBiquadFilter();
