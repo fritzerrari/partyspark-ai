@@ -27,6 +27,7 @@ import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
 import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
 import { pushLog } from "@/lib/dj/copilotLog";
+import { planDirector, type DirectorPlan } from "@/lib/dj/director";
 
 export type DeckSide = "A" | "B";
 
@@ -148,6 +149,10 @@ type Actions = {
   getTransitionQuality: (from: DeckSide, to: DeckSide) => TransitionQuality;
   /** Moises-style Smart Mix: pick best recipe + run it with conflict mute. */
   smartMix: (from: DeckSide, to: DeckSide) => Promise<{ engine: "real" | "clean"; recipe: string; decision: TransitionDecision } | null>;
+  /** Plan + play the Director (teaser + generated layers) BEFORE running smartMix. */
+  runVirtuoso: (from: DeckSide, to: DeckSide, opts?: { creativity?: number; bars?: number; choreographyId?: string; skipSmartMix?: boolean }) => Promise<DirectorPlan | null>;
+  /** Schedule an AudioBuffer (rendered teaser/layer) on the master bus with a fade. */
+  playPreviewLayer: (buffer: AudioBuffer, opts?: { gain?: number; fadeInSec?: number; fadeOutSec?: number; highpassHz?: number }) => void;
   /** Run a Clean DJ EQ-based transition (no fake stems). */
   runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number; decision?: TransitionDecision }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
