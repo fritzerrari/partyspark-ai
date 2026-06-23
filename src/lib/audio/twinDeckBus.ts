@@ -28,6 +28,7 @@ import { planTransition } from "@/lib/intel/planner";
 import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
 import { pushLog } from "@/lib/dj/copilotLog";
 import { planDirector, type DirectorPlan } from "@/lib/dj/director";
+import { nextOutroSlot } from "@/lib/intel/transitionPoints";
 
 export type DeckSide = "A" | "B";
 
