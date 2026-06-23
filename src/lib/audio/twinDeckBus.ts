@@ -26,6 +26,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
 import { trackProfileFromEngine } from "@/lib/intel/fromEngineTrack";
+import { pushLog } from "@/lib/dj/copilotLog";
 
 export type DeckSide = "A" | "B";
 
@@ -1229,10 +1230,13 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         decision,
       });
       try { console.info("[smartMix] real-stems recipe →", decision.recipe, decision); } catch { /* noop */ }
+      pushLog(`🎚 Real-Stems: ${decision.recipe} · ${decision.bars} Takte (Score ${decision.score})`, "act");
       return { engine: "real", recipe: decision.recipe, decision };
     }
     await get().runCleanRecipe(from, to, decision.recipe as CleanRecipeId, { bars: decision.bars, decision });
     try { console.info("[smartMix] clean recipe →", decision.recipe, "bars=", decision.bars, "sync=", decision.syncAllowed, decision); } catch { /* noop */ }
+    pushLog(`🎛 Clean-DJ: ${decision.recipe} · ${decision.bars} Takte (Score ${decision.score})`, "act");
+    if (decision.reasons.length) pushLog(`↳ ${decision.reasons.join(" · ")}`, "info");
     return { engine: "clean", recipe: decision.recipe, decision };
   },
   async runCleanRecipe(from, to, id, opts) {
