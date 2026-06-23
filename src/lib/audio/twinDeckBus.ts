@@ -153,7 +153,7 @@ type Actions = {
   /** Plan + play the Director (teaser + generated layers) BEFORE running smartMix. */
   runVirtuoso: (from: DeckSide, to: DeckSide, opts?: { creativity?: number; bars?: number; choreographyId?: string; skipSmartMix?: boolean }) => Promise<DirectorPlan | null>;
   /** Schedule an AudioBuffer (rendered teaser/layer) on the master bus with a fade. */
-  playPreviewLayer: (buffer: AudioBuffer, opts?: { gain?: number; fadeInSec?: number; fadeOutSec?: number; highpassHz?: number; startAtCtxTime?: number }) => void;
+  playPreviewLayer: (buffer: AudioBuffer, opts?: { gain?: number; fadeInSec?: number; fadeOutSec?: number; highpassHz?: number; startAtCtxTime?: number; stopAtCtxTime?: number }) => void;
   /** Run a Clean DJ EQ-based transition (no fake stems). */
   runCleanRecipe: (from: DeckSide, to: DeckSide, id?: CleanRecipeId, opts?: { bars?: number; decision?: TransitionDecision }) => Promise<void>;
   /** Attach real Demucs stems (4 buffers) to a deck. */
