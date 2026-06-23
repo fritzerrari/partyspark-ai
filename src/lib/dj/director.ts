@@ -73,8 +73,10 @@ export async function planDirector(
           bpm: live.bpm,
           bars,
           key: live.musicalKey,
+          targetKey: incoming.musicalKey ?? live.musicalKey,
           drumStyle: choreo.drumStyle,
-          level: 0.30,
+          level: 0.36,
+          swing: 0.08,
         }).catch((e) => { pushLog(`⚠ Layer fehlgeschlagen: ${(e as Error).message}`, "warn"); return null; })
       : Promise.resolve(null),
   ]);
