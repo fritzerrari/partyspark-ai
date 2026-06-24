@@ -345,6 +345,14 @@ function wireDeck(side: DeckSide) {
       d.gain.connect(d.loudnessGain);
       d.loudnessGain.connect(d.analyser);
       d.analyser.connect(masterGain);
+      // Tap a pre-fader send into the echo bus.
+      if (echoDelay) {
+        const send = ctx.createGain();
+        send.gain.value = 0;
+        d.loudnessGain.connect(send);
+        send.connect(echoDelay);
+        echoSend[side] = send;
+      }
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
       // Lazily attach SoundTouch worklet for pitch-preserving stretch. Once it
