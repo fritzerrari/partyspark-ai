@@ -18,7 +18,7 @@ import { EnergyTimeline } from "@/components/cockpit/EnergyTimeline";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
-import { Sparkles, Square, Disc, Mic, MonitorPlay } from "lucide-react";
+import { Sparkles, Square, Disc, Mic, MonitorPlay, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { startVisualBridge } from "@/lib/audio/visualBridge";
@@ -174,6 +174,12 @@ function Cockpit() {
             >
               <MonitorPlay className="h-3 w-3" /> Beamer
             </button>
+            <Link
+              to="/setplanner"
+              className="min-h-[44px] rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold uppercase tracking-widest text-stage-foreground transition-all hover:bg-white/20 active:scale-95 flex items-center justify-center gap-2"
+            >
+              <Calendar className="h-3 w-3" /> Set-Planer
+            </Link>
             <button
               onClick={handlePartyMode}
               disabled={tracks.length < 2}
