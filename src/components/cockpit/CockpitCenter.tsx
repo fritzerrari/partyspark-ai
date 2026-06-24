@@ -131,15 +131,15 @@ export function CockpitCenter() {
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-white/10 bg-card/40 p-4">
+    <div className="space-y-4">
       {/* Harmony Ring */}
-      <div className="flex flex-col items-center">
-        <div className="relative h-28 w-28">
+      <div className="sb-card-2 flex flex-col items-center p-4">
+        <div className="relative h-32 w-32">
           <svg viewBox="0 0 130 130" className="h-full w-full -rotate-90">
-            <circle cx="65" cy="65" r="57" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
+            <circle cx="65" cy="65" r="57" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="7" />
             <circle
               cx="65" cy="65" r="57" fill="none"
-              stroke={ringColor} strokeWidth="6"
+              stroke={ringColor} strokeWidth="7"
               strokeDasharray={`${ringPct * 358} 358`}
               strokeLinecap="round"
               style={{ transition: "stroke-dasharray .4s, stroke .4s" }}
@@ -148,40 +148,38 @@ export function CockpitCenter() {
           <div className="absolute inset-0 grid place-items-center text-center">
             {liveTrack && nextTrack ? (
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-stage-foreground/50">Harmony</div>
-                <div className="font-mono text-sm font-bold text-stage-foreground">
+                <div className="sb-eyebrow text-[9px]">Harmony</div>
+                <div className="font-mono text-base font-bold" style={{ color: "var(--sb-ink)" }}>
                   {liveTrack.camelot ?? "?"} → {nextTrack.camelot ?? "?"}
                 </div>
-                <div className="text-[10px]" style={{ color: ringColor }}>
+                <div className="text-[11px] font-semibold" style={{ color: ringColor }}>
                   {hd === 0 ? "perfekt" : hd <= 1 ? "passt" : hd <= 2 ? "okay" : "clash"}
                 </div>
               </div>
             ) : (
-              <div className="text-[10px] text-stage-foreground/50">Beide Decks laden</div>
+              <div className="text-[11px]" style={{ color: "var(--sb-ink-dim)" }}>Beide Decks laden</div>
             )}
           </div>
         </div>
         {bpmDelta != null && (
-          <div className={cn(
-            "mt-2 text-center font-mono text-[11px]",
-            bridge ? "text-red-300" : "text-stage-foreground/70",
-          )}>
+          <div className="mt-3 text-center font-mono text-[12px]"
+               style={{ color: bridge ? "#ff9aa8" : "var(--sb-ink-dim)" }}>
             {Math.round(liveTrack!.bpm!)} → {Math.round(nextTrack!.bpm!)} BPM
-            {bpmPct != null && <span className="ml-2 text-stage-foreground/50">({bpmPct >= 0 ? "+" : ""}{bpmPct.toFixed(1)}%)</span>}
-            {bridge && <div className="text-[10px]">⚠ Tempo zu groß — Bridge nutzen</div>}
+            {bpmPct != null && <span className="ml-2" style={{ color: "var(--sb-ink-mute)" }}>({bpmPct >= 0 ? "+" : ""}{bpmPct.toFixed(1)}%)</span>}
+            {bridge && <div className="mt-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: "#ff9aa8" }}>⚠ Tempo zu groß — Bridge nutzen</div>}
           </div>
         )}
       </div>
 
       {/* Bars slider */}
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] uppercase tracking-widest text-stage-foreground/60">Länge</span>
+      <div className="sb-card-2 flex items-center gap-3 p-3">
+        <span className="sb-eyebrow text-[10px]">Länge</span>
         <input
           type="range" min={4} max={32} step={4} value={bars}
           onChange={(e) => setBars(parseInt(e.target.value))}
-          className="flex-1 accent-[var(--neon-cyan)]"
+          className="flex-1 accent-[var(--sb-primary)]"
         />
-        <span className="font-mono text-[11px] text-stage-foreground">{bars} Takte</span>
+        <span className="font-mono text-sm font-bold" style={{ color: "var(--sb-ink)" }}>{bars} Takte</span>
       </div>
 
       {/* Recipe buttons */}
@@ -192,13 +190,15 @@ export function CockpitCenter() {
             onClick={() => run(r.id)}
             disabled={transitionInFlight || !liveTrack || !nextTrack}
             className={cn(
-              "rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-left transition-all hover:bg-white/10 disabled:opacity-40",
-              r.id === "auto" && "col-span-2 border-[var(--neon-cyan)] bg-[color-mix(in_oklab,var(--neon-cyan)_15%,transparent)]",
+              "sb-btn h-auto justify-start py-2.5 px-3 text-left",
+              r.id === "auto" && "sb-btn-primary col-span-2",
             )}
             title={r.hint}
           >
-            <div className="text-xs font-bold text-stage-foreground">{r.icon} {r.label}</div>
-            <div className="truncate text-[10px] text-stage-foreground/60">{r.hint}</div>
+            <div className="flex flex-col items-start gap-0.5">
+              <div className="text-[12px] font-bold tracking-wider">{r.icon} {r.label}</div>
+              <div className="truncate text-[10px] font-normal normal-case tracking-normal opacity-80">{r.hint}</div>
+            </div>
           </button>
         ))}
       </div>
@@ -208,51 +208,57 @@ export function CockpitCenter() {
         onClick={dropBridge}
         disabled={!liveTrack?.bpm}
         className={cn(
-          "w-full rounded-lg border px-3 py-2 text-left transition-all disabled:opacity-40",
-          bridge
-            ? "border-red-400 bg-red-500/10 hover:bg-red-500/20 text-red-100"
-            : "border-white/10 bg-white/5 hover:bg-white/10 text-stage-foreground",
+          "sb-btn h-auto w-full justify-start py-2.5 px-3 text-left",
+          bridge && "sb-btn-live",
         )}
       >
-        <div className="text-xs font-bold">🥁 Bridge-Beat erzeugen</div>
-        <div className="text-[10px] text-stage-foreground/60">
-          {liveTrack?.bpm
-            ? `Neutraler 4-Takt-Beat @ ${Math.round(liveTrack.bpm)} BPM → Deck ${other}`
-            : "Lade einen Track ins Live-Deck"}
+        <div className="flex flex-col items-start gap-0.5">
+          <div className="text-[12px] font-bold tracking-wider">🥁 Bridge-Beat erzeugen</div>
+          <div className="text-[10px] font-normal normal-case tracking-normal opacity-80">
+            {liveTrack?.bpm
+              ? `Neutraler 4-Takt-Beat @ ${Math.round(liveTrack.bpm)} BPM → Deck ${other}`
+              : "Lade einen Track ins Live-Deck"}
+          </div>
         </div>
       </button>
 
       {/* Director — virtuose Übergänge */}
-      <div className="space-y-2 rounded-xl border border-[var(--neon-magenta)]/40 bg-[color-mix(in_oklab,var(--neon-magenta)_8%,transparent)] p-3">
+      <div className="sb-card-live space-y-3 p-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs font-bold text-stage-foreground">🎬 Director — virtuose Übergänge</div>
-            <div className="text-[10px] text-stage-foreground/60">Teaser + generierte Drums/Bass/Pluck in Live-Key & BPM</div>
+            <div className="text-sm font-bold tracking-wide" style={{ color: "var(--sb-ink)" }}>🎬 Director — virtuose Übergänge</div>
+            <div className="text-[11px]" style={{ color: "var(--sb-ink-dim)" }}>Teaser + generierte Drums/Bass/Pluck in Live-Key & BPM</div>
           </div>
-          <label className="flex items-center gap-1 text-[10px] text-stage-foreground/70">
-            <input type="checkbox" checked={virtuoso} onChange={(e) => setVirtuoso(e.target.checked)} className="accent-[var(--neon-magenta)]" />
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest"
+                 style={{ color: "var(--sb-ink)" }}>
+            <input type="checkbox" checked={virtuoso} onChange={(e) => setVirtuoso(e.target.checked)} className="h-4 w-4 accent-[var(--sb-magenta)]" />
             an
           </label>
         </div>
 
         {virtuoso && (
           <>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-stage-foreground/60">Kreativität</span>
+            <div className="flex items-center gap-3">
+              <span className="sb-eyebrow text-[10px]">Kreativität</span>
               <input
                 type="range" min={0} max={1} step={0.05} value={creativity}
                 onChange={(e) => setCreativity(parseFloat(e.target.value))}
-                className="flex-1 accent-[var(--neon-magenta)]"
+                className="flex-1 accent-[var(--sb-magenta)]"
               />
-              <span className="font-mono text-[11px] text-stage-foreground">{Math.round(creativity * 100)}%</span>
+              <span className="font-mono text-sm font-bold" style={{ color: "var(--sb-ink)" }}>{Math.round(creativity * 100)}%</span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-stage-foreground/60">Choreo</span>
+            <div className="flex items-center gap-3">
+              <span className="sb-eyebrow text-[10px]">Choreo</span>
               <select
                 value={choreoId}
                 onChange={(e) => setChoreoId(e.target.value)}
-                className="flex-1 rounded border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-stage-foreground"
+                className="flex-1 rounded-lg border px-3 py-1.5 text-[12px] font-semibold"
+                style={{
+                  background: "var(--sb-surface-3)",
+                  borderColor: "var(--sb-border-strong)",
+                  color: "var(--sb-ink)",
+                }}
               >
                 <option value="auto">🎲 Auto (würfelt)</option>
                 {CHOREOGRAPHIES.map((c) => (
@@ -265,14 +271,14 @@ export function CockpitCenter() {
               <button
                 onClick={virtuosoMix}
                 disabled={transitionInFlight || !liveTrack || !nextTrack}
-                className="rounded-lg border border-[var(--neon-magenta)] bg-[color-mix(in_oklab,var(--neon-magenta)_20%,transparent)] px-2 py-2 text-xs font-bold text-stage-foreground transition-all hover:bg-[color-mix(in_oklab,var(--neon-magenta)_35%,transparent)] disabled:opacity-40"
+                className="sb-btn sb-btn-live"
               >
                 🎬 Virtuoso-Mix starten
               </button>
               <button
                 onClick={previewDirector}
                 disabled={previewBusy || !liveTrack || !nextTrack}
-                className="rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-xs font-bold text-stage-foreground transition-all hover:bg-white/10 disabled:opacity-40"
+                className="sb-btn sb-btn-ghost"
               >
                 {previewBusy ? "Rendere…" : "🎧 Vorhören"}
               </button>
