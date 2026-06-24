@@ -1061,6 +1061,12 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         await new Promise((r) => setTimeout(r, half * 1000));
         // SWAP the basses on the beat.
         await waitForNextBeat(from);
+        // XCorr polarity check — if the incoming kick is anti-phase relative
+        // to the outgoing one, flip the incoming deck's polarity for the
+        // duration of the swap so the basses re-inforce instead of cancel.
+        if (shouldFlipPolarity(fromDeck.analyser, toDeck.analyser)) {
+          setPolarity(to, -1);
+        }
         // Echo-throw on the outgoing deck right as the bass cuts —
         // hides the seam with a tail that resolves over the next 2 beats.
         triggerEchoTail(from, 0.5, -8);
