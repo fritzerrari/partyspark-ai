@@ -15,8 +15,6 @@ import { CockpitCenter } from "@/components/cockpit/CockpitCenter";
 import { MixabilityPlaylist } from "@/components/cockpit/MixabilityPlaylist";
 import { CopilotLog } from "@/components/cockpit/CopilotLog";
 import { EnergyTimeline } from "@/components/cockpit/EnergyTimeline";
-import { MixScoreDial } from "@/components/cockpit/MixScoreDial";
-import { SkillBadge } from "@/components/cockpit/SkillBadge";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
@@ -195,7 +193,7 @@ function Cockpit() {
       </header>
 
       {/* ───── KPI strip ───── */}
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-[1.4fr_1fr_1fr_1.2fr]">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiTile
           icon={<Music className="h-4 w-4" />}
           label="Library"
@@ -203,13 +201,8 @@ function Cockpit() {
           hint={tracks.length >= 2 ? "Bereit zum Mixen" : "≥ 2 Tracks benötigt"}
           tone="warm"
         />
-        <div className="sb-kpi">
-          <MixScoreDial />
-        </div>
         <LiveStateKpi />
-        <div className="sb-kpi flex items-center">
-          <SkillBadge />
-        </div>
+        <CrateKpi tracks={tracks} />
       </section>
 
       {/* ───── Decks row ───── */}
