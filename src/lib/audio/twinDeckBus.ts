@@ -170,6 +170,7 @@ const deck: Record<DeckSide, {
   src: MediaElementAudioSourceNode | null;
   filter: BiquadFilterNode | null;
   gain: GainNode | null;
+  mediaGain: GainNode | null;
   loudnessGain: GainNode | null;
   eqLow: BiquadFilterNode | null;
   eqMid: BiquadFilterNode | null;
@@ -179,8 +180,8 @@ const deck: Record<DeckSide, {
   realStems: RealStemPlayer | null;
   stemMeter: StemMeter | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  A: { el: null, src: null, filter: null, gain: null, mediaGain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  B: { el: null, src: null, filter: null, gain: null, mediaGain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
@@ -304,6 +305,8 @@ function wireDeck(side: DeckSide) {
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
+      d.mediaGain = ctx.createGain();
+      d.mediaGain.gain.value = 1;
       // Per-deck loudness-trim gain. Set by ensureAnalysis() based on the
       // K-weighted LUFS measurement so every track sits around −14 LUFS.
       // Sits AFTER the user gain so the volume slider remains absolute.
@@ -312,13 +315,16 @@ function wireDeck(side: DeckSide) {
       d.analyser = ctx.createAnalyser();
       d.analyser.fftSize = 512;
       d.analyser.smoothingTimeConstant = 0.6;
-      // Insert pseudo-stem split between the filter chain and the final deck gain.
+      // Keep normal playback on a direct, cheap media path. The stem split is
+      // only an auxiliary bus for real stem buffers; pseudo band filters are
+      // not in the live deck path anymore, which avoids playback stutter.
       d.stems = createStemSplit(ctx);
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
-      d.filter.connect(d.stems.input);
+      d.filter.connect(d.mediaGain);
+      d.mediaGain.connect(d.gain);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.loudnessGain);
       d.loudnessGain.connect(d.analyser);
@@ -1089,11 +1095,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     if (d.realStems) {
       try { d.realStems.dispose(); } catch { /* noop */ }
       d.realStems = null;
-      if (d.stems && ctx) {
+      if (ctx) {
         try {
-          const inputGain = (d.stems.input as GainNode).gain;
-          inputGain.cancelScheduledValues(ctx.currentTime);
-          inputGain.setValueAtTime(1, ctx.currentTime);
+          d.mediaGain?.gain.cancelScheduledValues(ctx.currentTime);
+          d.mediaGain?.gain.setValueAtTime(1, ctx.currentTime);
         } catch { /* noop */ }
       }
       set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
@@ -1707,11 +1712,14 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       const buffers = await loadRealStems(ctx, urls);
       const player = createRealStemPlayer(ctx, d.el, d.stems, buffers);
       d.realStems = player;
-      // Mute pseudo path so we don't double-mix.
+      // Mute the direct media path; real stem buffers feed the stem gain bus.
       try {
-        const inputGain = (d.stems.input as GainNode).gain;
-        inputGain.cancelScheduledValues(ctx.currentTime);
-        inputGain.setValueAtTime(0, ctx.currentTime);
+        d.mediaGain?.gain.cancelScheduledValues(ctx.currentTime);
+        d.mediaGain?.gain.setValueAtTime(0, ctx.currentTime);
+        d.stems.setGain("drums", 1, 0.02);
+        d.stems.setGain("bass", 1, 0.02);
+        d.stems.setGain("vocals", 1, 0.02);
+        d.stems.setGain("other", 1, 0.02);
       } catch { /* noop */ }
       if (!d.el.paused) player.start();
       set((s) => ({ [side]: { ...s[side], stemsMode: "real" } } as Partial<BusState>));
@@ -1723,11 +1731,11 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   detachRealStems(side) {
     const d = deck[side];
     if (d.realStems) { d.realStems.dispose(); d.realStems = null; }
-    if (d.stems && ctx) {
+    if (ctx) {
       try {
-        const inputGain = (d.stems.input as GainNode).gain;
-        inputGain.cancelScheduledValues(ctx.currentTime);
-        inputGain.setValueAtTime(1, ctx.currentTime);
+        d.mediaGain?.gain.cancelScheduledValues(ctx.currentTime);
+        d.mediaGain?.gain.setValueAtTime(1, ctx.currentTime);
+        d.stems?.reset();
       } catch { /* noop */ }
     }
     set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
