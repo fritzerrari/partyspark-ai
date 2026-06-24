@@ -12,12 +12,11 @@
 // continue to drive `el.playbackRate` only. The chipmunk effect is then
 // the only fallback — but most evergreen browsers support AudioWorklet.
 
-import { SoundTouchNode } from "@soundtouchjs/audio-worklet";
-import processorUrl from "@soundtouchjs/audio-worklet/processor?url";
+const registered = new WeakMap<BaseAudioContext, Promise<unknown>>();
 
-const registered = new WeakMap<BaseAudioContext, Promise<void>>();
-
-function registerOnce(ctx: BaseAudioContext): Promise<void> {
+async function registerOnce(ctx: BaseAudioContext): Promise<typeof import("@soundtouchjs/audio-worklet").SoundTouchNode> {
+  const { SoundTouchNode } = await import("@soundtouchjs/audio-worklet");
+  const { default: processorUrl } = await import("@soundtouchjs/audio-worklet/processor?url");
   let p = registered.get(ctx);
   if (!p) {
     p = SoundTouchNode.register(ctx, processorUrl).catch((err) => {
@@ -26,7 +25,8 @@ function registerOnce(ctx: BaseAudioContext): Promise<void> {
     });
     registered.set(ctx, p);
   }
-  return p;
+  await p;
+  return SoundTouchNode;
 }
 
 export type LiveStretchNode = {
@@ -39,8 +39,9 @@ export type LiveStretchNode = {
 
 /** Build a SoundTouchNode wrapped in our small API. Resolves to null if worklet unavailable. */
 export async function createLiveStretch(ctx: AudioContext): Promise<LiveStretchNode | null> {
+  if (typeof AudioWorkletNode === "undefined") return null;
   try {
-    await registerOnce(ctx);
+    const SoundTouchNode = await registerOnce(ctx);
     const st = new SoundTouchNode({ context: ctx });
     // Pitch stays at 1.0; we let `playbackRate` control time and the processor
     // automatically compensates pitch so vocals/melodies retain their original key.
