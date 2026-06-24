@@ -418,6 +418,34 @@ function resetEq(side: DeckSide) {
   }
 }
 
+/** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
+ *  into the master delay bus, then closes it so the tail rings out alone.
+ *  Length: `beats` beats at the deck's effective BPM (default ½). */
+function triggerEchoTail(side: DeckSide, beats = 0.5, wetDb = -8) {
+  if (!ctx || !echoDelay || !echoFb || !echoWet) return;
+  const send = echoSend[side];
+  if (!send) return;
+  const st = useTwinDeck.getState();
+  const bpm = (st[side].effectiveBpm ?? st[side].track?.bpm ?? 120);
+  const beatSec = 60 / Math.max(60, Math.min(200, bpm));
+  const delaySec = Math.max(0.06, beatSec * beats);
+  const now = ctx.currentTime;
+  // Tune the delay time to the beat, lift the wet bus, open the send for
+  // ~½ beat, then ramp wet back to silence over 2 beats.
+  echoDelay.delayTime.cancelScheduledValues(now);
+  echoDelay.delayTime.setValueAtTime(delaySec, now);
+  const wetLin = Math.pow(10, wetDb / 20);
+  echoWet.gain.cancelScheduledValues(now);
+  echoWet.gain.setValueAtTime(echoWet.gain.value, now);
+  echoWet.gain.linearRampToValueAtTime(wetLin, now + 0.02);
+  send.gain.cancelScheduledValues(now);
+  send.gain.setValueAtTime(0, now);
+  send.gain.linearRampToValueAtTime(0.6, now + 0.01);
+  send.gain.linearRampToValueAtTime(0, now + beatSec * 0.5);
+  // Tail fades out over 2 beats.
+  echoWet.gain.setTargetAtTime(0, now + beatSec * 0.5, beatSec * 0.6);
+}
+
 /** Choose effective BPM ratio considering half/double-time matches. */
 function tempoRatio(fromBpm: number, toBpm: number): number {
   const candidates = [toBpm, toBpm * 2, toBpm / 2];
