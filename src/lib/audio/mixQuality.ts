@@ -108,6 +108,13 @@ export function computeMixScore(a: DeckSignal, b: DeckSignal): MixScore {
   else if (semi <= 5) keyCompat = 45;
   else keyCompat = 25;
 
+  // ---- Vocal clash (kckDeepak: double-vocals are the #1 amateur tell) ----
+  const va = a.vocalAt ?? 0;
+  const vb = b.vocalAt ?? 0;
+  // 100 = no overlap, drops fast as both decks become vocal-heavy.
+  const clashRisk = Math.min(1, va * vb * 1.4);
+  const vocalClashScore = Math.round((1 - clashRisk) * 100);
+
   const total = Math.round(
     phase * 0.30 + bassClashScore * 0.22 + beatAlign * 0.20 + keyCompat * 0.12 + vocalClashScore * 0.16,
   );
