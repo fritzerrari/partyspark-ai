@@ -34,6 +34,9 @@ export type TrackAnalysis = {
   lufsIntegrated: number;
   /** Gain (dB) to apply on playback so this track sits at −14 LUFS. */
   loudnessGainDb: number;
+  /** Buildup/drop events derived from the energy curve. Caller can trigger
+   *  filter risers or stutter-cuts at the marked time stamps. */
+  energyEvents: { t: number; kind: "buildup" | "drop"; strength: number }[];
 };
 
 export type SmartCrate = "warmup" | "filler" | "peak" | "cooldown" | "reserve";
@@ -307,6 +310,7 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
   // Target: −14 LUFS (streaming-platform reference). Clamp ±9 dB so a
   // very quiet/very loud master doesn't blow up the live output.
   const loudnessGainDb = Math.max(-9, Math.min(9, -14 - lufs));
+  const energyEvents = detectEnergyEvents(curve);
   onProgress?.("Fertig", 100);
 
   return {
@@ -326,7 +330,51 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
     trimOutSec: trim.trimOutSec,
     lufsIntegrated: +lufs.toFixed(2),
     loudnessGainDb: +loudnessGainDb.toFixed(2),
+    energyEvents,
   };
+}
+
+/** Detect buildups and drops from a per-second RMS curve.
+ *  - Buildup: a sustained positive 1st-derivative window (Savitzky-Golay
+ *    smoothing, 5-sample window) immediately followed by a peak.
+ *  - Drop: peak that follows a buildup, normalised against track maximum.
+ *  Strength is the normalised magnitude of the energy step, 0..1. */
+function detectEnergyEvents(curve: number[]): { t: number; kind: "buildup" | "drop"; strength: number }[] {
+  if (curve.length < 8) return [];
+  // 5-tap Savitzky-Golay smoother (coeffs [-3,12,17,12,-3]/35) → derivative
+  // approximation via simple diff afterwards.
+  const smooth: number[] = new Array(curve.length).fill(0);
+  for (let i = 0; i < curve.length; i++) {
+    const a = curve[Math.max(0, i - 2)];
+    const b = curve[Math.max(0, i - 1)];
+    const c = curve[i];
+    const d = curve[Math.min(curve.length - 1, i + 1)];
+    const e = curve[Math.min(curve.length - 1, i + 2)];
+    smooth[i] = (-3 * a + 12 * b + 17 * c + 12 * d - 3 * e) / 35;
+  }
+  const peak = Math.max(...smooth) || 1;
+  const events: { t: number; kind: "buildup" | "drop"; strength: number }[] = [];
+  let buildupStart = -1;
+  let buildupPeak = 0;
+  for (let i = 1; i < smooth.length; i++) {
+    const slope = smooth[i] - smooth[i - 1];
+    if (slope > 0.0035) {
+      if (buildupStart < 0) buildupStart = i;
+      if (smooth[i] > buildupPeak) buildupPeak = smooth[i];
+    } else if (buildupStart >= 0) {
+      // Buildup ended; is it followed by a drop above 75 % of track peak?
+      const ended = i;
+      const lengthSec = ended - buildupStart;
+      if (lengthSec >= 3 && buildupPeak >= peak * 0.65) {
+        const strength = +(buildupPeak / peak).toFixed(3);
+        events.push({ t: buildupStart, kind: "buildup", strength });
+        events.push({ t: ended, kind: "drop", strength });
+      }
+      buildupStart = -1;
+      buildupPeak = 0;
+    }
+  }
+  return events;
 }
 
 /** ITU-R BS.1770 K-weighted mean-square → LUFS.

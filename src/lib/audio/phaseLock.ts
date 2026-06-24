@@ -37,6 +37,9 @@ export type PhaseLockOpts = {
   measureOnly?: boolean;
   /** Polling interval in ms. */
   intervalMs?: number;
+  /** Called once when drift exceeds `trainWreckMs` and the lock bails out.
+   *  Caller can use this to trigger a loop-roll / beat-repeat rescue. */
+  onTrainWreck?: (driftMs: number) => void;
 };
 
 /** Start the lock. Caller MUST invoke handle.stop() when the transition ends. */
@@ -49,6 +52,7 @@ export function startPhaseLock(opts: PhaseLockOpts): PhaseLockHandle {
     trainWreckMs = 200,
     measureOnly = false,
     intervalMs = 33,
+    onTrainWreck,
   } = opts;
 
   let drift = 0;
@@ -69,6 +73,7 @@ export function startPhaseLock(opts: PhaseLockOpts): PhaseLockHandle {
     if (Math.abs(drift) > trainWreckMs) {
       // Bail out — bigger problem than a P-controller can fix.
       killed = true;
+      try { onTrainWreck?.(drift); } catch { /* noop */ }
       return;
     }
     if (!measureOnly) {
