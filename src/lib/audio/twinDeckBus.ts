@@ -998,18 +998,10 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         await new Promise((r) => setTimeout(r, half * 1000));
         // SWAP the basses on the beat.
         await waitForNextBeat(from);
-        // XCorr polarity check — if the incoming kick is anti-phase relative
-        // to the outgoing one, flip the incoming deck's polarity for the
-        // duration of the swap so the basses re-inforce instead of cancel.
-        if (shouldFlipPolarity(fromDeck.analyser, toDeck.analyser)) {
-          setPolarity(to, -1);
-        }
         // Echo-throw on the outgoing deck right as the bass cuts —
         // hides the seam with a tail that resolves over the next 2 beats.
         triggerEchoTail(from, 0.5, -8);
-        // LR24 HPF sweep + EQ low cut for a clean, surgical bass kill.
-        lr24BassKill(from, 120, 0.2);
-        rampEqGain(fromDeck.eqLow, -28, 0.25);
+        rampEqGain(fromDeck.eqLow, -24, 0.25);
         rampEqGain(toDeck.eqLow, 0, 0.25);
         // Now fade the outgoing out entirely.
         rampEqGain(fromDeck.eqHigh, -10, half);
@@ -1032,11 +1024,9 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
       default:
         // Harmonic crossfade with subtle low-end isolation to avoid bass clash.
         rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
-        if (ctx && fromDeck.gain) epRampGain(ctx, fromDeck.gain, 0, xf);
-        else rampGain(fromDeck.gain, 0, xf);
+        rampGain(fromDeck.gain, 0, xf);
         rampEqGain(toDeck.eqLow, 0, xf * 0.6);
-        if (ctx && toDeck.gain) epRampGain(ctx, toDeck.gain, toUserVol, xf);
-        else rampGain(toDeck.gain, toUserVol, xf);
+        rampGain(toDeck.gain, toUserVol, xf);
         break;
     }
     // Animate the visible crossfader to its target (A:0, B:1)
@@ -1049,12 +1039,6 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     resetFilter(from);
     resetEq(from);
     resetEq(to);
-    // Restore LR24 HPFs on both decks so they are transparent for the next mix.
-    lr24BassRestore(from, 0.2);
-    lr24BassRestore(to, 0.2);
-    // Restore polarity on both decks (no-op if never flipped).
-    setPolarity(from, 1);
-    setPolarity(to, 1);
     if (fromDeck.gain) fromDeck.gain.gain.value = fromUserVol * (to === "B" ? Math.cos((1 * Math.PI) / 2) : Math.cos(0));
 
     const ratioNote = appliedRatio !== 1 ? ` · sync ×${appliedRatio.toFixed(3)}` : "";
