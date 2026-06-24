@@ -58,14 +58,15 @@ export async function uploadTracks(
 
       onProgress?.({ index: i, total: files.length, file: file.name, phase: "save" });
       const title = file.name.replace(/\.[^.]+$/, "");
-      await supabase.from("tracks").insert({
-        owner_id: userId,
-        title,
-        artist: "You",
-        storage_path: path,
-        duration_sec: dur,
-        ...analysisFields,
-      });
+      await (supabase.from("tracks") as unknown as { insert: (v: Record<string, unknown>) => Promise<unknown> })
+        .insert({
+          owner_id: userId,
+          title,
+          artist: "You",
+          storage_path: path,
+          duration_sec: dur,
+          ...analysisFields,
+        });
       ok++;
       onProgress?.({ index: i, total: files.length, file: file.name, phase: "done" });
     } catch (err) {
