@@ -981,6 +981,9 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         await new Promise((r) => setTimeout(r, half * 1000));
         // SWAP the basses on the beat.
         await waitForNextBeat(from);
+        // Echo-throw on the outgoing deck right as the bass cuts —
+        // hides the seam with a tail that resolves over the next 2 beats.
+        triggerEchoTail(from, 0.5, -8);
         rampEqGain(fromDeck.eqLow, -28, 0.25);
         rampEqGain(toDeck.eqLow, 0, 0.25);
         // Now fade the outgoing out entirely.
