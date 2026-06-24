@@ -186,6 +186,31 @@ function avgBeatLen(grid: number[]): number {
   return (grid[grid.length - 1] - grid[0]) / (grid.length - 1);
 }
 
+/** Snap `t` to the nearest downbeat (every 4th beat from the first beat).
+ *  Used so mix-in / mix-out points always land on a phrase boundary, never
+ *  mid-bar. Returns `t` unchanged if the grid is unusable. */
+export function snapToDownbeat(
+  grid: number[] | null | undefined,
+  t: number,
+  opts?: { searchAhead?: boolean; tolBeats?: number },
+): number {
+  if (!grid?.length) return t;
+  const tol = opts?.tolBeats ?? 2; // ≤ 2 beats off the wanted point is fine
+  const ahead = opts?.searchAhead ?? true;
+  const beatLen = avgBeatLen(grid);
+  const maxOffset = beatLen * tol;
+  // Iterate every 4th grid entry (downbeats) starting from index 0.
+  let bestT = t;
+  let bestDist = Infinity;
+  for (let i = 0; i < grid.length; i += 4) {
+    const g = grid[i];
+    if (!ahead && g > t + 0.001) continue;
+    const d = Math.abs(g - t);
+    if (d < bestDist) { bestDist = d; bestT = g; }
+  }
+  return bestDist <= maxOffset ? bestT : t;
+}
+
 /** Vocal-overlap risk in [0..1]. 1 = both decks have vocals in the blend window. */
 export function vocalOverlapRisk(
   vmapA: { t: number; voiced: number }[] | null | undefined,

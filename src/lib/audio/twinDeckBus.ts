@@ -196,6 +196,12 @@ let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
 let masterLimiter: DynamicsCompressorNode | null = null;
 let masterDcBlock: BiquadFilterNode | null = null;
+// Echo-tail send bus: deck → echoSend (one per side) → echoDelay → echoFb → echoWet → master.
+// Rekordbox-style 1/2-beat throw triggered with a bass-swap or cut.
+let echoDelay: DelayNode | null = null;
+let echoFb: GainNode | null = null;
+let echoWet: GainNode | null = null;
+const echoSend: Record<DeckSide, GainNode | null> = { A: null, B: null };
 let rafId: number | null = null;
 let activeDroneStop: (() => void) | null = null;
 // Bridge playback graph: a one-shot BufferSource → filter → gain → master.
@@ -246,6 +252,17 @@ function ensureCtx() {
     masterDcBlock.connect(masterSubComp);
     masterSubComp.connect(masterLimiter);
     masterLimiter.connect(ctx.destination);
+    // Echo-tail send bus (shared by both decks).
+    echoDelay = ctx.createDelay(2.0);
+    echoDelay.delayTime.value = 0.25;        // 1/2 beat @ 120 BPM, retuned on trigger
+    echoFb = ctx.createGain();
+    echoFb.gain.value = 0.35;
+    echoWet = ctx.createGain();
+    echoWet.gain.value = 0;                  // muted until triggered
+    echoDelay.connect(echoFb);
+    echoFb.connect(echoDelay);
+    echoDelay.connect(echoWet);
+    echoWet.connect(masterGain);
     // Bridge bus
     bridgeGain = ctx.createGain();
     bridgeGain.gain.value = 0;
@@ -328,6 +345,14 @@ function wireDeck(side: DeckSide) {
       d.gain.connect(d.loudnessGain);
       d.loudnessGain.connect(d.analyser);
       d.analyser.connect(masterGain);
+      // Tap a pre-fader send into the echo bus.
+      if (echoDelay) {
+        const send = ctx.createGain();
+        send.gain.value = 0;
+        d.loudnessGain.connect(send);
+        send.connect(echoDelay);
+        echoSend[side] = send;
+      }
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
       // Lazily attach SoundTouch worklet for pitch-preserving stretch. Once it
@@ -391,6 +416,34 @@ function resetEq(side: DeckSide) {
     n.gain.cancelScheduledValues(ctx.currentTime);
     n.gain.setValueAtTime(0, ctx.currentTime);
   }
+}
+
+/** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
+ *  into the master delay bus, then closes it so the tail rings out alone.
+ *  Length: `beats` beats at the deck's effective BPM (default ½). */
+function triggerEchoTail(side: DeckSide, beats = 0.5, wetDb = -8) {
+  if (!ctx || !echoDelay || !echoFb || !echoWet) return;
+  const send = echoSend[side];
+  if (!send) return;
+  const st = useTwinDeck.getState();
+  const bpm = (st[side].effectiveBpm ?? st[side].track?.bpm ?? 120);
+  const beatSec = 60 / Math.max(60, Math.min(200, bpm));
+  const delaySec = Math.max(0.06, beatSec * beats);
+  const now = ctx.currentTime;
+  // Tune the delay time to the beat, lift the wet bus, open the send for
+  // ~½ beat, then ramp wet back to silence over 2 beats.
+  echoDelay.delayTime.cancelScheduledValues(now);
+  echoDelay.delayTime.setValueAtTime(delaySec, now);
+  const wetLin = Math.pow(10, wetDb / 20);
+  echoWet.gain.cancelScheduledValues(now);
+  echoWet.gain.setValueAtTime(echoWet.gain.value, now);
+  echoWet.gain.linearRampToValueAtTime(wetLin, now + 0.02);
+  send.gain.cancelScheduledValues(now);
+  send.gain.setValueAtTime(0, now);
+  send.gain.linearRampToValueAtTime(0.6, now + 0.01);
+  send.gain.linearRampToValueAtTime(0, now + beatSec * 0.5);
+  // Tail fades out over 2 beats.
+  echoWet.gain.setTargetAtTime(0, now + beatSec * 0.5, beatSec * 0.6);
 }
 
 /** Choose effective BPM ratio considering half/double-time matches. */
@@ -928,6 +981,9 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         await new Promise((r) => setTimeout(r, half * 1000));
         // SWAP the basses on the beat.
         await waitForNextBeat(from);
+        // Echo-throw on the outgoing deck right as the bass cuts —
+        // hides the seam with a tail that resolves over the next 2 beats.
+        triggerEchoTail(from, 0.5, -8);
         rampEqGain(fromDeck.eqLow, -28, 0.25);
         rampEqGain(toDeck.eqLow, 0, 0.25);
         // Now fade the outgoing out entirely.
