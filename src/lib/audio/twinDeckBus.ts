@@ -22,7 +22,7 @@ import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { decideTransition, type TransitionDecision } from "./transitionDecision";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
-import { epRampGain } from "./proTransition";
+import { epRampGain, shouldFlipPolarity } from "./proTransition";
 import { createLR24Highpass, type LR24 } from "./filters/lr24";
 import { startPhaseLock, registerActiveLock, stopActiveLock } from "./phaseLock";
 import { supabase } from "@/integrations/supabase/client";
@@ -192,9 +192,12 @@ const deck: Record<DeckSide, {
   /** LR24 (Linkwitz-Riley 4th-order) high-pass for surgical bass kills
    *  during bass-swap transitions. Idle at 20 Hz (transparent). */
   lr24Hpf: LR24 | null;
+  /** Polarity gain (±1) used by bass-swap to flip the incoming deck if its
+   *  kick is anti-phase to the outgoing one (XCorr < −0.3). Idle at +1. */
+  polarity: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null, polarity: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null, polarity: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
