@@ -303,6 +303,11 @@ function wireDeck(side: DeckSide) {
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
+      // Per-deck loudness-trim gain. Set by ensureAnalysis() based on the
+      // K-weighted LUFS measurement so every track sits around −14 LUFS.
+      // Sits AFTER the user gain so the volume slider remains absolute.
+      d.loudnessGain = ctx.createGain();
+      d.loudnessGain.gain.value = 1;
       d.analyser = ctx.createAnalyser();
       d.analyser.fftSize = 512;
       d.analyser.smoothingTimeConstant = 0.6;
@@ -320,7 +325,8 @@ function wireDeck(side: DeckSide) {
       d.filter.connect(d.stretchPlaceholder);
       d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
-      d.gain.connect(d.analyser);
+      d.gain.connect(d.loudnessGain);
+      d.loudnessGain.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
