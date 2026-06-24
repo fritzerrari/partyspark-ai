@@ -70,6 +70,8 @@ export function ProjectTrayPanel() {
             smartCrate: ((tt.smart_crate as string | null) ?? "reserve") as "warmup" | "filler" | "peak" | "cooldown" | "reserve",
             overallEnergy: 0.5,
             vocalDensity: 0,
+            trimInSec: 0,
+            trimOutSec: (tt.duration_sec as number | null) ?? 0,
           } : null,
           meta: { artist: (tt.artist as string | null), artwork: (tt.artwork_url as string | null), durationSec: (tt.duration_sec as number | null) },
         });
