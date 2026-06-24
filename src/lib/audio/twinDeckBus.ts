@@ -176,6 +176,7 @@ const deck: Record<DeckSide, {
   src: MediaElementAudioSourceNode | null;
   filter: BiquadFilterNode | null;
   gain: GainNode | null;
+  loudnessGain: GainNode | null;
   eqLow: BiquadFilterNode | null;
   eqMid: BiquadFilterNode | null;
   eqHigh: BiquadFilterNode | null;
@@ -188,10 +189,13 @@ const deck: Record<DeckSide, {
   /** Bypass node used while the async stretch node is being built. */
   stretchPlaceholder: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
 };
 let masterGain: GainNode | null = null;
+let masterSubComp: DynamicsCompressorNode | null = null;
+let masterLimiter: DynamicsCompressorNode | null = null;
+let masterDcBlock: BiquadFilterNode | null = null;
 let rafId: number | null = null;
 let activeDroneStop: (() => void) | null = null;
 // Bridge playback graph: a one-shot BufferSource → filter → gain → master.
@@ -219,7 +223,29 @@ function ensureCtx() {
     ctx = new Ctx();
     masterGain = ctx.createGain();
     masterGain.gain.value = 1;
-    masterGain.connect(ctx.destination);
+    // Live master safety chain — DC-block HPF → sub-comp → brickwall limiter.
+    // Mirrors the offline masterBuffer() chain so live mixing has the same
+    // headroom protection as rendered exports.
+    masterDcBlock = ctx.createBiquadFilter();
+    masterDcBlock.type = "highpass";
+    masterDcBlock.frequency.value = 28;
+    masterDcBlock.Q.value = Math.SQRT1_2;
+    masterSubComp = ctx.createDynamicsCompressor();
+    masterSubComp.threshold.value = -12;
+    masterSubComp.knee.value = 6;
+    masterSubComp.ratio.value = 3;
+    masterSubComp.attack.value = 0.006;
+    masterSubComp.release.value = 0.12;
+    masterLimiter = ctx.createDynamicsCompressor();
+    masterLimiter.threshold.value = -1.0;
+    masterLimiter.knee.value = 0;
+    masterLimiter.ratio.value = 20;
+    masterLimiter.attack.value = 0.001;
+    masterLimiter.release.value = 0.05;
+    masterGain.connect(masterDcBlock);
+    masterDcBlock.connect(masterSubComp);
+    masterSubComp.connect(masterLimiter);
+    masterLimiter.connect(ctx.destination);
     // Bridge bus
     bridgeGain = ctx.createGain();
     bridgeGain.gain.value = 0;
