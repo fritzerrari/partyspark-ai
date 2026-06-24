@@ -293,3 +293,196 @@
 
 @keyframes spin-slow { to { transform: rotate(360deg); } }
 @utility animate-spin-slow { animation: spin-slow 2.4s linear infinite; }
+
+/* ===== Cockpit Pro — Sunset Blaze design system (scoped) =====
+ * Applied via .cockpit-pro wrapper. Remaps the existing --neon-* and
+ * --deck-* tokens to Sunset Blaze hues so all child components inherit
+ * the redesign without needing per-component edits. Adds Space Grotesk
+ * + DM Sans typography and a set of pro-DJ utilities (sb-*).
+ */
+.cockpit-pro {
+  /* Palette: Sunset Blaze */
+  --sb-bg:        #0a0710;
+  --sb-surface:   #15101c;
+  --sb-elevated:  #1c1525;
+  --sb-border:    color-mix(in oklab, #ff6b35 18%, transparent);
+  --sb-border-soft: color-mix(in oklab, white 8%, transparent);
+  --sb-primary:   #ff6b35;
+  --sb-warm:      #f7931e;
+  --sb-magenta:   #e84393;
+  --sb-cool:      #6c5ce7;
+  --sb-ink:       #f6f1ea;
+  --sb-ink-dim:   color-mix(in oklab, #f6f1ea 65%, transparent);
+  --sb-ink-mute:  color-mix(in oklab, #f6f1ea 38%, transparent);
+
+  /* Re-route existing tokens so child components pick up the new theme */
+  --neon-cyan:    var(--sb-primary);
+  --neon-magenta: var(--sb-magenta);
+  --neon-amber:   var(--sb-warm);
+  --neon-lime:    #5dd3a3;
+  --deck-graphite:   var(--sb-bg);
+  --deck-graphite-2: var(--sb-surface);
+  --stage-foreground: var(--sb-ink);
+
+  /* Typography */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  color: var(--sb-ink);
+  font-family: var(--font-sans);
+}
+.cockpit-pro h1, .cockpit-pro h2, .cockpit-pro h3, .cockpit-pro h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+@utility sb-shell {
+  background:
+    radial-gradient(70% 50% at 20% 0%, color-mix(in oklab, var(--sb-primary) 22%, transparent) 0%, transparent 60%),
+    radial-gradient(60% 60% at 100% 100%, color-mix(in oklab, var(--sb-magenta) 18%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, var(--sb-bg) 0%, #060309 100%);
+}
+
+@utility sb-card {
+  background: linear-gradient(180deg, var(--sb-elevated) 0%, var(--sb-surface) 100%);
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, white 5%, transparent) inset,
+    0 30px 60px -30px rgba(0,0,0,0.65);
+}
+
+@utility sb-card-warm {
+  background:
+    radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--sb-primary) 14%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, var(--sb-elevated) 0%, var(--sb-surface) 100%);
+  border: 1px solid color-mix(in oklab, var(--sb-primary) 30%, transparent);
+  border-radius: 1.25rem;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--sb-primary) 10%, transparent) inset,
+    0 30px 60px -30px color-mix(in oklab, var(--sb-primary) 35%, transparent);
+}
+
+@utility sb-kpi {
+  background: linear-gradient(180deg, color-mix(in oklab, var(--sb-elevated) 92%, black) 0%, var(--sb-surface) 100%);
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 1rem;
+  padding: 0.75rem 1rem;
+  position: relative;
+  overflow: hidden;
+}
+.cockpit-pro .sb-kpi::before {
+  content: "";
+  position: absolute; inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--sb-primary) 80%, transparent), transparent);
+  opacity: 0.6;
+}
+
+@utility sb-pill {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  height: 2.25rem; padding: 0 0.85rem;
+  border-radius: 9999px;
+  font-family: var(--font-display);
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  background: color-mix(in oklab, white 6%, transparent);
+  border: 1px solid var(--sb-border-soft);
+  color: var(--sb-ink);
+  transition: background .15s ease, transform .1s ease;
+}
+.cockpit-pro .sb-pill:hover { background: color-mix(in oklab, white 12%, transparent); }
+.cockpit-pro .sb-pill:active { transform: scale(.97); }
+
+@utility sb-pill-primary {
+  background: linear-gradient(135deg, var(--sb-primary) 0%, var(--sb-magenta) 100%);
+  color: #1a0a05; border: 0;
+  box-shadow:
+    0 8px 20px -8px color-mix(in oklab, var(--sb-primary) 60%, transparent),
+    0 0 24px -4px color-mix(in oklab, var(--sb-magenta) 40%, transparent);
+}
+.cockpit-pro .sb-pill-primary:hover { filter: brightness(1.08); }
+
+@utility sb-pill-rec {
+  background: color-mix(in oklab, #ff2d55 18%, transparent);
+  border: 1px solid color-mix(in oklab, #ff2d55 50%, transparent);
+  color: #ffdcd0;
+}
+
+@utility sb-eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--sb-ink-mute);
+}
+
+@utility sb-title {
+  font-family: var(--font-display);
+  font-weight: 700; letter-spacing: -0.04em;
+  background: linear-gradient(135deg, #ffb88c 0%, var(--sb-primary) 35%, var(--sb-magenta) 80%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+
+@utility sb-section-title {
+  font-family: var(--font-display);
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.28em; text-transform: uppercase;
+  color: var(--sb-primary);
+}
+
+/* Module rail (replaces bottom tabs) */
+@utility sb-rail {
+  background: linear-gradient(180deg, var(--sb-elevated) 0%, var(--sb-surface) 100%);
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 1rem;
+  padding: 0.35rem;
+  display: flex; flex-wrap: wrap; gap: 0.25rem;
+}
+@utility sb-rail-item {
+  flex: 1 1 130px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  height: 2.5rem; padding: 0 0.9rem;
+  border-radius: 0.75rem;
+  font-family: var(--font-display);
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--sb-ink-dim);
+  background: transparent;
+  transition: background .15s ease, color .15s ease;
+}
+.cockpit-pro .sb-rail-item:hover { background: color-mix(in oklab, white 6%, transparent); color: var(--sb-ink); }
+.cockpit-pro [data-state="active"].sb-rail-item {
+  color: #1a0a05;
+  background: linear-gradient(135deg, var(--sb-primary) 0%, var(--sb-warm) 100%);
+  box-shadow: 0 6px 16px -8px color-mix(in oklab, var(--sb-primary) 70%, transparent);
+}
+
+/* Live "now-playing" equalizer bars */
+@keyframes sb-eq {
+  0%, 100% { transform: scaleY(0.3); }
+  50%      { transform: scaleY(1); }
+}
+@utility sb-eq {
+  display: inline-flex; align-items: end; gap: 2px; height: 14px;
+}
+.cockpit-pro .sb-eq > span {
+  display: inline-block;
+  width: 3px; height: 100%;
+  background: linear-gradient(180deg, var(--sb-primary), var(--sb-magenta));
+  border-radius: 1px;
+  transform-origin: bottom;
+  animation: sb-eq 0.9s ease-in-out infinite;
+}
+.cockpit-pro .sb-eq > span:nth-child(2) { animation-delay: .12s; animation-duration: .7s; }
+.cockpit-pro .sb-eq > span:nth-child(3) { animation-delay: .25s; animation-duration: 1.1s; }
+.cockpit-pro .sb-eq > span:nth-child(4) { animation-delay: .08s; animation-duration: .8s; }
+
+/* Subtle scanline overlay on premium cards */
+@utility sb-scan {
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0 2px,
+    color-mix(in oklab, white 3%, transparent) 2px 3px
+  );
+}
