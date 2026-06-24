@@ -1031,7 +1031,8 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         rampGain(fromDeck.gain, 0, xf * 0.5);
         break;
       case "bassSwap": {
-        // Pro-style bass swap: lift incoming highs first, swap lows on the beat, then bleed lows out.
+        // Pro-style bass swap with Linkwitz-Riley 24 dB/oct bass kill on the
+        // outgoing deck — phase-coherent, no ringing tail (Mixxx LR24 path).
         const half = xf * 0.5;
         // Bring incoming up — highs/mids first, lows still cut.
         rampGain(toDeck.gain, toUserVol, half);
@@ -1043,6 +1044,8 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         // Echo-throw on the outgoing deck right as the bass cuts —
         // hides the seam with a tail that resolves over the next 2 beats.
         triggerEchoTail(from, 0.5, -8);
+        // LR24 HPF sweep + EQ low cut for a clean, surgical bass kill.
+        lr24BassKill(from, 120, 0.2);
         rampEqGain(fromDeck.eqLow, -28, 0.25);
         rampEqGain(toDeck.eqLow, 0, 0.25);
         // Now fade the outgoing out entirely.
