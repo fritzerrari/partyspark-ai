@@ -1441,6 +1441,25 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       set((s) => ({ [to]: { ...s[to], pitch: decision.syncAllowed ? decision.syncRate : 1 } } as Partial<BusState>));
       recomputeEffective(to);
       beatAlign(from, to);
+      // Continuous phase-lock (Mixxx P-loop). Leader = outgoing deck, follower = incoming.
+      try {
+        const lock = startPhaseLock({
+          leader: {
+            grid: fromTrack.beatGrid ?? null,
+            getPosition: () => fromDeck.el?.currentTime ?? 0,
+            getRate: () => fromDeck.el?.playbackRate ?? 1,
+          },
+          follower: {
+            grid: toTrack.beatGrid ?? null,
+            getPosition: () => toDeck.el?.currentTime ?? 0,
+            getRate: () => toDeck.el?.playbackRate ?? 1,
+            setRate: (r) => setDeckRate(to, r),
+          },
+          kP: 0.35,
+          maxAdjust: 0.04,
+        });
+        registerActiveLock(lock);
+      } catch { /* noop */ }
       // Open outgoing to its user volume, incoming starts at 0.
       toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
       toDeck.gain.gain.setValueAtTime(0, ctx.currentTime);
@@ -1487,6 +1506,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       console.warn("clean recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
     } finally {
+      try { stopActiveLock(); } catch { /* noop */ }
       // Safety net: ALWAYS reset both decks' EQ + filter so a thrown error
       // can never leave a deck with a -24 dB low-shelf permanently engaged.
       try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
@@ -1520,6 +1540,25 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
       recomputeEffective(to);
       beatAlign(from, to);
+      // Continuous phase-lock during the stem recipe.
+      try {
+        const lock = startPhaseLock({
+          leader: {
+            grid: fromTrack.beatGrid ?? null,
+            getPosition: () => fromDeck.el?.currentTime ?? 0,
+            getRate: () => fromDeck.el?.playbackRate ?? 1,
+          },
+          follower: {
+            grid: toTrack.beatGrid ?? null,
+            getPosition: () => toDeck.el?.currentTime ?? 0,
+            getRate: () => toDeck.el?.playbackRate ?? 1,
+            setRate: (r) => setDeckRate(to, r),
+          },
+          kP: 0.35,
+          maxAdjust: 0.04,
+        });
+        registerActiveLock(lock);
+      } catch { /* noop */ }
       // Make sure deck volumes are open — recipe rides the stems, not the main gain.
       if (toDeck.gain) toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
       if (toDeck.gain) toDeck.gain.gain.setValueAtTime(toUserVol, ctx.currentTime);
@@ -1585,6 +1624,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       console.warn("stem recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
     } finally {
+      try { stopActiveLock(); } catch { /* noop */ }
       // Safety net: ensure neither deck remains with a frozen EQ/filter state.
       try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
     }
