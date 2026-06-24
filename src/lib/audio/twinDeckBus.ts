@@ -23,6 +23,7 @@ import { decideTransition, type TransitionDecision } from "./transitionDecision"
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
 import { epRampGain } from "./proTransition";
+import { createLR24Highpass, type LR24 } from "./filters/lr24";
 import { startPhaseLock, registerActiveLock, stopActiveLock } from "./phaseLock";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
@@ -188,9 +189,12 @@ const deck: Record<DeckSide, {
   stretch: LiveStretchNode | null;
   /** Bypass node used while the async stretch node is being built. */
   stretchPlaceholder: GainNode | null;
+  /** LR24 (Linkwitz-Riley 4th-order) high-pass for surgical bass kills
+   *  during bass-swap transitions. Idle at 20 Hz (transparent). */
+  lr24Hpf: LR24 | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
@@ -338,7 +342,11 @@ function wireDeck(side: DeckSide) {
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
-      d.eqHigh.connect(d.filter);
+      // LR24 high-pass sits between the 3-band EQ and the colour filter.
+      // Idle at 20 Hz so it's transparent until a bass-swap recipe sweeps it up.
+      d.lr24Hpf = createLR24Highpass(ctx, 20);
+      d.eqHigh.connect(d.lr24Hpf.input);
+      d.lr24Hpf.output.connect(d.filter);
       d.filter.connect(d.stretchPlaceholder);
       d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
