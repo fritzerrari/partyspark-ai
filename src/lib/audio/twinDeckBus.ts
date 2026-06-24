@@ -570,7 +570,6 @@ async function runStableDeckBlend(
   const bars = Math.max(4, Math.min(12, opts.bars ?? 8));
   const total = Math.max(4, secPerBar * bars);
   const half = total * 0.5;
-  const now = ctx.currentTime;
 
   opts.onPhase?.("cue");
   try { fromDeck.stems?.reset(); toDeck.stems?.reset(); } catch { /* noop */ }
@@ -579,6 +578,8 @@ async function runStableDeckBlend(
   if (toDeck.el && toDeck.el.paused) {
     try { await toDeck.el.play(); } catch { /* gesture */ }
   }
+
+  const now = ctx.currentTime;
 
   fromDeck.gain.gain.cancelScheduledValues(now);
   toDeck.gain.gain.cancelScheduledValues(now);
