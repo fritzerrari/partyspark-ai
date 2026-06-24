@@ -82,6 +82,7 @@ export function MixScoreDial() {
             <span>Bass {score?.bassClash ?? 100}</span>
             <span>Beat {score?.beatAlign ?? 100}</span>
             <span>Key {score?.keyCompat ?? 100}</span>
+            <span>Vox {score?.vocalClash ?? 100}</span>
           </div>
         </div>
       </div>

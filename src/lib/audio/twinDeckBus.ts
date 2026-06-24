@@ -22,6 +22,7 @@ import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { decideTransition, type TransitionDecision } from "./transitionDecision";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
+import { epRampGain } from "./proTransition";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
@@ -669,6 +670,15 @@ export function getDeckSignal(side: DeckSide) {
   const d = deck[side];
   const st = useTwinDeck.getState();
   const ds = st[side];
+  // Sample vocal density at the live playhead so the mix scorer can penalize
+  // double-vocals (kckDeepak vocal_overlap_risk).
+  const vmap = ds.track?.vocalMap;
+  const t = d.el?.currentTime ?? 0;
+  let vocalAt = 0;
+  if (vmap?.length) {
+    const i = Math.max(0, Math.min(vmap.length - 1, Math.round(t)));
+    vocalAt = vmap[i]?.voiced ?? 0;
+  }
   return {
     analyser: d.analyser,
     bpm: ds.track?.bpm ?? null,
@@ -679,6 +689,7 @@ export function getDeckSignal(side: DeckSide) {
     currentTime: d.el?.currentTime ?? 0,
     playing: ds.isPlaying,
     volume: (d.gain?.gain.value ?? 0),
+    vocalAt,
   };
 }
 
@@ -907,9 +918,11 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
       default:
         // Harmonic crossfade with subtle low-end isolation to avoid bass clash.
         rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
-        rampGain(fromDeck.gain, 0, xf);
+        if (ctx && fromDeck.gain) epRampGain(ctx, fromDeck.gain, 0, xf);
+        else rampGain(fromDeck.gain, 0, xf);
         rampEqGain(toDeck.eqLow, 0, xf * 0.6);
-        rampGain(toDeck.gain, toUserVol, xf);
+        if (ctx && toDeck.gain) epRampGain(ctx, toDeck.gain, toUserVol, xf);
+        else rampGain(toDeck.gain, toUserVol, xf);
         break;
     }
     // Animate the visible crossfader to its target (A:0, B:1)

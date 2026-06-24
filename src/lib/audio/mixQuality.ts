@@ -17,6 +17,8 @@ export type DeckSignal = {
   currentTime: number;
   playing: boolean;
   volume: number;     // 0..1 after crossfade gain
+  /** 0..1 vocal density at the current playhead. */
+  vocalAt?: number;
 };
 
 export type MixScore = {
@@ -25,6 +27,7 @@ export type MixScore = {
   bassClash: number;      // 0..100 (higher = cleaner)
   beatAlign: number;      // 0..100
   keyCompat: number;      // 0..100
+  vocalClash: number;     // 0..100 (higher = cleaner)
   details: string;
 };
 
@@ -64,7 +67,7 @@ function nearestBeatDelta(time: number, grid: number[] | null): number {
 export function computeMixScore(a: DeckSignal, b: DeckSignal): MixScore {
   const bothPlaying = a.playing && b.playing;
   if (!bothPlaying) {
-    return { total: 0, phase: 0, bassClash: 100, beatAlign: 100, keyCompat: 100, details: "idle" };
+    return { total: 0, phase: 0, bassClash: 100, beatAlign: 100, keyCompat: 100, vocalClash: 100, details: "idle" };
   }
 
   // ---- Spectra ----
@@ -105,9 +108,16 @@ export function computeMixScore(a: DeckSignal, b: DeckSignal): MixScore {
   else if (semi <= 5) keyCompat = 45;
   else keyCompat = 25;
 
+  // ---- Vocal clash (kckDeepak: double-vocals are the #1 amateur tell) ----
+  const va = a.vocalAt ?? 0;
+  const vb = b.vocalAt ?? 0;
+  // 100 = no overlap, drops fast as both decks become vocal-heavy.
+  const clashRisk = Math.min(1, va * vb * 1.4);
+  const vocalClashScore = Math.round((1 - clashRisk) * 100);
+
   const total = Math.round(
-    phase * 0.4 + bassClashScore * 0.25 + beatAlign * 0.2 + keyCompat * 0.15,
+    phase * 0.30 + bassClashScore * 0.22 + beatAlign * 0.20 + keyCompat * 0.12 + vocalClashScore * 0.16,
   );
-  const details = `phase ${phase} · bass ${bassClashScore} · beat ${beatAlign} · key ${keyCompat}`;
-  return { total, phase, bassClash: bassClashScore, beatAlign, keyCompat, details };
+  const details = `phase ${phase} · bass ${bassClashScore} · beat ${beatAlign} · key ${keyCompat} · vox ${vocalClashScore}`;
+  return { total, phase, bassClash: bassClashScore, beatAlign, keyCompat, vocalClash: vocalClashScore, details };
 }

@@ -2,6 +2,7 @@
 // hot-cues, vocal-presence map. Runs on a decoded AudioBuffer. Pure JS.
 import { estimateBPM } from "./mashup";
 import { NOTE_NAMES } from "./pitch";
+import { findTrimPoints, correctBpmFold } from "./proTransition";
 
 export type TrackAnalysis = {
   bpm: number;
@@ -24,6 +25,10 @@ export type TrackAnalysis = {
   overallEnergy: number;
   /** Mean vocal density 0..1 (derived from vocalMap). */
   vocalDensity: number;
+  /** First sample > −60 dBFS — real start of audible audio. */
+  trimInSec: number;
+  /** Last sample > −60 dBFS — real end of audible audio. */
+  trimOutSec: number;
 };
 
 export type SmartCrate = "warmup" | "filler" | "peak" | "cooldown" | "reserve";
@@ -250,7 +255,10 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
 
   onProgress?.("BPM", 10);
   const raw = estimateBPM(buf) || 120;
-  const bpm = correctBpmOctave(raw);
+  const folded = correctBpmOctave(raw);
+  // If we have a sibling/metadata hint later, the caller can override via
+  // correctBpmFold(). For now keep the octave-corrected value.
+  const bpm = folded;
   await yieldUI();
 
   onProgress?.("Energy", 30);
@@ -287,6 +295,8 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
   const vocalDensity = vmap.length ? vmap.reduce((a, p) => a + p.voiced, 0) / vmap.length : 0;
   const embedding = computeEmbedding(curve, vmap, bpm, k.pitchClass, k.mode);
   const smartCrate = assignSmartCrate(bpm, overallEnergy, vocalDensity);
+  // Mixxx-style −60 dBFS silence trim for the real blend window.
+  const trim = findTrimPoints(buf, -60);
   onProgress?.("Fertig", 100);
 
   return {
@@ -302,8 +312,14 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
     smartCrate,
     overallEnergy: +overallEnergy.toFixed(3),
     vocalDensity: +vocalDensity.toFixed(3),
+    trimInSec: trim.trimInSec,
+    trimOutSec: trim.trimOutSec,
   };
 }
+
+/** Re-export for callers that want to fold a detected BPM against a
+ *  metadata or sibling-track hint. */
+export { correctBpmFold } from "./proTransition";
 
 /** 24-dim L2-normalized fingerprint, derived from cheap features only.
  *  Layout:
