@@ -14,6 +14,7 @@ import { FxPadGrid } from "@/components/cockpit/FxPadGrid";
 import { CockpitCenter } from "@/components/cockpit/CockpitCenter";
 import { MixabilityPlaylist } from "@/components/cockpit/MixabilityPlaylist";
 import { CopilotLog } from "@/components/cockpit/CopilotLog";
+import { EnergyTimeline } from "@/components/cockpit/EnergyTimeline";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
@@ -92,6 +93,10 @@ function Cockpit() {
           cues: safeJson<{ introEnd: number; firstDrop: number; outroStart: number }>(t.cues),
           vocalMap: safeJson<{ t: number; voiced: number }[]>(t.vocal_map),
           durationSec: (t.duration_sec as number | null) ?? null,
+          energy: (t.energy as number | null) ?? null,
+          embedding: (t.embedding as number[] | null) ?? null,
+          smartCrate: (t.smart_crate as EngineTrack["smartCrate"] | null) ?? null,
+          userTags: (t.user_tags as string[] | null) ?? null,
         } satisfies EngineTrack;
       }));
       const filtered = mapped.filter((t) => t.url);
@@ -200,6 +205,8 @@ function Cockpit() {
       </div>
 
       <TwinDeck tracks={tracks} />
+
+      <EnergyTimeline />
 
       {/* Center / Playlist / Copilot — PartySpark-style cockpit row */}
       <div className="rounded-3xl stage-gradient p-3 sm:p-4">
