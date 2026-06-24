@@ -176,6 +176,7 @@ const deck: Record<DeckSide, {
   src: MediaElementAudioSourceNode | null;
   filter: BiquadFilterNode | null;
   gain: GainNode | null;
+  loudnessGain: GainNode | null;
   eqLow: BiquadFilterNode | null;
   eqMid: BiquadFilterNode | null;
   eqHigh: BiquadFilterNode | null;
@@ -188,10 +189,13 @@ const deck: Record<DeckSide, {
   /** Bypass node used while the async stretch node is being built. */
   stretchPlaceholder: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
-  B: { el: null, src: null, filter: null, gain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
 };
 let masterGain: GainNode | null = null;
+let masterSubComp: DynamicsCompressorNode | null = null;
+let masterLimiter: DynamicsCompressorNode | null = null;
+let masterDcBlock: BiquadFilterNode | null = null;
 let rafId: number | null = null;
 let activeDroneStop: (() => void) | null = null;
 // Bridge playback graph: a one-shot BufferSource → filter → gain → master.
@@ -219,7 +223,29 @@ function ensureCtx() {
     ctx = new Ctx();
     masterGain = ctx.createGain();
     masterGain.gain.value = 1;
-    masterGain.connect(ctx.destination);
+    // Live master safety chain — DC-block HPF → sub-comp → brickwall limiter.
+    // Mirrors the offline masterBuffer() chain so live mixing has the same
+    // headroom protection as rendered exports.
+    masterDcBlock = ctx.createBiquadFilter();
+    masterDcBlock.type = "highpass";
+    masterDcBlock.frequency.value = 28;
+    masterDcBlock.Q.value = Math.SQRT1_2;
+    masterSubComp = ctx.createDynamicsCompressor();
+    masterSubComp.threshold.value = -12;
+    masterSubComp.knee.value = 6;
+    masterSubComp.ratio.value = 3;
+    masterSubComp.attack.value = 0.006;
+    masterSubComp.release.value = 0.12;
+    masterLimiter = ctx.createDynamicsCompressor();
+    masterLimiter.threshold.value = -1.0;
+    masterLimiter.knee.value = 0;
+    masterLimiter.ratio.value = 20;
+    masterLimiter.attack.value = 0.001;
+    masterLimiter.release.value = 0.05;
+    masterGain.connect(masterDcBlock);
+    masterDcBlock.connect(masterSubComp);
+    masterSubComp.connect(masterLimiter);
+    masterLimiter.connect(ctx.destination);
     // Bridge bus
     bridgeGain = ctx.createGain();
     bridgeGain.gain.value = 0;
@@ -277,6 +303,11 @@ function wireDeck(side: DeckSide) {
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
+      // Per-deck loudness-trim gain. Set by ensureAnalysis() based on the
+      // K-weighted LUFS measurement so every track sits around −14 LUFS.
+      // Sits AFTER the user gain so the volume slider remains absolute.
+      d.loudnessGain = ctx.createGain();
+      d.loudnessGain.gain.value = 1;
       d.analyser = ctx.createAnalyser();
       d.analyser.fftSize = 512;
       d.analyser.smoothingTimeConstant = 0.6;
@@ -294,7 +325,8 @@ function wireDeck(side: DeckSide) {
       d.filter.connect(d.stretchPlaceholder);
       d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
-      d.gain.connect(d.analyser);
+      d.gain.connect(d.loudnessGain);
+      d.loudnessGain.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
@@ -1696,6 +1728,16 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       };
       set((s) => ({ [side]: { ...s[side], track: enriched, analyzing: false, analyzeProgress: 100 } } as Partial<BusState>));
       recomputeEffective(side);
+      // Apply LUFS-based loudness trim so deck-to-deck level differences vanish.
+      try {
+        const lg = deck[side].loudnessGain;
+        if (lg && ctx) {
+          const gainLin = Math.pow(10, (a.loudnessGainDb ?? 0) / 20);
+          const now = ctx.currentTime;
+          lg.gain.cancelScheduledValues(now);
+          lg.gain.setTargetAtTime(Math.max(0.1, Math.min(4, gainLin)), now, 0.05);
+        }
+      } catch { /* noop */ }
       // (Re)build bridge for this side now that analysis is fresh.
       const other: DeckSide = side === "A" ? "B" : "A";
       if (get()[other].track?.bpm) {

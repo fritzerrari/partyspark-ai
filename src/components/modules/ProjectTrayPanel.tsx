@@ -72,6 +72,8 @@ export function ProjectTrayPanel() {
             vocalDensity: 0,
             trimInSec: 0,
             trimOutSec: (tt.duration_sec as number | null) ?? 0,
+            lufsIntegrated: -14,
+            loudnessGainDb: 0,
           } : null,
           meta: { artist: (tt.artist as string | null), artwork: (tt.artwork_url as string | null), durationSec: (tt.duration_sec as number | null) },
         });

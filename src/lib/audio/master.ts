@@ -13,15 +13,30 @@ export async function masterBuffer(input: AudioBuffer, opts: { makeup?: number; 
   src.buffer = input;
   const pre = offline.createGain();
   pre.gain.value = makeup;
+  // DC-block / sub-rumble HPF — 2nd-order Butterworth @ 30 Hz.
+  const hp = offline.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 30;
+  hp.Q.value = Math.SQRT1_2;
+  // Sub-bass soft-knee compressor (tames kick stacks).
+  const subComp = offline.createDynamicsCompressor();
+  subComp.threshold.value = -12;
+  subComp.knee.value = 6;
+  subComp.ratio.value = 3;
+  subComp.attack.value = 0.006;
+  subComp.release.value = 0.12;
   const lim = offline.createDynamicsCompressor();
-  lim.threshold.value = -1.5;   // dB
+  // Brick-wall limiter: −1 dBTP ceiling target, instant attack.
+  lim.threshold.value = -1.0;
   lim.knee.value = 0;
   lim.ratio.value = 20;
   lim.attack.value = 0.001;
-  lim.release.value = 0.08;
-  // Connect: source → pre → limiter → destination
+  lim.release.value = 0.05;
+  // Chain: source → pre → HPF → sub-comp → brick-wall limiter → destination
   src.connect(pre);
-  pre.connect(lim);
+  pre.connect(hp);
+  hp.connect(subComp);
+  subComp.connect(lim);
   lim.connect(offline.destination);
   src.start();
   const rendered = await offline.startRendering();
