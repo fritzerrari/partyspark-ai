@@ -22,6 +22,14 @@ import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { decideTransition, type TransitionDecision } from "./transitionDecision";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
+import { epRampGain } from "./proTransition";
+import {
+  startPhaseLock,
+  registerActiveLock,
+  stopActiveLock,
+  publishLiveDrift,
+} from "./phaseLock";
+import { beatDriftMs } from "./proTransition";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
@@ -907,9 +915,11 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
       default:
         // Harmonic crossfade with subtle low-end isolation to avoid bass clash.
         rampEqGain(fromDeck.eqLow, -10, xf * 0.5);
-        rampGain(fromDeck.gain, 0, xf);
+        if (ctx && fromDeck.gain) epRampGain(ctx, fromDeck.gain, 0, xf);
+        else rampGain(fromDeck.gain, 0, xf);
         rampEqGain(toDeck.eqLow, 0, xf * 0.6);
-        rampGain(toDeck.gain, toUserVol, xf);
+        if (ctx && toDeck.gain) epRampGain(ctx, toDeck.gain, toUserVol, xf);
+        else rampGain(toDeck.gain, toUserVol, xf);
         break;
     }
     // Animate the visible crossfader to its target (A:0, B:1)
