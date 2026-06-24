@@ -1572,6 +1572,13 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
           },
           kP: 0.35,
           maxAdjust: 0.04,
+          onTrainWreck: (drift) => {
+            // Loop-roll rescue: gate the outgoing deck in 1/4-beat slices
+            // for 4 beats so the drift becomes a rhythmic stutter, not
+            // a wreck. Mixxx beatloop_roll behaviour, simplified.
+            try { triggerBeatRepeat(from, 4, 4); } catch { /* noop */ }
+            console.warn("[phaseLock] train-wreck", { driftMs: drift, from, to });
+          },
         });
         registerActiveLock(lock);
       } catch { /* noop */ }
@@ -1671,6 +1678,13 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
           },
           kP: 0.35,
           maxAdjust: 0.04,
+          onTrainWreck: (drift) => {
+            // Loop-roll rescue: gate the outgoing deck in 1/4-beat slices
+            // for 4 beats so the drift becomes a rhythmic stutter, not
+            // a wreck. Mixxx beatloop_roll behaviour, simplified.
+            try { triggerBeatRepeat(from, 4, 4); } catch { /* noop */ }
+            console.warn("[phaseLock] train-wreck", { driftMs: drift, from, to });
+          },
         });
         registerActiveLock(lock);
       } catch { /* noop */ }
