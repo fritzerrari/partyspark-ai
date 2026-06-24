@@ -69,15 +69,18 @@ export function decideTransition(opts: {
   const energyJump = energyOf(toTrack) - energyOf(fromTrack);
   const realStemsAvailable = fromMode === "real" && toMode === "real";
 
-  // Stability-first: no live tempo-stretch inside transitions. PlaybackRate
-  // glides and phase-lock loops were the main source of audible stutter on
-  // slower devices, so the simplified system only uses deck gain/EQ ramps.
+  // Tempo sync: glide the incoming deck up to the outgoing master tempo for
+  // the duration of the crossfade, then drift slowly back to its original
+  // rate afterwards. Clamp ±6 % so we don't audibly mangle the audio; outside
+  // that window we fall back to a pure EQ/echo swap with no rate change.
   const rawRate = fromBpm && toBpm ? tempoSyncRate(fromBpm, toBpm) : 1;
-  const syncAllowed = false;
-  const syncRate = 1;
+  const syncAllowed = Math.abs(rawRate - 1) <= 0.06;
+  const syncRate = syncAllowed ? Math.max(0.94, Math.min(1.06, rawRate)) : 1;
 
   const reasons: string[] = [];
-  if (Math.abs(rawRate - 1) > 0.01) reasons.push("kein Live-Stretching");
+  if (!syncAllowed && Math.abs(rawRate - 1) > 0.06) reasons.push("BPM-Spreizung zu groß, kein Stretch");
+  else if (syncAllowed && Math.abs(syncRate - 1) > 0.002) reasons.push(`Sync ×${syncRate.toFixed(3)} mit Rück-Glide`);
+  else reasons.push("BPM bereits matched");
   if (vocalClash) reasons.push("Vocal-Clash erkannt");
   if (keyCompatible) reasons.push("Tonarten kompatibel");
   else if (fromTrack && toTrack) reasons.push("Tonarten riskant");
