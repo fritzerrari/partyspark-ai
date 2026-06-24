@@ -35,8 +35,11 @@ export async function ensureAnalyzed(
       energy_curve: a.energyCurve,
       cues: a.cues,
       vocal_map: a.vocalMap,
+      embedding: a.embedding,
+      smart_crate: a.smartCrate,
+      energy: Math.round(Math.max(10, Math.min(100, a.overallEnergy * 400))),
       analyzed_at: new Date().toISOString(),
-    }).eq("id", track.id);
+    } as unknown as Record<string, unknown>).eq("id", track.id);
   } catch { /* ignore */ }
   return {
     ...track,
@@ -46,6 +49,9 @@ export async function ensureAnalyzed(
     beatGrid: a.beatGrid,
     cues: a.cues,
     vocalMap: a.vocalMap,
+    energy: a.overallEnergy,
+    embedding: a.embedding,
+    smartCrate: a.smartCrate,
   };
 }
 
