@@ -223,6 +223,32 @@ export function vocalOverlapRisk(
   return Math.min(1, va * vb * 1.4);
 }
 
+/** Sample a deck's current 2048-sample time-domain window into a Float32Array.
+ *  Returns null if the analyser is unavailable. Use this together with
+ *  crossCorrelatePhase() to detect kick-vs-kick phase cancellation between
+ *  two playing decks — if peakCorr < −0.3, flip the polarity of one bass bus. */
+export function snapshotAnalyser(an: AnalyserNode | null): Float32Array | null {
+  if (!an) return null;
+  try {
+    const buf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(buf);
+    return buf;
+  } catch {
+    return null;
+  }
+}
+
+/** High-level helper: take two analyser snapshots and return whether to
+ *  invert the polarity of the incoming bass (true ⇒ flip). */
+export function shouldFlipPolarity(a: AnalyserNode | null, b: AnalyserNode | null): boolean {
+  const sa = snapshotAnalyser(a);
+  const sb = snapshotAnalyser(b);
+  if (!sa || !sb) return false;
+  // Use ±5 ms max lag (≈ 240 samples @ 48 kHz) to find the best alignment.
+  const { peakCorr } = crossCorrelatePhase(sa, sb, 240);
+  return peakCorr < -0.3;
+}
+
 function sampleVocal(
   map: { t: number; voiced: number }[] | null | undefined,
   sec: number,
