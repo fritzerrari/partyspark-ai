@@ -18,7 +18,7 @@ import { EnergyTimeline } from "@/components/cockpit/EnergyTimeline";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
-import { Sparkles, Square, Disc, Mic, MonitorPlay, Calendar } from "lucide-react";
+import { Sparkles, Square, Disc, Mic, MonitorPlay, Calendar, Radio, Activity, Music } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { startVisualBridge } from "@/lib/audio/visualBridge";
@@ -144,89 +144,98 @@ function Cockpit() {
   }
 
   return (
-    <div className="space-y-4 pb-32 animate-fade-up sm:pb-4">
-      <div className="relative overflow-hidden rounded-3xl stage-gradient p-5 sm:p-6">
-        {/* Ambient bg pulse */}
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[var(--neon-cyan)]/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-20 h-64 w-64 rounded-full bg-[var(--neon-magenta)]/10 blur-3xl" />
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative">
-            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-stage-foreground/60">
-              Schritt 3 · Spiele deine Party
-            </p>
-            <h1 className="mt-1 text-2xl font-black uppercase tracking-tight text-stage-foreground sm:text-3xl">
-              <span className="bg-gradient-to-r from-[var(--neon-cyan)] to-[var(--neon-magenta)] bg-clip-text text-transparent">
-                DJ Cockpit
-              </span>
-            </h1>
-            <p className="mt-1 text-[11px] text-stage-foreground/70">
-              {tracks.length === 0
-                ? "Noch keine Tracks — lade welche in deine Library."
-                : tracks.length < 2
-                  ? `${tracks.length} Track verfügbar — du brauchst min. 2 für Party-Modus.`
-                  : `${tracks.length} Tracks bereit · Live-Mixen, Export, Stems, FX.`}
-            </p>
+    <div className="cockpit-pro sb-shell -mx-4 -my-4 min-h-[calc(100vh-3rem)] space-y-5 px-4 py-4 pb-32 animate-fade-up sm:-mx-6 sm:px-6 sm:pb-6">
+      {/* ───── Top bar ───── */}
+      <header className="sb-card sb-scan grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-5 py-4 sm:flex sm:flex-wrap sm:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl"
+               style={{ background: "linear-gradient(135deg, var(--sb-primary), var(--sb-magenta))",
+                        boxShadow: "0 10px 24px -10px color-mix(in oklab, var(--sb-primary) 70%, transparent)" }}>
+            <Radio className="h-5 w-5 text-black/80" />
           </div>
-          <div className="relative flex flex-wrap gap-2">
-            <button
-              onClick={openVisualizer}
-              className="min-h-[44px] rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold uppercase tracking-widest text-stage-foreground transition-all hover:bg-white/20 active:scale-95 flex items-center justify-center gap-2"
-            >
-              <MonitorPlay className="h-3 w-3" /> Beamer
-            </button>
-            <Link
-              to="/setplanner"
-              className="min-h-[44px] rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold uppercase tracking-widest text-stage-foreground transition-all hover:bg-white/20 active:scale-95 flex items-center justify-center gap-2"
-            >
-              <Calendar className="h-3 w-3" /> Set-Planer
-            </Link>
-            <button
-              onClick={handlePartyMode}
-              disabled={tracks.length < 2}
-              className={
-                "min-h-[44px] flex-1 sm:flex-none rounded-full px-4 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40 flex items-center justify-center gap-2 " +
-                (autoTimerOn
-                  ? "bg-red-500 text-white animate-pulse"
-                  : "bg-[var(--neon-cyan)] text-black hover:brightness-110 neon-glow-cyan")
-              }
-            >
-              {autoTimerOn ? <><Square className="h-3 w-3" /> Party-Modus stoppen</> : <><Sparkles className="h-4 w-4" /> Party-Modus starten</>}
-            </button>
-            <button
-              onClick={handleRecord}
-              className={
-                "min-h-[44px] rounded-full px-4 text-xs font-bold uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2 " +
-                (recording ? "bg-red-500 text-white animate-pulse" : "border border-white/20 bg-white/10 text-stage-foreground hover:bg-white/20")
-              }
-            >
-              <Disc className="h-3 w-3" /> {recording ? "Stop" : "Rec"}
-            </button>
+          <div className="min-w-0">
+            <div className="sb-eyebrow">Schritt 3 · Spiele deine Party</div>
+            <h1 className="sb-title truncate text-2xl sm:text-3xl">DJ COCKPIT</h1>
+            <div className="mt-0.5 flex items-center gap-2 text-[11px]" style={{ color: "var(--sb-ink-dim)" }}>
+              <span className="sb-eq" aria-hidden><span /><span /><span /><span /></span>
+              <span className="font-mono">
+                {tracks.length === 0
+                  ? "Noch keine Tracks — lade welche in die Library."
+                  : tracks.length < 2
+                    ? `${tracks.length} Track · min. 2 für Party-Modus`
+                    : `${tracks.length} Tracks bereit · Live-Engine ready`}
+              </span>
+            </div>
           </div>
         </div>
-        {tracks.length < 2 && (
-          <p className="mt-3 text-[11px] text-stage-foreground/70">
-            Lade mindestens 2 Tracks in deine <Link to="/library" className="underline text-[var(--neon-cyan)]">Library</Link>, dann startet der Party-Modus mit einem Klick.
-          </p>
-        )}
-      </div>
 
-      <TwinDeck tracks={tracks} />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button onClick={openVisualizer} className="sb-pill">
+            <MonitorPlay className="h-3.5 w-3.5" /> Beamer
+          </button>
+          <Link to="/setplanner" className="sb-pill">
+            <Calendar className="h-3.5 w-3.5" /> Set-Planer
+          </Link>
+          <button
+            onClick={handlePartyMode}
+            disabled={tracks.length < 2}
+            className={"sb-pill " + (autoTimerOn ? "sb-pill-rec animate-pulse" : "sb-pill-primary")}
+          >
+            {autoTimerOn ? <><Square className="h-3.5 w-3.5" /> Stop</> : <><Sparkles className="h-3.5 w-3.5" /> Party-Modus</>}
+          </button>
+          <button
+            onClick={handleRecord}
+            className={"sb-pill " + (recording ? "sb-pill-rec animate-pulse" : "")}
+          >
+            <Disc className="h-3.5 w-3.5" /> {recording ? "Stop" : "Rec"}
+          </button>
+        </div>
+      </header>
 
-      <EnergyTimeline />
+      {/* ───── KPI strip ───── */}
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiTile
+          icon={<Music className="h-4 w-4" />}
+          label="Library"
+          value={tracks.length.toString().padStart(2, "0")}
+          hint={tracks.length >= 2 ? "Bereit zum Mixen" : "≥ 2 Tracks benötigt"}
+          tone="warm"
+        />
+        <LiveStateKpi />
+        <CrateKpi tracks={tracks} />
+      </section>
 
-      {/* Center / Playlist / Copilot — PartySpark-style cockpit row */}
-      <div className="rounded-3xl stage-gradient p-3 sm:p-4">
-        <div className="grid gap-3 lg:grid-cols-[1fr_320px]">
+      {/* ───── Decks row ───── */}
+      <section>
+        <SectionHeader label="Decks & Mixer" icon={<Activity className="h-3.5 w-3.5" />} />
+        <TwinDeck tracks={tracks} />
+      </section>
+
+      {/* ───── Mix Lab + Right Rail ───── */}
+      <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
+        <div className="sb-card-warm p-4">
+          <SectionHeader label="Mix Lab" icon={<Sparkles className="h-3.5 w-3.5" />} />
           <CockpitCenter />
-          <div className="grid gap-3 grid-rows-[1fr_1fr] min-h-[420px]">
+        </div>
+        <div className="grid gap-3">
+          <div className="sb-card p-3">
+            <SectionHeader label="Energy Timeline" />
+            <EnergyTimeline />
+          </div>
+          <div className="sb-card p-3">
+            <SectionHeader label="Playlist" />
             <MixabilityPlaylist tracks={tracks} />
+          </div>
+          <div className="sb-card p-3">
+            <SectionHeader label="Copilot Log" />
             <CopilotLog />
           </div>
         </div>
-      </div>
+      </section>
 
+      {/* ───── Module rail (Export · Stems · Karaoke · FX · Sequencer · Coach) ───── */}
       <Tabs defaultValue="autodj" className="w-full">
-        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-2xl bg-card/60 p-1.5 backdrop-blur">
+        <TabsList className="sb-rail">
           {[
             { v: "autodj", label: "Export", icon: Bot },
             { v: "stems", label: "Stems & Mix", icon: Music2 },
@@ -235,11 +244,7 @@ function Cockpit() {
             { v: "sequencer", label: "Sequencer", icon: Grid3x3 },
             { v: "coach", label: "Coach", icon: Lightbulb },
           ].map(({ v, label, icon: Icon }) => (
-            <TabsTrigger
-              key={v}
-              value={v}
-              className="flex-1 min-w-[110px] gap-2 rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
+            <TabsTrigger key={v} value={v} className="sb-rail-item">
               <Icon className="h-3.5 w-3.5" /> {label}
             </TabsTrigger>
           ))}
@@ -286,16 +291,130 @@ function Cockpit() {
 
 function EmptyHint({ title, body, to, cta }: { title: string; body: string; to: string; cta: string }) {
   return (
-    <div className="rounded-3xl border border-dashed border-white/15 bg-card/40 p-8 text-center">
-      <Lightbulb className="mx-auto mb-3 h-8 w-8 text-[var(--neon-cyan)]" />
-      <h3 className="text-base font-bold text-stage-foreground">{title}</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm text-stage-foreground/70">{body}</p>
+    <div className="sb-card p-8 text-center">
+      <Lightbulb className="mx-auto mb-3 h-8 w-8" style={{ color: "var(--sb-primary)" }} />
+      <h3 className="text-base font-bold" style={{ color: "var(--sb-ink)" }}>{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: "var(--sb-ink-dim)" }}>{body}</p>
       <Link
         to={to}
-        className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--neon-cyan)] px-5 py-2 text-xs font-bold uppercase tracking-widest text-black hover:brightness-110"
+        className="sb-pill sb-pill-primary mt-4"
       >
         {cta}
       </Link>
+    </div>
+  );
+}
+
+/* ───── helpers ───── */
+
+function SectionHeader({ label, icon }: { label: string; icon?: React.ReactNode }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {icon && <span style={{ color: "var(--sb-primary)" }}>{icon}</span>}
+      <span className="sb-section-title">{label}</span>
+      <span className="flex-1" />
+    </div>
+  );
+}
+
+function KpiTile({
+  icon, label, value, hint, tone = "warm",
+}: { icon: React.ReactNode; label: string; value: string; hint?: string; tone?: "warm" | "cool" }) {
+  const color = tone === "cool" ? "var(--sb-cool)" : "var(--sb-primary)";
+  return (
+    <div className="sb-kpi flex items-center gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+           style={{ background: `color-mix(in oklab, ${color} 18%, transparent)`, color }}>
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="sb-eyebrow text-[10px]">{label}</div>
+        <div className="font-mono text-2xl font-bold leading-none" style={{ color: "var(--sb-ink)" }}>{value}</div>
+        {hint && <div className="mt-1 truncate text-[10px]" style={{ color: "var(--sb-ink-mute)" }}>{hint}</div>}
+      </div>
+    </div>
+  );
+}
+
+function LiveStateKpi() {
+  const aPlaying = useTwinDeck((s) => s.A.isPlaying);
+  const bPlaying = useTwinDeck((s) => s.B.isPlaying);
+  const crossfader = useTwinDeck((s) => s.crossfader);
+  const inFlight = useTwinDeck((s) => s.transitionInFlight);
+  const live = (1 - crossfader) > crossfader ? "A" : "B";
+  const liveColor = live === "A" ? "var(--sb-primary)" : "var(--sb-cool)";
+  const status = inFlight ? "Übergang läuft" : aPlaying || bPlaying ? `Deck ${live} live` : "Idle";
+  return (
+    <div className="sb-kpi flex items-center gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+           style={{ background: `color-mix(in oklab, ${liveColor} 20%, transparent)`, color: liveColor }}>
+        {aPlaying || bPlaying ? (
+          <span className="sb-eq" aria-hidden><span /><span /><span /><span /></span>
+        ) : (
+          <Activity className="h-4 w-4" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="sb-eyebrow text-[10px]">Engine</div>
+        <div className="font-mono text-base font-bold leading-tight" style={{ color: "var(--sb-ink)" }}>{status}</div>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "color-mix(in oklab, white 8%, transparent)" }}>
+          <div className="h-full rounded-full transition-[width] duration-200"
+               style={{
+                 width: `${Math.round(crossfader * 100)}%`,
+                 background: "linear-gradient(90deg, var(--sb-primary), var(--sb-magenta), var(--sb-cool))",
+               }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CrateKpi({ tracks }: { tracks: EngineTrack[] }) {
+  const counts = tracks.reduce<Record<string, number>>((acc, t) => {
+    const k = (t.smartCrate ?? "unsortiert") as string;
+    acc[k] = (acc[k] ?? 0) + 1;
+    return acc;
+  }, {});
+  const order = ["warmup", "filler", "peak", "cooldown", "reserve", "unsortiert"] as const;
+  const labels: Record<string, string> = {
+    warmup: "Warm-up", filler: "Floor-Filler", peak: "Peak-Time",
+    cooldown: "Cool-down", reserve: "Reserve", unsortiert: "Unsortiert",
+  };
+  const top = order
+    .map((k) => ({ k, n: counts[k] ?? 0 }))
+    .filter((x) => x.n > 0)
+    .slice(0, 3);
+  const total = tracks.length;
+  return (
+    <div className="sb-kpi flex items-center gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+           style={{ background: "color-mix(in oklab, var(--sb-warm) 18%, transparent)", color: "var(--sb-warm)" }}>
+        <Calendar className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="sb-eyebrow text-[10px]">Smart Crates</div>
+        {top.length === 0 ? (
+          <div className="font-mono text-base font-bold leading-tight" style={{ color: "var(--sb-ink-dim)" }}>
+            noch leer
+          </div>
+        ) : (
+          <div className="mt-0.5 flex flex-wrap gap-1.5">
+            {top.map(({ k, n }) => (
+              <span key={k}
+                className="rounded-full px-2 py-0.5 font-mono text-[10px]"
+                style={{ background: "color-mix(in oklab, var(--sb-warm) 16%, transparent)",
+                         color: "var(--sb-ink)" }}>
+                {labels[k]} <span style={{ color: "var(--sb-ink-mute)" }}>· {n}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {total > 0 && (
+          <div className="mt-1 text-[10px]" style={{ color: "var(--sb-ink-mute)" }}>
+            {total} Tracks analysiert
+          </div>
+        )}
+      </div>
     </div>
   );
 }
