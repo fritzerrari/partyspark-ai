@@ -563,6 +563,15 @@ async function runStableDeckBlend(
     bars?: number;
     fromUserVol: number;
     toUserVol: number;
+    /** Target playbackRate to lock the incoming deck to during the blend
+     *  (relative to its native rate). 1 = no tempo sync. Clamped 0.94..1.06. */
+    syncRate?: number;
+    /** Seconds to glide the incoming deck up to syncRate BEFORE the audible
+     *  crossfade starts. Keeps the rate change inaudible. */
+    preSyncSec?: number;
+    /** Seconds to glide the (now leading) deck back to its native rate
+     *  AFTER the crossfade. 0 disables the post-drift. */
+    postGlideSec?: number;
     onPhase?: (phase: TransitionPhase) => void;
   },
 ) {
@@ -576,14 +585,33 @@ async function runStableDeckBlend(
   const bars = Math.max(4, Math.min(12, opts.bars ?? 8));
   const total = Math.max(4, secPerBar * bars);
   const half = total * 0.5;
+  const syncRate = Math.max(0.94, Math.min(1.06, opts.syncRate ?? 1));
+  const preSyncSec = Math.max(0, opts.preSyncSec ?? (Math.abs(syncRate - 1) > 0.002 ? 2.5 : 0));
+  const postGlideSec = Math.max(0, opts.postGlideSec ?? (Math.abs(syncRate - 1) > 0.002 ? 8 : 0));
 
   opts.onPhase?.("cue");
   try { fromDeck.stems?.reset(); toDeck.stems?.reset(); } catch { /* noop */ }
   resetFilter(from); resetFilter(to); resetEq(from); resetEq(to);
-  setDeckRate(from, 1); setDeckRate(to, 1);
+  // Outgoing deck always plays at its native rate (it is the master).
+  setDeckRate(from, 1);
   if (toDeck.el && toDeck.el.paused) {
     try { await toDeck.el.play(); } catch { /* gesture */ }
   }
+
+  // Pre-Sync: glide the incoming deck up to the master tempo BEFORE the mix
+  // becomes audible. Done while toDeck.gain is still 0, so the rate ramp is
+  // inaudible. Single ramp per deck — never overlapping rate glides.
+  if (toDeck.el) {
+    if (preSyncSec > 0 && Math.abs(syncRate - (toDeck.el.playbackRate || 1)) > 0.0005) {
+      glidePlaybackRate(toDeck.el, syncRate, preSyncSec * 1000);
+      await new Promise((r) => setTimeout(r, preSyncSec * 1000 + 40));
+    } else {
+      setDeckRate(to, syncRate);
+    }
+  }
+  // Reflect the locked rate in the UI immediately.
+  useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: syncRate } } as Partial<BusState>));
+  recomputeEffective(to);
 
   const now = ctx.currentTime;
 
@@ -613,8 +641,26 @@ async function runStableDeckBlend(
   opts.onPhase?.("reveal");
   try { fromDeck.el?.pause(); } catch { /* noop */ }
   resetFilter(from); resetFilter(to); resetEq(from); resetEq(to);
-  setDeckRate(to, 1);
-  recomputeEffective(to);
+  // Post-Sync: slow drift back to native tempo on the now-leading deck so
+  // the next mix starts from the track's original BPM. Non-awaited — the
+  // transition is musically "done"; this only un-bends the pitch.
+  if (toDeck.el && postGlideSec > 0 && Math.abs(syncRate - 1) > 0.002) {
+    glidePlaybackRate(toDeck.el, 1, postGlideSec * 1000);
+    // RAF the UI back to 1.0 alongside the glide.
+    const t0 = performance.now();
+    const tick = () => {
+      const p = Math.min(1, (performance.now() - t0) / (postGlideSec * 1000));
+      const r = syncRate + (1 - syncRate) * p;
+      useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: r } } as Partial<BusState>));
+      recomputeEffective(to);
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  } else {
+    setDeckRate(to, 1);
+    useTwinDeck.setState((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
+    recomputeEffective(to);
+  }
   opts.onPhase?.("done");
 }
 
