@@ -196,6 +196,12 @@ let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
 let masterLimiter: DynamicsCompressorNode | null = null;
 let masterDcBlock: BiquadFilterNode | null = null;
+// Echo-tail send bus: deck → echoSend (one per side) → echoDelay → echoFb → echoWet → master.
+// Rekordbox-style 1/2-beat throw triggered with a bass-swap or cut.
+let echoDelay: DelayNode | null = null;
+let echoFb: GainNode | null = null;
+let echoWet: GainNode | null = null;
+const echoSend: Record<DeckSide, GainNode | null> = { A: null, B: null };
 let rafId: number | null = null;
 let activeDroneStop: (() => void) | null = null;
 // Bridge playback graph: a one-shot BufferSource → filter → gain → master.
