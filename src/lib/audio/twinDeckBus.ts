@@ -252,6 +252,17 @@ function ensureCtx() {
     masterDcBlock.connect(masterSubComp);
     masterSubComp.connect(masterLimiter);
     masterLimiter.connect(ctx.destination);
+    // Echo-tail send bus (shared by both decks).
+    echoDelay = ctx.createDelay(2.0);
+    echoDelay.delayTime.value = 0.25;        // 1/2 beat @ 120 BPM, retuned on trigger
+    echoFb = ctx.createGain();
+    echoFb.gain.value = 0.35;
+    echoWet = ctx.createGain();
+    echoWet.gain.value = 0;                  // muted until triggered
+    echoDelay.connect(echoFb);
+    echoFb.connect(echoDelay);
+    echoDelay.connect(echoWet);
+    echoWet.connect(masterGain);
     // Bridge bus
     bridgeGain = ctx.createGain();
     bridgeGain.gain.value = 0;
