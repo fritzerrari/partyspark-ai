@@ -544,13 +544,71 @@ function glidePlaybackRate(el: HTMLMediaElement, target: number, durationMs: num
     const ease = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
     const next = from + (target - from) * ease;
     try { el.playbackRate = next; } catch { /* noop */ }
-    // Mirror the live rate into the pitch-preserving stretch node, if any.
-    const side: DeckSide | null = deck.A.el === el ? "A" : deck.B.el === el ? "B" : null;
-    if (side && deck[side].stretch) deck[side].stretch!.setRate(next);
     if (p < 1) gliderTimers.set(el, requestAnimationFrame(step));
     else gliderTimers.delete(el);
   };
   gliderTimers.set(el, requestAnimationFrame(step));
+}
+
+async function runStableDeckBlend(
+  from: DeckSide,
+  to: DeckSide,
+  opts: {
+    bars?: number;
+    fromUserVol: number;
+    toUserVol: number;
+    onPhase?: (phase: TransitionPhase) => void;
+  },
+) {
+  if (!ctx) return;
+  const fromDeck = deck[from];
+  const toDeck = deck[to];
+  if (!fromDeck.gain || !toDeck.gain) return;
+  const st = useTwinDeck.getState();
+  const bpm = st[from].track?.bpm ?? 120;
+  const secPerBar = (60 / Math.max(70, Math.min(180, bpm))) * 4;
+  const bars = Math.max(4, Math.min(12, opts.bars ?? 8));
+  const total = Math.max(4, secPerBar * bars);
+  const half = total * 0.5;
+  const now = ctx.currentTime;
+
+  opts.onPhase?.("cue");
+  try { fromDeck.stems?.reset(); toDeck.stems?.reset(); } catch { /* noop */ }
+  resetFilter(from); resetFilter(to); resetEq(from); resetEq(to);
+  setDeckRate(from, 1); setDeckRate(to, 1);
+  if (toDeck.el && toDeck.el.paused) {
+    try { await toDeck.el.play(); } catch { /* gesture */ }
+  }
+
+  fromDeck.gain.gain.cancelScheduledValues(now);
+  toDeck.gain.gain.cancelScheduledValues(now);
+  fromDeck.gain.gain.setValueAtTime(opts.fromUserVol, now);
+  toDeck.gain.gain.setValueAtTime(0, now);
+  if (toDeck.eqLow) {
+    toDeck.eqLow.gain.cancelScheduledValues(now);
+    toDeck.eqLow.gain.setValueAtTime(-12, now);
+    toDeck.eqLow.gain.linearRampToValueAtTime(-12, now + half);
+    toDeck.eqLow.gain.linearRampToValueAtTime(0, now + total * 0.75);
+  }
+  if (fromDeck.eqLow) {
+    fromDeck.eqLow.gain.cancelScheduledValues(now);
+    fromDeck.eqLow.gain.setValueAtTime(0, now);
+    fromDeck.eqLow.gain.linearRampToValueAtTime(-10, now + half);
+    fromDeck.eqLow.gain.linearRampToValueAtTime(-16, now + total * 0.85);
+  }
+  opts.onPhase?.("layer");
+  toDeck.gain.gain.linearRampToValueAtTime(opts.toUserVol * 0.72, now + half);
+  opts.onPhase?.("switch");
+  toDeck.gain.gain.linearRampToValueAtTime(opts.toUserVol, now + total);
+  fromDeck.gain.gain.linearRampToValueAtTime(0, now + total);
+  animateCrossfader(to === "B" ? 1 : 0, total * 1000);
+  await new Promise((r) => setTimeout(r, total * 1000 + 80));
+  opts.onPhase?.("reveal");
+  try { fromDeck.el?.pause(); } catch { /* noop */ }
+  resetFilter(from); resetFilter(to); resetEq(from); resetEq(to);
+  setDeckRate(to, 1);
+  recomputeEffective(to);
+  opts.onPhase?.("done");
 }
 
 let autoTimerInterval: number | null = null;
