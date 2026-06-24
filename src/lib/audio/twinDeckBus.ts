@@ -170,6 +170,7 @@ const deck: Record<DeckSide, {
   src: MediaElementAudioSourceNode | null;
   filter: BiquadFilterNode | null;
   gain: GainNode | null;
+  mediaGain: GainNode | null;
   loudnessGain: GainNode | null;
   eqLow: BiquadFilterNode | null;
   eqMid: BiquadFilterNode | null;
@@ -179,8 +180,8 @@ const deck: Record<DeckSide, {
   realStems: RealStemPlayer | null;
   stemMeter: StemMeter | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  A: { el: null, src: null, filter: null, gain: null, mediaGain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  B: { el: null, src: null, filter: null, gain: null, mediaGain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
@@ -304,6 +305,8 @@ function wireDeck(side: DeckSide) {
       d.filter.Q.value = 0.7;
       d.gain = ctx.createGain();
       d.gain.gain.value = 1;
+      d.mediaGain = ctx.createGain();
+      d.mediaGain.gain.value = 1;
       // Per-deck loudness-trim gain. Set by ensureAnalysis() based on the
       // K-weighted LUFS measurement so every track sits around −14 LUFS.
       // Sits AFTER the user gain so the volume slider remains absolute.
@@ -312,13 +315,16 @@ function wireDeck(side: DeckSide) {
       d.analyser = ctx.createAnalyser();
       d.analyser.fftSize = 512;
       d.analyser.smoothingTimeConstant = 0.6;
-      // Insert pseudo-stem split between the filter chain and the final deck gain.
+      // Keep normal playback on a direct, cheap media path. The stem split is
+      // only an auxiliary bus for real stem buffers; pseudo band filters are
+      // not in the live deck path anymore, which avoids playback stutter.
       d.stems = createStemSplit(ctx);
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
       d.eqHigh.connect(d.filter);
-      d.filter.connect(d.stems.input);
+      d.filter.connect(d.mediaGain);
+      d.mediaGain.connect(d.gain);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.loudnessGain);
       d.loudnessGain.connect(d.analyser);
