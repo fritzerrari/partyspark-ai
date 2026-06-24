@@ -354,7 +354,12 @@ function wireDeck(side: DeckSide) {
       d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.loudnessGain);
-      d.loudnessGain.connect(d.analyser);
+      // Polarity inverter (default +1) sits between loudness trim and the
+      // analyser. Bass-Swap flips this to −1 if XCorr detects anti-phase.
+      d.polarity = ctx.createGain();
+      d.polarity.gain.value = 1;
+      d.loudnessGain.connect(d.polarity);
+      d.polarity.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Tap a pre-fader send into the echo bus.
       if (echoDelay) {
