@@ -12,19 +12,12 @@ import { shiftKey, semitoneShiftToKey } from "./keyDelta";
 import { buildBridge, type BridgePlan } from "./bridgeBuilder";
 import { mutualTempoRamp, playPedalDrone, commonTonePivot } from "./harmonicSync";
 import { createStemSplit, type StemSplit, type StemId } from "./stemSplit";
-import { runRecipe, pickRecipe, RECIPES, type RecipeId } from "./transitionRecipes";
-import {
-  runCleanRecipe, pickCleanRecipe, CLEAN_RECIPES,
-  type CleanRecipeId, type TransitionPhase,
-} from "./cleanDjTransitions";
+import type { RecipeId } from "./transitionRecipes";
+import { CLEAN_RECIPES, type CleanRecipeId, type TransitionPhase } from "./cleanDjTransitions";
 import { loadRealStems, createRealStemPlayer, type RealStemPlayer, type RealStemUrls } from "./realStemPlayer";
 import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { decideTransition, type TransitionDecision } from "./transitionDecision";
 import { createStemMeter, type StemMeter } from "./stemMeter";
-import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
-import { epRampGain, shouldFlipPolarity } from "./proTransition";
-import { createLR24Highpass, type LR24 } from "./filters/lr24";
-import { startPhaseLock, registerActiveLock, stopActiveLock } from "./phaseLock";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
@@ -185,19 +178,9 @@ const deck: Record<DeckSide, {
   stems: StemSplit | null;
   realStems: RealStemPlayer | null;
   stemMeter: StemMeter | null;
-  /** Pitch-preserving live time-stretch node (SoundTouch worklet). */
-  stretch: LiveStretchNode | null;
-  /** Bypass node used while the async stretch node is being built. */
-  stretchPlaceholder: GainNode | null;
-  /** LR24 (Linkwitz-Riley 4th-order) high-pass for surgical bass kills
-   *  during bass-swap transitions. Idle at 20 Hz (transparent). */
-  lr24Hpf: LR24 | null;
-  /** Polarity gain (±1) used by bass-swap to flip the incoming deck if its
-   *  kick is anti-phase to the outgoing one (XCorr < −0.3). Idle at +1. */
-  polarity: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null, polarity: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null, polarity: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
@@ -305,12 +288,6 @@ function wireDeck(side: DeckSide) {
     d.el.addEventListener("ended", () => {
       useTwinDeck.setState((s) => ({ [side]: { ...s[side], isPlaying: false } } as Partial<BusState>));
     });
-    // Whenever the HTMLMediaElement's playbackRate changes (from anywhere),
-    // mirror it into the pitch-preserving stretch node so vocals retain key.
-    d.el.addEventListener("ratechange", () => {
-      const r = d.el?.playbackRate ?? 1;
-      if (d.stretch) d.stretch.setRate(r);
-    });
   }
   if (!d.src && d.el) {
     try {
@@ -337,29 +314,14 @@ function wireDeck(side: DeckSide) {
       d.analyser.smoothingTimeConstant = 0.6;
       // Insert pseudo-stem split between the filter chain and the final deck gain.
       d.stems = createStemSplit(ctx);
-      // Insert a placeholder gain that we later swap to a SoundTouch worklet node
-      // (pitch-preserving live time-stretch). Until the worklet is registered the
-      // placeholder passes audio through unchanged.
-      d.stretchPlaceholder = ctx.createGain();
-      d.stretchPlaceholder.gain.value = 1;
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
-      // LR24 high-pass sits between the 3-band EQ and the colour filter.
-      // Idle at 20 Hz so it's transparent until a bass-swap recipe sweeps it up.
-      d.lr24Hpf = createLR24Highpass(ctx, 20);
-      d.eqHigh.connect(d.lr24Hpf.input);
-      d.lr24Hpf.output.connect(d.filter);
-      d.filter.connect(d.stretchPlaceholder);
-      d.stretchPlaceholder.connect(d.stems.input);
+      d.eqHigh.connect(d.filter);
+      d.filter.connect(d.stems.input);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.loudnessGain);
-      // Polarity inverter (default +1) sits between loudness trim and the
-      // analyser. Bass-Swap flips this to −1 if XCorr detects anti-phase.
-      d.polarity = ctx.createGain();
-      d.polarity.gain.value = 1;
-      d.loudnessGain.connect(d.polarity);
-      d.polarity.connect(d.analyser);
+      d.loudnessGain.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Tap a pre-fader send into the echo bus.
       if (echoDelay) {
@@ -371,25 +333,6 @@ function wireDeck(side: DeckSide) {
       }
       // Per-stem meters: tap an AnalyserNode off each stem gain node.
       d.stemMeter = createStemMeter(ctx, d.stems.gains);
-      // Lazily attach SoundTouch worklet for pitch-preserving stretch. Once it
-      // resolves, we splice it in front of the stem split and dispose the placeholder.
-      void (async () => {
-        const stretch = await createLiveStretch(ctx!);
-        if (!stretch || !d.filter || !d.stems || !d.stretchPlaceholder) return;
-        try {
-          d.filter.disconnect(d.stretchPlaceholder);
-          d.stretchPlaceholder.disconnect();
-          d.filter.connect(stretch.node);
-          stretch.node.connect(d.stems.input);
-          d.stretch = stretch;
-          d.stretchPlaceholder = null;
-          // Apply the current playback rate so pitch is preserved from the start.
-          const rate = d.el?.playbackRate ?? 1;
-          stretch.setRate(rate);
-        } catch (err) {
-          console.warn("[twinDeckBus] could not splice stretch node", err);
-        }
-      })();
     } catch {
       /* already wired */
     }
@@ -422,17 +365,7 @@ function rampEqGain(node: BiquadFilterNode | null, dB: number, sec: number) {
   const now = ctx.currentTime;
   node.gain.cancelScheduledValues(now);
   node.gain.setValueAtTime(node.gain.value, now);
-  // 8-point S-curve ramp — half-cosine shape so the EQ tilt is smooth at
-  // both ends instead of starting/stopping abruptly. Mirrors the long-form
-  // EQ-sweeps used in Mixxx 32-bar autoblend.
-  const dur = Math.max(0.05, sec);
-  const start = node.gain.value;
-  const N = 8;
-  for (let i = 1; i <= N; i++) {
-    const t = i / N;
-    const w = 0.5 - 0.5 * Math.cos(Math.PI * t);
-    node.gain.linearRampToValueAtTime(start + (dB - start) * w, now + dur * t);
-  }
+  node.gain.linearRampToValueAtTime(dB, now + Math.max(0.05, sec));
 }
 function resetEq(side: DeckSide) {
   const d = deck[side];
@@ -442,32 +375,6 @@ function resetEq(side: DeckSide) {
     n.gain.cancelScheduledValues(ctx.currentTime);
     n.gain.setValueAtTime(0, ctx.currentTime);
   }
-}
-
-/** Linkwitz-Riley 24 dB/oct bass kill — phase-coherent, no ringing tail.
- *  Sweeps the per-deck LR24 HPF from idle (20 Hz) up to `fc` over `sec`. */
-function lr24BassKill(side: DeckSide, fc = 120, sec = 0.25) {
-  const hp = deck[side].lr24Hpf;
-  if (!hp || !ctx) return;
-  hp.setFrequency(fc, ctx.currentTime, sec);
-}
-/** Reverse of {@link lr24BassKill} — restores the deck's full bass response. */
-function lr24BassRestore(side: DeckSide, sec = 0.3) {
-  const hp = deck[side].lr24Hpf;
-  if (!hp || !ctx) return;
-  hp.setFrequency(20, ctx.currentTime, sec);
-}
-
-/** Set the polarity (±1) of a deck. Used by Bass-Swap to flip the incoming
- *  deck when its kick is anti-phase with the outgoing one (XCorr < −0.3),
- *  preventing the dreaded "vanishing kick" cancellation. */
-function setPolarity(side: DeckSide, sign: 1 | -1) {
-  const p = deck[side].polarity;
-  if (!p || !ctx) return;
-  const now = ctx.currentTime;
-  p.gain.cancelScheduledValues(now);
-  // Step instantly — phase inversion must not crossfade through zero.
-  p.gain.setValueAtTime(sign, now);
 }
 
 /** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
@@ -498,33 +405,6 @@ function triggerEchoTail(side: DeckSide, beats = 0.5, wetDb = -8) {
   echoWet.gain.setTargetAtTime(0, now + beatSec * 0.5, beatSec * 0.6);
 }
 
-/** Beat-repeat / loop-roll rescue — gates a deck's gain in a fast on/off
- *  pattern for `cycles` beats. Used to mask phase train-wrecks (Mixxx
- *  loop-roll trick). `divisor` 2 = 1/2 beat, 4 = 1/4 beat, 8 = 1/8 beat. */
-function triggerBeatRepeat(side: DeckSide, cycles = 4, divisor = 4) {
-  if (!ctx) return;
-  const g = deck[side].gain;
-  if (!g) return;
-  const st = useTwinDeck.getState();
-  const bpm = st[side].effectiveBpm ?? st[side].track?.bpm ?? 120;
-  const beatSec = 60 / Math.max(60, Math.min(200, bpm));
-  const sliceSec = beatSec / Math.max(2, divisor);
-  const userVol = st[side].volume;
-  const now = ctx.currentTime;
-  g.gain.cancelScheduledValues(now);
-  g.gain.setValueAtTime(g.gain.value, now);
-  // Square wave: open for half a slice, closed for half — repeated cycles*divisor times.
-  let t = now;
-  const steps = Math.max(2, Math.round(cycles * divisor));
-  for (let i = 0; i < steps; i++) {
-    g.gain.setValueAtTime(userVol, t);
-    g.gain.setValueAtTime(0, t + sliceSec * 0.5);
-    t += sliceSec;
-  }
-  // Resolve back to user volume.
-  g.gain.setValueAtTime(userVol, t);
-}
-
 /** Choose effective BPM ratio considering half/double-time matches. */
 function tempoRatio(fromBpm: number, toBpm: number): number {
   const candidates = [toBpm, toBpm * 2, toBpm / 2];
@@ -547,7 +427,6 @@ function setDeckRate(side: DeckSide, rate: number) {
   if (d.el) {
     try { d.el.playbackRate = r; } catch { /* noop */ }
   }
-  if (d.stretch) d.stretch.setRate(r);
 }
 
 /** Sync incoming deck's playbackRate so its perceived BPM matches outgoing. */
