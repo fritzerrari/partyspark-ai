@@ -22,7 +22,7 @@ import { scoreTransition, type TransitionQuality } from "./transitionQuality";
 import { decideTransition, type TransitionDecision } from "./transitionDecision";
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
-import { epRampGain } from "./proTransition";
+import { epRampGain, shouldFlipPolarity } from "./proTransition";
 import { createLR24Highpass, type LR24 } from "./filters/lr24";
 import { startPhaseLock, registerActiveLock, stopActiveLock } from "./phaseLock";
 import { supabase } from "@/integrations/supabase/client";
@@ -192,9 +192,12 @@ const deck: Record<DeckSide, {
   /** LR24 (Linkwitz-Riley 4th-order) high-pass for surgical bass kills
    *  during bass-swap transitions. Idle at 20 Hz (transparent). */
   lr24Hpf: LR24 | null;
+  /** Polarity gain (±1) used by bass-swap to flip the incoming deck if its
+   *  kick is anti-phase to the outgoing one (XCorr < −0.3). Idle at +1. */
+  polarity: GainNode | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null, polarity: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null, polarity: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
@@ -351,7 +354,12 @@ function wireDeck(side: DeckSide) {
       d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
       d.gain.connect(d.loudnessGain);
-      d.loudnessGain.connect(d.analyser);
+      // Polarity inverter (default +1) sits between loudness trim and the
+      // analyser. Bass-Swap flips this to −1 if XCorr detects anti-phase.
+      d.polarity = ctx.createGain();
+      d.polarity.gain.value = 1;
+      d.loudnessGain.connect(d.polarity);
+      d.polarity.connect(d.analyser);
       d.analyser.connect(masterGain);
       // Tap a pre-fader send into the echo bus.
       if (echoDelay) {
@@ -448,6 +456,18 @@ function lr24BassRestore(side: DeckSide, sec = 0.3) {
   const hp = deck[side].lr24Hpf;
   if (!hp || !ctx) return;
   hp.setFrequency(20, ctx.currentTime, sec);
+}
+
+/** Set the polarity (±1) of a deck. Used by Bass-Swap to flip the incoming
+ *  deck when its kick is anti-phase with the outgoing one (XCorr < −0.3),
+ *  preventing the dreaded "vanishing kick" cancellation. */
+function setPolarity(side: DeckSide, sign: 1 | -1) {
+  const p = deck[side].polarity;
+  if (!p || !ctx) return;
+  const now = ctx.currentTime;
+  p.gain.cancelScheduledValues(now);
+  // Step instantly — phase inversion must not crossfade through zero.
+  p.gain.setValueAtTime(sign, now);
 }
 
 /** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
@@ -1041,6 +1061,12 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         await new Promise((r) => setTimeout(r, half * 1000));
         // SWAP the basses on the beat.
         await waitForNextBeat(from);
+        // XCorr polarity check — if the incoming kick is anti-phase relative
+        // to the outgoing one, flip the incoming deck's polarity for the
+        // duration of the swap so the basses re-inforce instead of cancel.
+        if (shouldFlipPolarity(fromDeck.analyser, toDeck.analyser)) {
+          setPolarity(to, -1);
+        }
         // Echo-throw on the outgoing deck right as the bass cuts —
         // hides the seam with a tail that resolves over the next 2 beats.
         triggerEchoTail(from, 0.5, -8);
@@ -1089,6 +1115,9 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     // Restore LR24 HPFs on both decks so they are transparent for the next mix.
     lr24BassRestore(from, 0.2);
     lr24BassRestore(to, 0.2);
+    // Restore polarity on both decks (no-op if never flipped).
+    setPolarity(from, 1);
+    setPolarity(to, 1);
     if (fromDeck.gain) fromDeck.gain.gain.value = fromUserVol * (to === "B" ? Math.cos((1 * Math.PI) / 2) : Math.cos(0));
 
     const ratioNote = appliedRatio !== 1 ? ` · sync ×${appliedRatio.toFixed(3)}` : "";
@@ -1860,6 +1889,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         beatGrid: a.beatGrid,
         cues: a.cues,
         vocalMap: a.vocalMap,
+        energyEvents: a.energyEvents,
       };
       set((s) => ({ [side]: { ...s[side], track: enriched, analyzing: false, analyzeProgress: 100 } } as Partial<BusState>));
       recomputeEffective(side);

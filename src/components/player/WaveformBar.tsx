@@ -9,6 +9,7 @@ export function WaveformBar({ peaks, height = 44 }: { peaks?: Float32Array | nul
   const duration = useEngine((s) => s.durationSec);
   const seek = useEngine((s) => s.seek);
   const beatGrid = useEngine((s) => s.current?.beatGrid ?? null);
+  const energyEvents = useEngine((s) => s.current?.energyEvents ?? null);
 
   useEffect(() => {
     const c = ref.current;
@@ -59,7 +60,26 @@ export function WaveformBar({ peaks, height = 44 }: { peaks?: Float32Array | nul
       ctx.fillStyle = "#FF6B9D";
       ctx.fillRect(px - 1, 0, 2, h);
     }
-  }, [peaks, position, duration, beatGrid]);
+
+    // Buildup / Drop markers — amber for buildup, magenta for drop, height
+    // scaled by `strength` so weak events read fainter.
+    if (energyEvents && energyEvents.length && duration > 0) {
+      for (const ev of energyEvents) {
+        const x = (ev.t / duration) * w;
+        const hh = Math.max(6, Math.min(h, h * (0.35 + 0.55 * ev.strength)));
+        const color = ev.kind === "drop" ? "rgba(255, 107, 157, 0.85)" : "rgba(245, 192, 80, 0.75)";
+        ctx.fillStyle = color;
+        ctx.fillRect(x - 1, 0, 2, hh);
+        // Triangle cap on top so drops pop visually.
+        ctx.beginPath();
+        ctx.moveTo(x - 4, 0);
+        ctx.lineTo(x + 4, 0);
+        ctx.lineTo(x, 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }, [peaks, position, duration, beatGrid, energyEvents]);
 
   function onSeek(e: React.MouseEvent<HTMLCanvasElement>) {
     const c = ref.current;
