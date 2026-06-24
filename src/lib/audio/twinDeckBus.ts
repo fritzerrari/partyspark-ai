@@ -446,6 +446,33 @@ function triggerEchoTail(side: DeckSide, beats = 0.5, wetDb = -8) {
   echoWet.gain.setTargetAtTime(0, now + beatSec * 0.5, beatSec * 0.6);
 }
 
+/** Beat-repeat / loop-roll rescue — gates a deck's gain in a fast on/off
+ *  pattern for `cycles` beats. Used to mask phase train-wrecks (Mixxx
+ *  loop-roll trick). `divisor` 2 = 1/2 beat, 4 = 1/4 beat, 8 = 1/8 beat. */
+function triggerBeatRepeat(side: DeckSide, cycles = 4, divisor = 4) {
+  if (!ctx) return;
+  const g = deck[side].gain;
+  if (!g) return;
+  const st = useTwinDeck.getState();
+  const bpm = st[side].effectiveBpm ?? st[side].track?.bpm ?? 120;
+  const beatSec = 60 / Math.max(60, Math.min(200, bpm));
+  const sliceSec = beatSec / Math.max(2, divisor);
+  const userVol = st[side].volume;
+  const now = ctx.currentTime;
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(g.gain.value, now);
+  // Square wave: open for half a slice, closed for half — repeated cycles*divisor times.
+  let t = now;
+  const steps = Math.max(2, Math.round(cycles * divisor));
+  for (let i = 0; i < steps; i++) {
+    g.gain.setValueAtTime(userVol, t);
+    g.gain.setValueAtTime(0, t + sliceSec * 0.5);
+    t += sliceSec;
+  }
+  // Resolve back to user volume.
+  g.gain.setValueAtTime(userVol, t);
+}
+
 /** Choose effective BPM ratio considering half/double-time matches. */
 function tempoRatio(fromBpm: number, toBpm: number): number {
   const candidates = [toBpm, toBpm * 2, toBpm / 2];
