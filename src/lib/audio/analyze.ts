@@ -16,7 +16,17 @@ export type TrackAnalysis = {
     outroStart: number;      // sec
   };
   vocalMap: { t: number; voiced: number }[]; // per-second 0..1
+  /** 24-dim L2-normalized fingerprint vector (cosine-similarity ready). */
+  embedding: number[];
+  /** Auto-assigned bucket: warmup | filler | peak | cooldown | reserve. */
+  smartCrate: SmartCrate;
+  /** Overall mean energy 0..1 (convenience, derived from energyCurve). */
+  overallEnergy: number;
+  /** Mean vocal density 0..1 (derived from vocalMap). */
+  vocalDensity: number;
 };
+
+export type SmartCrate = "warmup" | "filler" | "peak" | "cooldown" | "reserve";
 
 // Krumhansl-Schmuckler key profiles
 const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
@@ -270,6 +280,13 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
   onProgress?.("Vocal-Map", 88);
   const cues = findCues(curve);
   const vmap = vocalMap(buf);
+  await yieldUI();
+
+  onProgress?.("Fingerprint", 96);
+  const overallEnergy = curve.length ? curve.reduce((a, b) => a + b, 0) / curve.length : 0;
+  const vocalDensity = vmap.length ? vmap.reduce((a, p) => a + p.voiced, 0) / vmap.length : 0;
+  const embedding = computeEmbedding(curve, vmap, bpm, k.pitchClass, k.mode);
+  const smartCrate = assignSmartCrate(bpm, overallEnergy, vocalDensity);
   onProgress?.("Fertig", 100);
 
   return {
@@ -281,7 +298,102 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
     energyCurve: curve,
     cues,
     vocalMap: vmap,
+    embedding,
+    smartCrate,
+    overallEnergy: +overallEnergy.toFixed(3),
+    vocalDensity: +vocalDensity.toFixed(3),
   };
+}
+
+/** 24-dim L2-normalized fingerprint, derived from cheap features only.
+ *  Layout:
+ *   [0..7]  energy curve octile means (coarse structure)
+ *   [8]     energy mean
+ *   [9]     energy std
+ *   [10]    energy peak position (0..1)
+ *   [11..13] vocal mean / std / fraction-above-0.5
+ *   [14..15] key as sin/cos of pitch class
+ *   [16]    mode (0 minor / 1 major)
+ *   [17]    bpm bucket 60..180 → 0..1
+ *   [18]    half-time bias (slow start vs fast end)
+ *   [19..23] reserved zeros (room for future mel bands)
+ */
+function computeEmbedding(
+  curve: number[],
+  vmap: { t: number; voiced: number }[],
+  bpm: number,
+  pitchClass: number,
+  mode: "maj" | "min",
+): number[] {
+  const v: number[] = new Array(24).fill(0);
+  if (curve.length) {
+    // Octile means
+    const n = curve.length;
+    for (let i = 0; i < 8; i++) {
+      const a = Math.floor((i * n) / 8);
+      const b = Math.floor(((i + 1) * n) / 8);
+      let s = 0; let c = 0;
+      for (let j = a; j < b; j++) { s += curve[j]; c++; }
+      v[i] = c ? s / c : 0;
+    }
+    const mean = curve.reduce((a, b) => a + b, 0) / n;
+    let varSum = 0; let peakIdx = 0; let peakVal = -1;
+    for (let i = 0; i < n; i++) {
+      varSum += (curve[i] - mean) ** 2;
+      if (curve[i] > peakVal) { peakVal = curve[i]; peakIdx = i; }
+    }
+    v[8] = mean;
+    v[9] = Math.sqrt(varSum / n);
+    v[10] = n > 1 ? peakIdx / (n - 1) : 0;
+    const firstHalf = curve.slice(0, Math.floor(n / 2));
+    const secondHalf = curve.slice(Math.floor(n / 2));
+    const fh = firstHalf.reduce((a, b) => a + b, 0) / Math.max(1, firstHalf.length);
+    const sh = secondHalf.reduce((a, b) => a + b, 0) / Math.max(1, secondHalf.length);
+    v[18] = sh - fh; // positive = builds over time
+  }
+  if (vmap.length) {
+    const vm = vmap.reduce((a, p) => a + p.voiced, 0) / vmap.length;
+    let vv = 0; let above = 0;
+    for (const p of vmap) { vv += (p.voiced - vm) ** 2; if (p.voiced >= 0.5) above++; }
+    v[11] = vm;
+    v[12] = Math.sqrt(vv / vmap.length);
+    v[13] = above / vmap.length;
+  }
+  const angle = (pitchClass / 12) * 2 * Math.PI;
+  v[14] = Math.sin(angle);
+  v[15] = Math.cos(angle);
+  v[16] = mode === "maj" ? 1 : 0;
+  v[17] = Math.max(0, Math.min(1, (bpm - 60) / 120));
+  // L2 normalize
+  let mag = 0;
+  for (const x of v) mag += x * x;
+  mag = Math.sqrt(mag) || 1;
+  for (let i = 0; i < v.length; i++) v[i] = +(v[i] / mag).toFixed(5);
+  return v;
+}
+
+/** Rule-based crate assignment from cheap stats. User can override later. */
+export function assignSmartCrate(bpm: number, energy: number, vocalDensity: number): SmartCrate {
+  if (bpm < 95 || energy < 0.06) return "cooldown";
+  if (bpm >= 124 && energy >= 0.13) return "peak";
+  if (bpm >= 116 && energy >= 0.10) return "filler";
+  if (bpm >= 95 && bpm < 116) return "warmup";
+  // Vocal-heavy mid-tempo songs serve as floor-fillers regardless of energy
+  if (vocalDensity > 0.55 && bpm >= 100) return "filler";
+  return "reserve";
+}
+
+/** Cosine similarity in [-1..1] (returns 0 for missing embeddings). */
+export function cosineSim(a?: number[] | null, b?: number[] | null): number {
+  if (!a?.length || !b?.length || a.length !== b.length) return 0;
+  let dot = 0; let na = 0; let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const d = Math.sqrt(na) * Math.sqrt(nb);
+  return d ? dot / d : 0;
 }
 
 /** Decode a blob/file into an AudioBuffer with a short-lived ctx. */

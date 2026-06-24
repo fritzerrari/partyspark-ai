@@ -539,6 +539,42 @@ export type Database = {
           },
         ]
       }
+      set_plans: {
+        Row: {
+          created_at: string
+          duration_min: number
+          event_type: string
+          id: string
+          name: string
+          owner_id: string
+          peak_at_min: number | null
+          slots: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_min: number
+          event_type: string
+          id?: string
+          name: string
+          owner_id: string
+          peak_at_min?: number | null
+          slots?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_min?: number
+          event_type?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          peak_at_min?: number | null
+          slots?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           autodj_enabled: boolean
@@ -768,6 +804,7 @@ export type Database = {
           created_at: string
           cues: Json | null
           duration_sec: number | null
+          embedding: Json | null
           energy: number
           energy_curve: Json | null
           id: string
@@ -776,8 +813,10 @@ export type Database = {
           mood: string | null
           music_key: string | null
           owner_id: string
+          smart_crate: string | null
           storage_path: string | null
           title: string
+          user_tags: string[]
           vocal_map: Json | null
         }
         Insert: {
@@ -790,6 +829,7 @@ export type Database = {
           created_at?: string
           cues?: Json | null
           duration_sec?: number | null
+          embedding?: Json | null
           energy?: number
           energy_curve?: Json | null
           id?: string
@@ -798,8 +838,10 @@ export type Database = {
           mood?: string | null
           music_key?: string | null
           owner_id: string
+          smart_crate?: string | null
           storage_path?: string | null
           title: string
+          user_tags?: string[]
           vocal_map?: Json | null
         }
         Update: {
@@ -812,6 +854,7 @@ export type Database = {
           created_at?: string
           cues?: Json | null
           duration_sec?: number | null
+          embedding?: Json | null
           energy?: number
           energy_curve?: Json | null
           id?: string
@@ -820,8 +863,10 @@ export type Database = {
           mood?: string | null
           music_key?: string | null
           owner_id?: string
+          smart_crate?: string | null
           storage_path?: string | null
           title?: string
+          user_tags?: string[]
           vocal_map?: Json | null
         }
         Relationships: []

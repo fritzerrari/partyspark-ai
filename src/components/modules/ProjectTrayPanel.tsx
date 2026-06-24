@@ -66,6 +66,10 @@ export function ProjectTrayPanel() {
             energyCurve: [],
             cues: (tt.cues as { introEnd: number; firstDrop: number; outroStart: number } | null) ?? { introEnd: 0, firstDrop: 0, outroStart: 0 },
             vocalMap: (tt.vocal_map as { t: number; voiced: number }[] | null) ?? [],
+            embedding: (tt.embedding as number[] | null) ?? [],
+            smartCrate: ((tt.smart_crate as string | null) ?? "reserve") as "warmup" | "filler" | "peak" | "cooldown" | "reserve",
+            overallEnergy: 0.5,
+            vocalDensity: 0,
           } : null,
           meta: { artist: (tt.artist as string | null), artwork: (tt.artwork_url as string | null), durationSec: (tt.duration_sec as number | null) },
         });

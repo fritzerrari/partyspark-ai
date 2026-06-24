@@ -14,10 +14,11 @@ import { FxPadGrid } from "@/components/cockpit/FxPadGrid";
 import { CockpitCenter } from "@/components/cockpit/CockpitCenter";
 import { MixabilityPlaylist } from "@/components/cockpit/MixabilityPlaylist";
 import { CopilotLog } from "@/components/cockpit/CopilotLog";
+import { EnergyTimeline } from "@/components/cockpit/EnergyTimeline";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
-import { Sparkles, Square, Disc, Mic, MonitorPlay } from "lucide-react";
+import { Sparkles, Square, Disc, Mic, MonitorPlay, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "@tanstack/react-router";
 import { startVisualBridge } from "@/lib/audio/visualBridge";
@@ -92,6 +93,10 @@ function Cockpit() {
           cues: safeJson<{ introEnd: number; firstDrop: number; outroStart: number }>(t.cues),
           vocalMap: safeJson<{ t: number; voiced: number }[]>(t.vocal_map),
           durationSec: (t.duration_sec as number | null) ?? null,
+          energy: (t.energy as number | null) ?? null,
+          embedding: (t.embedding as number[] | null) ?? null,
+          smartCrate: (t.smart_crate as EngineTrack["smartCrate"] | null) ?? null,
+          userTags: (t.user_tags as string[] | null) ?? null,
         } satisfies EngineTrack;
       }));
       const filtered = mapped.filter((t) => t.url);
@@ -169,6 +174,12 @@ function Cockpit() {
             >
               <MonitorPlay className="h-3 w-3" /> Beamer
             </button>
+            <Link
+              to="/setplanner"
+              className="min-h-[44px] rounded-full border border-white/20 bg-white/10 px-4 text-xs font-bold uppercase tracking-widest text-stage-foreground transition-all hover:bg-white/20 active:scale-95 flex items-center justify-center gap-2"
+            >
+              <Calendar className="h-3 w-3" /> Set-Planer
+            </Link>
             <button
               onClick={handlePartyMode}
               disabled={tracks.length < 2}
@@ -200,6 +211,8 @@ function Cockpit() {
       </div>
 
       <TwinDeck tracks={tracks} />
+
+      <EnergyTimeline />
 
       {/* Center / Playlist / Copilot — PartySpark-style cockpit row */}
       <div className="rounded-3xl stage-gradient p-3 sm:p-4">
