@@ -15,6 +15,7 @@ import { CockpitCenter } from "@/components/cockpit/CockpitCenter";
 import { MixabilityPlaylist } from "@/components/cockpit/MixabilityPlaylist";
 import { CopilotLog } from "@/components/cockpit/CopilotLog";
 import { EnergyTimeline } from "@/components/cockpit/EnergyTimeline";
+import { BeatDriftBadge } from "@/components/cockpit/BeatDriftBadge";
 import { keyToCamelot } from "@/lib/audio/keyToCamelot";
 import { useProject } from "@/lib/project/store";
 import { useTwinDeck } from "@/lib/audio/twinDeckBus";
@@ -170,6 +171,7 @@ function Cockpit() {
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <BeatDriftBadge />
           <button onClick={openVisualizer} className="sb-pill">
             <MonitorPlay className="h-3.5 w-3.5" /> Beamer
           </button>
