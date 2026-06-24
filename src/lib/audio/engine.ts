@@ -25,6 +25,8 @@ export type EngineTrack = {
   smartCrate?: "warmup" | "filler" | "peak" | "cooldown" | "reserve" | null;
   /** User-overridden tags. */
   userTags?: string[] | null;
+  /** Buildup/drop timestamps from energy analysis. Optional UI overlay. */
+  energyEvents?: { t: number; kind: "buildup" | "drop"; strength: number }[] | null;
 };
 
 export type TransitionMode =

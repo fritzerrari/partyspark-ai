@@ -1860,6 +1860,7 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         beatGrid: a.beatGrid,
         cues: a.cues,
         vocalMap: a.vocalMap,
+        energyEvents: a.energyEvents,
       };
       set((s) => ({ [side]: { ...s[side], track: enriched, analyzing: false, analyzeProgress: 100 } } as Partial<BusState>));
       recomputeEffective(side);
