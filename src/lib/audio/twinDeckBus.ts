@@ -1728,6 +1728,16 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       };
       set((s) => ({ [side]: { ...s[side], track: enriched, analyzing: false, analyzeProgress: 100 } } as Partial<BusState>));
       recomputeEffective(side);
+      // Apply LUFS-based loudness trim so deck-to-deck level differences vanish.
+      try {
+        const lg = deck[side].loudnessGain;
+        if (lg && ctx) {
+          const gainLin = Math.pow(10, (a.loudnessGainDb ?? 0) / 20);
+          const now = ctx.currentTime;
+          lg.gain.cancelScheduledValues(now);
+          lg.gain.setTargetAtTime(Math.max(0.1, Math.min(4, gainLin)), now, 0.05);
+        }
+      } catch { /* noop */ }
       // (Re)build bridge for this side now that analysis is fresh.
       const other: DeckSide = side === "A" ? "B" : "A";
       if (get()[other].track?.bpm) {
