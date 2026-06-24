@@ -1095,11 +1095,10 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     if (d.realStems) {
       try { d.realStems.dispose(); } catch { /* noop */ }
       d.realStems = null;
-      if (d.stems && ctx) {
+      if (ctx) {
         try {
-          const inputGain = (d.stems.input as GainNode).gain;
-          inputGain.cancelScheduledValues(ctx.currentTime);
-          inputGain.setValueAtTime(1, ctx.currentTime);
+          d.mediaGain?.gain.cancelScheduledValues(ctx.currentTime);
+          d.mediaGain?.gain.setValueAtTime(1, ctx.currentTime);
         } catch { /* noop */ }
       }
       set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));
@@ -1713,11 +1712,14 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       const buffers = await loadRealStems(ctx, urls);
       const player = createRealStemPlayer(ctx, d.el, d.stems, buffers);
       d.realStems = player;
-      // Mute pseudo path so we don't double-mix.
+      // Mute the direct media path; real stem buffers feed the stem gain bus.
       try {
-        const inputGain = (d.stems.input as GainNode).gain;
-        inputGain.cancelScheduledValues(ctx.currentTime);
-        inputGain.setValueAtTime(0, ctx.currentTime);
+        d.mediaGain?.gain.cancelScheduledValues(ctx.currentTime);
+        d.mediaGain?.gain.setValueAtTime(0, ctx.currentTime);
+        d.stems.setGain("drums", 1, 0.02);
+        d.stems.setGain("bass", 1, 0.02);
+        d.stems.setGain("vocals", 1, 0.02);
+        d.stems.setGain("other", 1, 0.02);
       } catch { /* noop */ }
       if (!d.el.paused) player.start();
       set((s) => ({ [side]: { ...s[side], stemsMode: "real" } } as Partial<BusState>));
@@ -1729,11 +1731,11 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
   detachRealStems(side) {
     const d = deck[side];
     if (d.realStems) { d.realStems.dispose(); d.realStems = null; }
-    if (d.stems && ctx) {
+    if (ctx) {
       try {
-        const inputGain = (d.stems.input as GainNode).gain;
-        inputGain.cancelScheduledValues(ctx.currentTime);
-        inputGain.setValueAtTime(1, ctx.currentTime);
+        d.mediaGain?.gain.cancelScheduledValues(ctx.currentTime);
+        d.mediaGain?.gain.setValueAtTime(1, ctx.currentTime);
+        d.stems?.reset();
       } catch { /* noop */ }
     }
     set((s) => ({ [side]: { ...s[side], stemsMode: "pseudo" } } as Partial<BusState>));

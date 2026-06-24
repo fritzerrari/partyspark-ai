@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -69,19 +69,6 @@ export function Turntable({
   // Spinning visual (CSS animation when playing & not dragging)
   const useCssSpin = spinning && !drag;
 
-  useEffect(() => {
-    if (useCssSpin && wrapRef.current) {
-      const el = wrapRef.current.querySelector<HTMLElement>("[data-platter]");
-      if (el) {
-        // sync animation start with current angle
-        el.style.animation = "none";
-        el.getBoundingClientRect();
-        el.style.transform = `rotate(${angle}deg)`;
-        el.style.animation = `spin-slow 1.8s linear infinite`;
-      }
-    }
-  }, [useCssSpin, angle]);
-
   return (
     <div
       ref={wrapRef}
@@ -107,6 +94,7 @@ export function Turntable({
         data-platter
         style={{
           transform: useCssSpin ? undefined : `rotate(${angle}deg)`,
+          animation: useCssSpin ? "spin-slow 1.8s linear infinite" : undefined,
           backgroundImage: artwork ? `url(${artwork})` : undefined,
         }}
         className={cn(
