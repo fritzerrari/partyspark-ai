@@ -28,7 +28,7 @@ export async function ensureAnalyzed(
   const camelot = a.camelot ?? keyToCamelot(a.musicalKey);
   // Best-effort persist (RLS may reject for tracks the user doesn't own).
   try {
-    await supabase.from("tracks").update({
+    const payload: Record<string, unknown> = {
       bpm: a.bpm,
       music_key: a.musicalKey,
       beat_grid: a.beatGrid,
@@ -39,7 +39,10 @@ export async function ensureAnalyzed(
       smart_crate: a.smartCrate,
       energy: Math.round(Math.max(10, Math.min(100, a.overallEnergy * 400))),
       analyzed_at: new Date().toISOString(),
-    } as unknown as Record<string, unknown>).eq("id", track.id);
+    };
+    // Supabase generated types lag behind new columns; cast through any.
+    await (supabase.from("tracks") as unknown as { update: (v: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<unknown> } })
+      .update(payload).eq("id", track.id);
   } catch { /* ignore */ }
   return {
     ...track,
