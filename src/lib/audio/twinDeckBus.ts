@@ -436,6 +436,20 @@ function resetEq(side: DeckSide) {
   }
 }
 
+/** Linkwitz-Riley 24 dB/oct bass kill — phase-coherent, no ringing tail.
+ *  Sweeps the per-deck LR24 HPF from idle (20 Hz) up to `fc` over `sec`. */
+function lr24BassKill(side: DeckSide, fc = 120, sec = 0.25) {
+  const hp = deck[side].lr24Hpf;
+  if (!hp || !ctx) return;
+  hp.setFrequency(fc, ctx.currentTime, sec);
+}
+/** Reverse of {@link lr24BassKill} — restores the deck's full bass response. */
+function lr24BassRestore(side: DeckSide, sec = 0.3) {
+  const hp = deck[side].lr24Hpf;
+  if (!hp || !ctx) return;
+  hp.setFrequency(20, ctx.currentTime, sec);
+}
+
 /** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
  *  into the master delay bus, then closes it so the tail rings out alone.
  *  Length: `beats` beats at the deck's effective BPM (default ½). */
