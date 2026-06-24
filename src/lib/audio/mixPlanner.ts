@@ -94,10 +94,14 @@ export function planMix(
   // if findTransitionPoints supplied any; otherwise fall back to outroStart.
   const smartOut = current.cues?.outroPoints?.find((t) => t >= positionSec + 2);
   const outro = smartOut ?? current.cues?.outroStart ?? Math.max(positionSec, (current.durationSec ?? 0) - 30);
-  const triggerAtSecOfCurrent = Math.max(positionSec + 2, outro);
+  const rawTrigger = Math.max(positionSec + 2, outro);
+  // Snap mix-out to the next downbeat so the blend phrase-aligns. Avoids the
+  // classic "mix starts mid-bar" feel.
+  const triggerAtSecOfCurrent = snapToDownbeat(current.beatGrid ?? null, rawTrigger, { tolBeats: 2 });
   // Mix into next track at its smart intro-point (vocal-free, rising energy)
   // if available, else cue introEnd, else 0.
-  const startAtSecOfNext = next.cues?.introPoints?.[0] ?? next.cues?.introEnd ?? 0;
+  const rawStart = next.cues?.introPoints?.[0] ?? next.cues?.introEnd ?? 0;
+  const startAtSecOfNext = snapToDownbeat(next.beatGrid ?? null, rawStart, { tolBeats: 2 });
 
   // Choose mode + length
   let mode: TransitionMode = "crossfade";
