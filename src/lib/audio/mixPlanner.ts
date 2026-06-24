@@ -4,6 +4,7 @@
 import { camelotCompatible, nextBeatAfter } from "./analyze";
 import type { TransitionMode } from "./engine";
 import { semitoneShiftToKey } from "./keyDelta";
+import { snapToDownbeat } from "./proTransition";
 
 export type TrackMeta = {
   bpm?: number | null;
