@@ -458,6 +458,18 @@ function lr24BassRestore(side: DeckSide, sec = 0.3) {
   hp.setFrequency(20, ctx.currentTime, sec);
 }
 
+/** Set the polarity (±1) of a deck. Used by Bass-Swap to flip the incoming
+ *  deck when its kick is anti-phase with the outgoing one (XCorr < −0.3),
+ *  preventing the dreaded "vanishing kick" cancellation. */
+function setPolarity(side: DeckSide, sign: 1 | -1) {
+  const p = deck[side].polarity;
+  if (!p || !ctx) return;
+  const now = ctx.currentTime;
+  p.gain.cancelScheduledValues(now);
+  // Step instantly — phase inversion must not crossfade through zero.
+  p.gain.setValueAtTime(sign, now);
+}
+
 /** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
  *  into the master delay bus, then closes it so the tail rings out alone.
  *  Length: `beats` beats at the deck's effective BPM (default ½). */
