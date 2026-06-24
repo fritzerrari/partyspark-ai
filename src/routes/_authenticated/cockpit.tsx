@@ -368,3 +368,53 @@ function LiveStateKpi() {
     </div>
   );
 }
+
+function CrateKpi({ tracks }: { tracks: EngineTrack[] }) {
+  const counts = tracks.reduce<Record<string, number>>((acc, t) => {
+    const k = (t.smartCrate ?? "unsortiert") as string;
+    acc[k] = (acc[k] ?? 0) + 1;
+    return acc;
+  }, {});
+  const order = ["warmup", "filler", "peak", "cooldown", "reserve", "unsortiert"] as const;
+  const labels: Record<string, string> = {
+    warmup: "Warm-up", filler: "Floor-Filler", peak: "Peak-Time",
+    cooldown: "Cool-down", reserve: "Reserve", unsortiert: "Unsortiert",
+  };
+  const top = order
+    .map((k) => ({ k, n: counts[k] ?? 0 }))
+    .filter((x) => x.n > 0)
+    .slice(0, 3);
+  const total = tracks.length;
+  return (
+    <div className="sb-kpi flex items-center gap-3">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
+           style={{ background: "color-mix(in oklab, var(--sb-warm) 18%, transparent)", color: "var(--sb-warm)" }}>
+        <Calendar className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="sb-eyebrow text-[10px]">Smart Crates</div>
+        {top.length === 0 ? (
+          <div className="font-mono text-base font-bold leading-tight" style={{ color: "var(--sb-ink-dim)" }}>
+            noch leer
+          </div>
+        ) : (
+          <div className="mt-0.5 flex flex-wrap gap-1.5">
+            {top.map(({ k, n }) => (
+              <span key={k}
+                className="rounded-full px-2 py-0.5 font-mono text-[10px]"
+                style={{ background: "color-mix(in oklab, var(--sb-warm) 16%, transparent)",
+                         color: "var(--sb-ink)" }}>
+                {labels[k]} <span style={{ color: "var(--sb-ink-mute)" }}>· {n}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {total > 0 && (
+          <div className="mt-1 text-[10px]" style={{ color: "var(--sb-ink-mute)" }}>
+            {total} Tracks analysiert
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
