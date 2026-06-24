@@ -677,6 +677,15 @@ export function getDeckSignal(side: DeckSide) {
   const d = deck[side];
   const st = useTwinDeck.getState();
   const ds = st[side];
+  // Sample vocal density at the live playhead so the mix scorer can penalize
+  // double-vocals (kckDeepak vocal_overlap_risk).
+  const vmap = ds.track?.vocalMap;
+  const t = d.el?.currentTime ?? 0;
+  let vocalAt = 0;
+  if (vmap?.length) {
+    const i = Math.max(0, Math.min(vmap.length - 1, Math.round(t)));
+    vocalAt = vmap[i]?.voiced ?? 0;
+  }
   return {
     analyser: d.analyser,
     bpm: ds.track?.bpm ?? null,
@@ -687,6 +696,7 @@ export function getDeckSignal(side: DeckSide) {
     currentTime: d.el?.currentTime ?? 0,
     playing: ds.isPlaying,
     volume: (d.gain?.gain.value ?? 0),
+    vocalAt,
   };
 }
 
