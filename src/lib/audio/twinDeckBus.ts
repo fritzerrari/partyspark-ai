@@ -1529,85 +1529,22 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     try {
       const toUserVol = st[to].volume;
       const fromUserVol = st[from].volume;
-      // Make sure pseudo-stem overlays are silent so they don't colour the dry
-      // signal during the transition.
-      fromDeck.stems?.reset();
-      toDeck.stems?.reset();
-      // Start incoming silently.
-      if (toDeck.el && toDeck.el.paused) {
-        try { await toDeck.el.play(); } catch { /* gesture */ }
-      }
       if (ctx.state === "suspended") void ctx.resume();
       const decision = opts?.decision ?? decideTransition({ fromTrack, toTrack, fromMode: st[from].stemsMode, toMode: st[to].stemsMode });
-      if (decision.syncAllowed) setDeckRate(to, decision.syncRate);
-      else setDeckRate(to, 1);
-      set((s) => ({ [to]: { ...s[to], pitch: decision.syncAllowed ? decision.syncRate : 1 } } as Partial<BusState>));
-      recomputeEffective(to);
       beatAlign(from, to);
-      // Continuous phase-lock (Mixxx P-loop). Leader = outgoing deck, follower = incoming.
-      try {
-        const lock = startPhaseLock({
-          leader: {
-            grid: fromTrack.beatGrid ?? null,
-            getPosition: () => fromDeck.el?.currentTime ?? 0,
-            getRate: () => fromDeck.el?.playbackRate ?? 1,
-          },
-          follower: {
-            grid: toTrack.beatGrid ?? null,
-            getPosition: () => toDeck.el?.currentTime ?? 0,
-            getRate: () => toDeck.el?.playbackRate ?? 1,
-            setRate: (r) => setDeckRate(to, r),
-          },
-          kP: 0.35,
-          maxAdjust: 0.04,
-          onTrainWreck: (drift) => {
-            // Loop-roll rescue: gate the outgoing deck in 1/4-beat slices
-            // for 4 beats so the drift becomes a rhythmic stutter, not
-            // a wreck. Mixxx beatloop_roll behaviour, simplified.
-            try { triggerBeatRepeat(from, 4, 4); } catch { /* noop */ }
-            console.warn("[phaseLock] train-wreck", { driftMs: drift, from, to });
-          },
-        });
-        registerActiveLock(lock);
-      } catch { /* noop */ }
-      // Open outgoing to its user volume, incoming starts at 0.
-      toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
-      toDeck.gain.gain.setValueAtTime(0, ctx.currentTime);
-      fromDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
-      fromDeck.gain.gain.setValueAtTime(fromUserVol, ctx.currentTime);
       await waitForNextBeat(from);
-      const secPerBar = fromTrack.bpm ? (60 / fromTrack.bpm) * 4 : 2;
-      const bars = Math.max(8, Math.min(24, opts?.bars ?? 16));
-      const recipeId: CleanRecipeId = id ?? pickCleanRecipe({
-        bpmDeltaPct: fromTrack.bpm && toTrack.bpm ? Math.abs(fromTrack.bpm - toTrack.bpm) / fromTrack.bpm : 0,
-        keyCompatible: camelotCompatible(fromTrack.camelot ?? "", toTrack.camelot ?? ""),
-        fromHasVocals: (fromTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
-        toHasVocals: (toTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false,
-        energyJump: (toTrack.energy ?? 0.5) - (fromTrack.energy ?? 0.5),
-      });
-      animateCrossfader(to === "B" ? 1 : 0, secPerBar * bars * 1000);
-      await runCleanRecipe(recipeId, {
-        ctx,
-        from: {
-          filter: fromDeck.filter, eqLow: fromDeck.eqLow, eqMid: fromDeck.eqMid,
-          eqHigh: fromDeck.eqHigh, gain: fromDeck.gain,
-        },
-        to: {
-          filter: toDeck.filter, eqLow: toDeck.eqLow, eqMid: toDeck.eqMid,
-          eqHigh: toDeck.eqHigh, gain: toDeck.gain,
-        },
-        secPerBar, bars, fromUserVol, toUserVol,
-        waitForBeat: () => waitForNextBeat(from),
+      const bars = Math.max(4, Math.min(12, opts?.bars ?? decision.bars ?? 8));
+      const recipeId: CleanRecipeId = id ?? (decision.recipe as CleanRecipeId) ?? "djEqSwap";
+      await runStableDeckBlend(from, to, {
+        bars,
+        fromUserVol,
+        toUserVol,
         onPhase: (phase) => set({ transitionPhase: phase }),
       });
-      try { fromDeck.el?.pause(); } catch { /* noop */ }
-      setDeckRate(to, 1);
       set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
-      recomputeEffective(to);
-      const ratioNote = decision.syncAllowed && decision.syncRate !== 1 ? ` · sync ×${decision.syncRate.toFixed(3)}` : " · no stretch";
       const label = CLEAN_RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId;
       set({
-        lastTransitionNote: `${decisionNote({ ...decision, recipe: recipeId, recipeLabel: label })} · ${bars} bars${ratioNote}`,
+        lastTransitionNote: `${decisionNote({ ...decision, recipe: recipeId, recipeLabel: label })} · stabil · ${bars} bars`,
         transitionInFlight: false,
         transitionPhase: null,
         transitionEngine: null,
@@ -1630,109 +1567,31 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
     const toTrack = st[to].track;
     if (!fromTrack || !toTrack) return;
     if (st.transitionInFlight) return;
-    const fromStems = deck[from].stems;
-    const toStems = deck[to].stems;
-    if (!fromStems || !toStems) return;
-    set({ transitionInFlight: true, transitionEngine: "real", transitionPhase: "cue" });
+    const fromDeck = deck[from];
+    const toDeck = deck[to];
+    if (!fromDeck.gain || !toDeck.gain) return;
+    set({ transitionInFlight: true, transitionEngine: "clean", transitionPhase: "cue" });
     try {
-      // BPM sync + beat align like the normal transition.
-      const fromDeck = deck[from];
-      const toDeck = deck[to];
       const toUserVol = st[to].volume;
       const fromUserVol = st[from].volume;
-      // Start incoming if needed.
-      if (toDeck.el && toDeck.el.paused) {
-        try { await toDeck.el.play(); } catch { /* user gesture */ }
-      }
       if (ctx.state === "suspended") void ctx.resume();
       const decision = opts?.decision ?? decideTransition({ fromTrack, toTrack, fromMode: st[from].stemsMode, toMode: st[to].stemsMode });
       setDeckRate(to, 1);
       set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
       recomputeEffective(to);
       beatAlign(from, to);
-      // Continuous phase-lock during the stem recipe.
-      try {
-        const lock = startPhaseLock({
-          leader: {
-            grid: fromTrack.beatGrid ?? null,
-            getPosition: () => fromDeck.el?.currentTime ?? 0,
-            getRate: () => fromDeck.el?.playbackRate ?? 1,
-          },
-          follower: {
-            grid: toTrack.beatGrid ?? null,
-            getPosition: () => toDeck.el?.currentTime ?? 0,
-            getRate: () => toDeck.el?.playbackRate ?? 1,
-            setRate: (r) => setDeckRate(to, r),
-          },
-          kP: 0.35,
-          maxAdjust: 0.04,
-          onTrainWreck: (drift) => {
-            // Loop-roll rescue: gate the outgoing deck in 1/4-beat slices
-            // for 4 beats so the drift becomes a rhythmic stutter, not
-            // a wreck. Mixxx beatloop_roll behaviour, simplified.
-            try { triggerBeatRepeat(from, 4, 4); } catch { /* noop */ }
-            console.warn("[phaseLock] train-wreck", { driftMs: drift, from, to });
-          },
-        });
-        registerActiveLock(lock);
-      } catch { /* noop */ }
-      // Make sure deck volumes are open — recipe rides the stems, not the main gain.
-      if (toDeck.gain) toDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
-      if (toDeck.gain) toDeck.gain.gain.setValueAtTime(toUserVol, ctx.currentTime);
-      if (fromDeck.gain) fromDeck.gain.gain.cancelScheduledValues(ctx.currentTime);
-      if (fromDeck.gain) fromDeck.gain.gain.setValueAtTime(fromUserVol, ctx.currentTime);
-      // Reset incoming stems to "muted but ready" so the recipe can sneak them in.
-      toStems.setGain("drums", 0, 0.02);
-      toStems.setGain("bass", 0, 0.02);
-      toStems.setGain("vocals", 0, 0.02);
-      toStems.setGain("other", 0, 0.02);
-      fromStems.setGain("drums", 1, 0.02);
-      fromStems.setGain("bass", 1, 0.02);
-      fromStems.setGain("vocals", 1, 0.02);
-      fromStems.setGain("other", 1, 0.02);
-      // Wait for first downbeat so the recipe's beats are aligned.
       await waitForNextBeat(from);
-      // Choose recipe.
-      const bpmDeltaPct = (fromTrack.bpm && toTrack.bpm) ? Math.abs(fromTrack.bpm - toTrack.bpm) / fromTrack.bpm : 0;
-      const fromVoc = (fromTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false;
-      const toVoc = (toTrack.vocalMap?.some((v) => v.voiced > 0.6)) ?? false;
-      const fromE = fromTrack.energy ?? 0.5;
-      const toE = toTrack.energy ?? 0.5;
-      const recipeId: RecipeId = id ?? pickRecipe({
-        bpmDeltaPct,
-        keyCompatible: camelotCompatible(fromTrack.camelot ?? "", toTrack.camelot ?? ""),
-        fromHasVocals: fromVoc,
-        toHasVocals: toVoc,
-        energyJump: toE - fromE,
+      const bars = Math.max(4, Math.min(12, opts?.bars ?? decision.bars ?? 8));
+      await runStableDeckBlend(from, to, {
+        bars,
+        fromUserVol,
+        toUserVol,
+        onPhase: (phase) => set({ transitionPhase: phase }),
       });
-      const secPerBar = fromTrack.bpm ? (60 / fromTrack.bpm) * 4 : 2;
-      const bars = Math.max(8, Math.min(20, opts?.bars ?? 12));
-      // Animate the visible crossfader gently — the AUDIO is fully handled by
-      // stem swaps. We only nudge the UI fader near the end so it doesn't
-      // become a parallel hidden master crossfade.
-      animateCrossfader(to === "B" ? 1 : 0, secPerBar * bars * 1000);
-      await runRecipe(recipeId, {
-        ctx,
-        fromStems, toStems,
-        secPerBar, bars,
-        waitForBeat: () => waitForNextBeat(from),
-        teaserStem: opts?.teaserStem,
-        aggression: opts?.aggression,
-      });
-      // Clean up: pause outgoing, reset its stems to neutral so it's ready to be
-      // reused, restore the deck gain to user volume.
-      try { fromDeck.el?.pause(); } catch { /* noop */ }
-      fromStems.reset();
       setDeckRate(to, 1);
-      // Incoming stems should all be at 1 by now; force it.
-      toStems.setGain("drums", 1, 0.1);
-      toStems.setGain("bass", 1, 0.1);
-      toStems.setGain("vocals", 1, 0.1);
-      toStems.setGain("other", 1, 0.1);
       recomputeEffective(to);
-      const ratioNote = " · no stretch";
       set({
-        lastTransitionNote: `${decisionNote({ ...decision, recipe: recipeId, recipeLabel: RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId })} · ${bars} bars${ratioNote}`,
+        lastTransitionNote: `Stabiler Deck-Blend · ${id ?? decision.recipe} · ${bars} bars`,
         transitionInFlight: false,
         transitionPhase: null,
         transitionEngine: null,
@@ -1741,7 +1600,6 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       console.warn("stem recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
     } finally {
-      try { stopActiveLock(); } catch { /* noop */ }
       // Safety net: ensure neither deck remains with a frozen EQ/filter state.
       try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
     }
