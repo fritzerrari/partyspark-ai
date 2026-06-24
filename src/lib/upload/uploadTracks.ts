@@ -42,14 +42,16 @@ export async function uploadTracks(
         analysisFields = {
           bpm: a.bpm,
           music_key: a.musicalKey,
-          energy: 60,
+          energy: Math.round(Math.max(10, Math.min(100, a.overallEnergy * 400))),
           mood: "Build",
           beat_grid: a.beatGrid,
           energy_curve: a.energyCurve,
           cues: { ...a.cues, ...tp },
           vocal_map: a.vocalMap,
+          embedding: a.embedding,
+          smart_crate: a.smartCrate,
           analyzed_at: new Date().toISOString(),
-        };
+        } as Record<string, unknown>;
       } catch (e) {
         console.warn("Analyse fehlgeschlagen", e);
       }
