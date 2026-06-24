@@ -19,6 +19,12 @@ export type EngineTrack = {
   beatGrid?: number[] | null;
   cues?: { introEnd: number; firstDrop: number; outroStart: number } | null;
   vocalMap?: { t: number; voiced: number }[] | null;
+  /** 24-dim L2-normalized fingerprint (cosine similarity). */
+  embedding?: number[] | null;
+  /** Auto-assigned crate bucket. */
+  smartCrate?: "warmup" | "filler" | "peak" | "cooldown" | "reserve" | null;
+  /** User-overridden tags. */
+  userTags?: string[] | null;
 };
 
 export type TransitionMode =
