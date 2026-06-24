@@ -140,6 +140,35 @@ export function NextMoveCard() {
           <div className="text-stage-foreground/60">{toTrack?.camelot ?? "?"}</div>
         </div>
       </div>
+      {liveDecision.breakdown && (
+        <div className="mt-2 rounded-md border border-white/5 bg-black/30 px-2 py-1.5">
+          <div className="text-[8px] uppercase tracking-widest text-stage-foreground/40">6-Faktor Breakdown</div>
+          <div className="mt-1 grid grid-cols-6 gap-1">
+            {([
+              ["BPM", liveDecision.breakdown.bpm],
+              ["Key", liveDecision.breakdown.key],
+              ["Vox", liveDecision.breakdown.vocals],
+              ["Eng", liveDecision.breakdown.energy],
+              ["Stm", liveDecision.breakdown.stems],
+              ["Type", liveDecision.breakdown.typeBonus],
+            ] as const).map(([label, v]) => {
+              const tone = v >= 80 ? "var(--neon-cyan)" : v >= 55 ? "var(--neon-amber)" : "var(--neon-magenta)";
+              return (
+                <div key={label} className="flex flex-col items-center gap-0.5">
+                  <div className="h-8 w-full rounded-sm bg-white/5 relative overflow-hidden">
+                    <div
+                      className="absolute bottom-0 left-0 right-0 transition-[height] duration-300"
+                      style={{ height: `${v}%`, background: tone, boxShadow: `0 0 6px ${tone}` }}
+                    />
+                  </div>
+                  <div className="text-[8px] uppercase tracking-widest text-stage-foreground/50">{label}</div>
+                  <div className="text-[9px] font-bold" style={{ color: tone }}>{v}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

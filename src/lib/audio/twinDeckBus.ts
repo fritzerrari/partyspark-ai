@@ -406,7 +406,17 @@ function rampEqGain(node: BiquadFilterNode | null, dB: number, sec: number) {
   const now = ctx.currentTime;
   node.gain.cancelScheduledValues(now);
   node.gain.setValueAtTime(node.gain.value, now);
-  node.gain.linearRampToValueAtTime(dB, now + Math.max(0.05, sec));
+  // 8-point S-curve ramp — half-cosine shape so the EQ tilt is smooth at
+  // both ends instead of starting/stopping abruptly. Mirrors the long-form
+  // EQ-sweeps used in Mixxx 32-bar autoblend.
+  const dur = Math.max(0.05, sec);
+  const start = node.gain.value;
+  const N = 8;
+  for (let i = 1; i <= N; i++) {
+    const t = i / N;
+    const w = 0.5 - 0.5 * Math.cos(Math.PI * t);
+    node.gain.linearRampToValueAtTime(start + (dB - start) * w, now + dur * t);
+  }
 }
 function resetEq(side: DeckSide) {
   const d = deck[side];
