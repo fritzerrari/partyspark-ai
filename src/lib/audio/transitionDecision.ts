@@ -3,6 +3,7 @@ import { camelotCompatible } from "./analyze";
 import { CLEAN_RECIPES, pickCleanRecipe, type CleanRecipeId } from "./cleanDjTransitions";
 import { RECIPES, pickRecipe, type RecipeId } from "./transitionRecipes";
 import type { StemId } from "./stemSplit";
+import { scoreSixFactor, type SixFactorBreakdown } from "./sixFactorScore";
 
 type StemMode = "pseudo" | "loading" | "real";
 
@@ -20,6 +21,8 @@ export type TransitionDecision = {
   keyCompatible: boolean;
   vocalClash: boolean;
   reasons: string[];
+  /** Per-factor breakdown driving the score (UI HUD). */
+  breakdown?: SixFactorBreakdown;
 };
 
 function hasVocals(track: EngineTrack | null | undefined): boolean {
@@ -97,12 +100,11 @@ export function decideTransition(opts: {
     else if (energyJump > 0.2) recipe = "dropSwitch";
     else if (!keyCompatible || bpmDeltaPct > 0.06) recipe = "drumBridge";
 
-    const bpmScore = Math.max(0, 100 - Math.round((bpmDeltaPct / 0.12) * 100));
-    const keyScore = keyCompatible ? 100 : 45;
-    const vocalScore = vocalClash && recipe !== "vocalOutDrumsIn" ? 55 : 100;
-    const energyScore = Math.max(0, 100 - Math.round(Math.abs(energyJump) * 85));
-    const score = Math.round(bpmScore * 0.3 + keyScore * 0.25 + vocalScore * 0.25 + energyScore * 0.2);
-    return { engine: "real", recipe, recipeLabel: labelFor("real", recipe), score, bars, teaserStem, aggression, syncRate, syncAllowed, bpmDeltaPct, keyCompatible: !!keyCompatible, vocalClash, reasons };
+    const breakdown = scoreSixFactor({
+      fromTrack, toTrack, fromMode, toMode, recipe,
+      bpmDeltaPct, keyCompatible: !!keyCompatible, vocalClash, energyJump,
+    });
+    return { engine: "real", recipe, recipeLabel: labelFor("real", recipe), score: breakdown.total, bars, teaserStem, aggression, syncRate, syncAllowed, bpmDeltaPct, keyCompatible: !!keyCompatible, vocalClash, reasons, breakdown };
   }
 
   let recipe = pickCleanRecipe({ bpmDeltaPct, keyCompatible: !!keyCompatible, fromHasVocals, toHasVocals, energyJump });
@@ -111,10 +113,9 @@ export function decideTransition(opts: {
   else if (!keyCompatible || bpmDeltaPct > 0.07) recipe = "filterBuild";
   else if (energyJump > 0.18) recipe = "hookTease";
 
-  const bpmScore = Math.max(0, 100 - Math.round((bpmDeltaPct / 0.12) * 100));
-  const keyScore = keyCompatible ? 100 : 45;
-  const vocalScore = vocalClash && recipe !== "echoOut" ? 50 : 100;
-  const energyScore = Math.max(0, 100 - Math.round(Math.abs(energyJump) * 85));
-  const score = Math.round((bpmScore * 0.3 + keyScore * 0.25 + vocalScore * 0.25 + energyScore * 0.2) * 0.86);
-  return { engine: "clean", recipe, recipeLabel: labelFor("clean", recipe), score, bars, teaserStem, aggression, syncRate, syncAllowed, bpmDeltaPct, keyCompatible: !!keyCompatible, vocalClash, reasons };
+  const breakdown = scoreSixFactor({
+    fromTrack, toTrack, fromMode, toMode, recipe,
+    bpmDeltaPct, keyCompatible: !!keyCompatible, vocalClash, energyJump,
+  });
+  return { engine: "clean", recipe, recipeLabel: labelFor("clean", recipe), score: breakdown.total, bars, teaserStem, aggression, syncRate, syncAllowed, bpmDeltaPct, keyCompatible: !!keyCompatible, vocalClash, reasons, breakdown };
 }
