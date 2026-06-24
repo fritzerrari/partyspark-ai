@@ -23,6 +23,7 @@ import { decideTransition, type TransitionDecision } from "./transitionDecision"
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
 import { epRampGain } from "./proTransition";
+import { createLR24Highpass, type LR24 } from "./filters/lr24";
 import { startPhaseLock, registerActiveLock, stopActiveLock } from "./phaseLock";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
@@ -188,9 +189,12 @@ const deck: Record<DeckSide, {
   stretch: LiveStretchNode | null;
   /** Bypass node used while the async stretch node is being built. */
   stretchPlaceholder: GainNode | null;
+  /** LR24 (Linkwitz-Riley 4th-order) high-pass for surgical bass kills
+   *  during bass-swap transitions. Idle at 20 Hz (transparent). */
+  lr24Hpf: LR24 | null;
 } > = {
-  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
-  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null },
+  A: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
+  B: { el: null, src: null, filter: null, gain: null, loudnessGain: null, eqLow: null, eqMid: null, eqHigh: null, analyser: null, stems: null, realStems: null, stemMeter: null, stretch: null, stretchPlaceholder: null, lr24Hpf: null },
 };
 let masterGain: GainNode | null = null;
 let masterSubComp: DynamicsCompressorNode | null = null;
@@ -338,7 +342,11 @@ function wireDeck(side: DeckSide) {
       d.src.connect(d.eqLow);
       d.eqLow.connect(d.eqMid);
       d.eqMid.connect(d.eqHigh);
-      d.eqHigh.connect(d.filter);
+      // LR24 high-pass sits between the 3-band EQ and the colour filter.
+      // Idle at 20 Hz so it's transparent until a bass-swap recipe sweeps it up.
+      d.lr24Hpf = createLR24Highpass(ctx, 20);
+      d.eqHigh.connect(d.lr24Hpf.input);
+      d.lr24Hpf.output.connect(d.filter);
       d.filter.connect(d.stretchPlaceholder);
       d.stretchPlaceholder.connect(d.stems.input);
       d.stems.output.connect(d.gain);
@@ -426,6 +434,20 @@ function resetEq(side: DeckSide) {
     n.gain.cancelScheduledValues(ctx.currentTime);
     n.gain.setValueAtTime(0, ctx.currentTime);
   }
+}
+
+/** Linkwitz-Riley 24 dB/oct bass kill — phase-coherent, no ringing tail.
+ *  Sweeps the per-deck LR24 HPF from idle (20 Hz) up to `fc` over `sec`. */
+function lr24BassKill(side: DeckSide, fc = 120, sec = 0.25) {
+  const hp = deck[side].lr24Hpf;
+  if (!hp || !ctx) return;
+  hp.setFrequency(fc, ctx.currentTime, sec);
+}
+/** Reverse of {@link lr24BassKill} — restores the deck's full bass response. */
+function lr24BassRestore(side: DeckSide, sec = 0.3) {
+  const hp = deck[side].lr24Hpf;
+  if (!hp || !ctx) return;
+  hp.setFrequency(20, ctx.currentTime, sec);
 }
 
 /** Rekordbox-style 1/2-beat echo throw on a deck. Briefly opens the send
@@ -1009,7 +1031,8 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         rampGain(fromDeck.gain, 0, xf * 0.5);
         break;
       case "bassSwap": {
-        // Pro-style bass swap: lift incoming highs first, swap lows on the beat, then bleed lows out.
+        // Pro-style bass swap with Linkwitz-Riley 24 dB/oct bass kill on the
+        // outgoing deck — phase-coherent, no ringing tail (Mixxx LR24 path).
         const half = xf * 0.5;
         // Bring incoming up — highs/mids first, lows still cut.
         rampGain(toDeck.gain, toUserVol, half);
@@ -1021,6 +1044,8 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
         // Echo-throw on the outgoing deck right as the bass cuts —
         // hides the seam with a tail that resolves over the next 2 beats.
         triggerEchoTail(from, 0.5, -8);
+        // LR24 HPF sweep + EQ low cut for a clean, surgical bass kill.
+        lr24BassKill(from, 120, 0.2);
         rampEqGain(fromDeck.eqLow, -28, 0.25);
         rampEqGain(toDeck.eqLow, 0, 0.25);
         // Now fade the outgoing out entirely.
@@ -1061,6 +1086,9 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     resetFilter(from);
     resetEq(from);
     resetEq(to);
+    // Restore LR24 HPFs on both decks so they are transparent for the next mix.
+    lr24BassRestore(from, 0.2);
+    lr24BassRestore(to, 0.2);
     if (fromDeck.gain) fromDeck.gain.gain.value = fromUserVol * (to === "B" ? Math.cos((1 * Math.PI) / 2) : Math.cos(0));
 
     const ratioNote = appliedRatio !== 1 ? ` · sync ×${appliedRatio.toFixed(3)}` : "";
