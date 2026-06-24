@@ -29,6 +29,11 @@ export type TrackAnalysis = {
   trimInSec: number;
   /** Last sample > −60 dBFS — real end of audible audio. */
   trimOutSec: number;
+  /** Integrated loudness in LUFS (ITU-R BS.1770 K-weighted, gated approximation).
+   *  Negative numbers — −14 LUFS ≈ Spotify target. */
+  lufsIntegrated: number;
+  /** Gain (dB) to apply on playback so this track sits at −14 LUFS. */
+  loudnessGainDb: number;
 };
 
 export type SmartCrate = "warmup" | "filler" | "peak" | "cooldown" | "reserve";
@@ -297,6 +302,11 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
   const smartCrate = assignSmartCrate(bpm, overallEnergy, vocalDensity);
   // Mixxx-style −60 dBFS silence trim for the real blend window.
   const trim = findTrimPoints(buf, -60);
+  // ITU-R BS.1770-ish K-weighted integrated loudness.
+  const lufs = measureLufs(buf);
+  // Target: −14 LUFS (streaming-platform reference). Clamp ±9 dB so a
+  // very quiet/very loud master doesn't blow up the live output.
+  const loudnessGainDb = Math.max(-9, Math.min(9, -14 - lufs));
   onProgress?.("Fertig", 100);
 
   return {
@@ -314,7 +324,82 @@ export async function analyzeAudio(buf: AudioBuffer, onProgress?: (label: string
     vocalDensity: +vocalDensity.toFixed(3),
     trimInSec: trim.trimInSec,
     trimOutSec: trim.trimOutSec,
+    lufsIntegrated: +lufs.toFixed(2),
+    loudnessGainDb: +loudnessGainDb.toFixed(2),
   };
+}
+
+/** ITU-R BS.1770 K-weighted mean-square → LUFS.
+ *  We approximate the K-weighting curve with:
+ *    - 2nd-order highpass @ 38 Hz   (stage-1, removes rumble)
+ *    - high-shelf @ 1500 Hz +4 dB   (stage-2, RLB pre-filter)
+ *  Gating: 400 ms blocks at 75 % overlap, absolute gate −70 LUFS,
+ *  then relative gate −10 LU below the ungated mean (BS.1770-4).
+ *  Mono fold (channel 0) — close enough for relative loudness matching. */
+function measureLufs(buf: AudioBuffer): number {
+  const sr = buf.sampleRate;
+  const ch = buf.getChannelData(0);
+  // Stage 1: HPF biquad @ 38 Hz, Q = 0.5
+  const fc1 = 38, Q1 = 0.5;
+  const w1 = (2 * Math.PI * fc1) / sr;
+  const a1 = Math.sin(w1) / (2 * Q1);
+  const cw1 = Math.cos(w1);
+  const b0_1 = (1 + cw1) / 2, b1_1 = -(1 + cw1), b2_1 = (1 + cw1) / 2;
+  const a0_1 = 1 + a1, a1_1 = -2 * cw1, a2_1 = 1 - a1;
+  // Stage 2: high-shelf @ 1500 Hz, +4 dB, S = 1
+  const A = Math.pow(10, 4 / 40);
+  const w2 = (2 * Math.PI * 1500) / sr;
+  const cw2 = Math.cos(w2), sw2 = Math.sin(w2);
+  const a2 = sw2 / 2 * Math.sqrt((A + 1 / A) * (1 / 1 - 1) + 2);
+  // Robbie formula (RBJ shelving):
+  const beta = 2 * Math.sqrt(A) * a2 || 0.5;
+  const b0_2 = A * ((A + 1) + (A - 1) * cw2 + beta);
+  const b1_2 = -2 * A * ((A - 1) + (A + 1) * cw2);
+  const b2_2 = A * ((A + 1) + (A - 1) * cw2 - beta);
+  const a0_2 = (A + 1) - (A - 1) * cw2 + beta;
+  const a1_2 = 2 * ((A - 1) - (A + 1) * cw2);
+  const a2_2 = (A + 1) - (A - 1) * cw2 - beta;
+
+  const blockSize = Math.floor(sr * 0.4);  // 400 ms
+  const hop = Math.floor(sr * 0.1);        // 100 ms (75 % overlap)
+  const meanSquares: number[] = [];
+  let x1a = 0, x2a = 0, y1a = 0, y2a = 0;
+  let x1b = 0, x2b = 0, y1b = 0, y2b = 0;
+  const filt = new Float32Array(blockSize);
+  let bufIdx = 0;
+
+  // Running fill of a circular block; flush when full at every hop.
+  let sinceFlush = 0;
+  let acc = 0;
+  for (let i = 0; i < ch.length; i++) {
+    const x = ch[i];
+    const sA = (b0_1 * x + b1_1 * x1a + b2_1 * x2a - a1_1 * y1a - a2_1 * y2a) / a0_1;
+    x2a = x1a; x1a = x; y2a = y1a; y1a = sA;
+    const sB = (b0_2 * sA + b1_2 * x1b + b2_2 * x2b - a1_2 * y1b - a2_2 * y2b) / a0_2;
+    x2b = x1b; x1b = sA; y2b = y1b; y1b = sB;
+    filt[bufIdx] = sB;
+    bufIdx = (bufIdx + 1) % blockSize;
+    acc += sB * sB;
+    sinceFlush++;
+    if (sinceFlush >= hop && i >= blockSize) {
+      let sum = 0;
+      for (let n = 0; n < blockSize; n++) sum += filt[n] * filt[n];
+      meanSquares.push(sum / blockSize);
+      sinceFlush = 0;
+    }
+  }
+  if (!meanSquares.length) return -23;
+  const toLufs = (ms: number) => -0.691 + 10 * Math.log10(Math.max(1e-12, ms));
+  // Absolute gate −70 LUFS
+  const gateAbs = meanSquares.filter((ms) => toLufs(ms) > -70);
+  if (!gateAbs.length) return -70;
+  const meanAbs = gateAbs.reduce((a, b) => a + b, 0) / gateAbs.length;
+  // Relative gate at −10 LU below ungated mean
+  const relThresh = Math.pow(10, (toLufs(meanAbs) - 10 + 0.691) / 10);
+  const gateRel = gateAbs.filter((ms) => ms > relThresh);
+  if (!gateRel.length) return toLufs(meanAbs);
+  const meanRel = gateRel.reduce((a, b) => a + b, 0) / gateRel.length;
+  return toLufs(meanRel);
 }
 
 /** Re-export for callers that want to fold a detected BPM against a
