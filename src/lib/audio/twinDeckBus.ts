@@ -1591,9 +1591,9 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         bars,
         fromUserVol,
         toUserVol,
+        syncRate: decision.syncAllowed ? decision.syncRate : 1,
         onPhase: (phase) => set({ transitionPhase: phase }),
       });
-      set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
       const label = CLEAN_RECIPES.find((r) => r.id === recipeId)?.label ?? recipeId;
       set({
         lastTransitionNote: `${decisionNote({ ...decision, recipe: recipeId, recipeLabel: label })} · stabil · ${bars} bars`,
@@ -1627,9 +1627,6 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       const fromUserVol = st[from].volume;
       if (ctx.state === "suspended") void ctx.resume();
       const decision = opts?.decision ?? decideTransition({ fromTrack, toTrack, fromMode: st[from].stemsMode, toMode: st[to].stemsMode });
-      setDeckRate(to, 1);
-      set((s) => ({ [to]: { ...s[to], pitch: 1 } } as Partial<BusState>));
-      recomputeEffective(to);
       beatAlign(from, to);
       await waitForNextBeat(from);
       const bars = Math.max(4, Math.min(12, opts?.bars ?? decision.bars ?? 8));
@@ -1637,10 +1634,9 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
         bars,
         fromUserVol,
         toUserVol,
+        syncRate: decision.syncAllowed ? decision.syncRate : 1,
         onPhase: (phase) => set({ transitionPhase: phase }),
       });
-      setDeckRate(to, 1);
-      recomputeEffective(to);
       set({
         lastTransitionNote: `Stabiler Deck-Blend · ${id ?? decision.recipe} · ${bars} bars`,
         transitionInFlight: false,
