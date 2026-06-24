@@ -1115,6 +1115,9 @@ async function runTransition(from: DeckSide, to: DeckSide, hint: TransitionModeH
     // Restore LR24 HPFs on both decks so they are transparent for the next mix.
     lr24BassRestore(from, 0.2);
     lr24BassRestore(to, 0.2);
+    // Restore polarity on both decks (no-op if never flipped).
+    setPolarity(from, 1);
+    setPolarity(to, 1);
     if (fromDeck.gain) fromDeck.gain.gain.value = fromUserVol * (to === "B" ? Math.cos((1 * Math.PI) / 2) : Math.cos(0));
 
     const ratioNote = appliedRatio !== 1 ? ` · sync ×${appliedRatio.toFixed(3)}` : "";
