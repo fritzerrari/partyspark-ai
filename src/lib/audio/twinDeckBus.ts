@@ -1553,7 +1553,6 @@ export const useTwinDeck = create<BusState & Actions>((set, get) => ({
       console.warn("clean recipe failed", e);
       set({ transitionInFlight: false, transitionPhase: null, transitionEngine: null });
     } finally {
-      try { stopActiveLock(); } catch { /* noop */ }
       // Safety net: ALWAYS reset both decks' EQ + filter so a thrown error
       // can never leave a deck with a -24 dB low-shelf permanently engaged.
       try { resetEq(from); resetEq(to); resetFilter(from); resetFilter(to); } catch { /* noop */ }
