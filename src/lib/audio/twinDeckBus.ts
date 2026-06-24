@@ -23,6 +23,7 @@ import { decideTransition, type TransitionDecision } from "./transitionDecision"
 import { createStemMeter, type StemMeter } from "./stemMeter";
 import { createLiveStretch, type LiveStretchNode } from "./liveStretch";
 import { epRampGain } from "./proTransition";
+import { startPhaseLock, registerActiveLock, stopActiveLock } from "./phaseLock";
 import { supabase } from "@/integrations/supabase/client";
 import type { TransitionPlan, TransitionEvent } from "@/lib/intel/types";
 import { planTransition } from "@/lib/intel/planner";
