@@ -213,20 +213,20 @@ function Cockpit() {
 
       {/* ───── Mix Lab + Right Rail ───── */}
       <section className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <div className="sb-card-warm p-4">
+        <div className="sb-card-warm p-5">
           <SectionHeader label="Mix Lab" icon={<Sparkles className="h-3.5 w-3.5" />} />
           <CockpitCenter />
         </div>
-        <div className="grid gap-3">
-          <div className="sb-card p-3">
+        <div className="grid gap-4">
+          <div className="sb-card p-4">
             <SectionHeader label="Energy Timeline" />
             <EnergyTimeline />
           </div>
-          <div className="sb-card p-3">
+          <div className="sb-card p-4">
             <SectionHeader label="Playlist" />
             <MixabilityPlaylist tracks={tracks} />
           </div>
-          <div className="sb-card p-3">
+          <div className="sb-card p-4">
             <SectionHeader label="Copilot Log" />
             <CopilotLog />
           </div>
@@ -309,10 +309,20 @@ function EmptyHint({ title, body, to, cta }: { title: string; body: string; to: 
 
 function SectionHeader({ label, icon }: { label: string; icon?: React.ReactNode }) {
   return (
-    <div className="mb-3 flex items-center gap-2">
-      {icon && <span style={{ color: "var(--sb-primary)" }}>{icon}</span>}
+    <div className="mb-4 flex items-center gap-2">
+      {icon && (
+        <span
+          className="grid h-6 w-6 place-items-center rounded-md"
+          style={{
+            background: "color-mix(in oklab, var(--sb-primary) 20%, transparent)",
+            color: "var(--sb-primary)",
+          }}
+        >
+          {icon}
+        </span>
+      )}
       <span className="sb-section-title">{label}</span>
-      <span className="flex-1" />
+      <span className="sb-section-divider" />
     </div>
   );
 }
